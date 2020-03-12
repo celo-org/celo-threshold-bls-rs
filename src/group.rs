@@ -1,0 +1,82 @@
+use rand_core::RngCore;
+use std::error::Error;
+use std::fmt;
+use std::marker::PhantomData;
+use std::result::Result;
+/// Element represents an element of a group with the additive notation
+/// which is also equipped with a multiplication transformation.
+/// Two implementations are for Scalar which forms a ring so RHS is the same
+/// and Point which can be multiplied by a scalar of its prime field.
+pub trait Element<RHS = Self>: Clone + fmt::Display + fmt::Debug + Eq {
+    /// new MUST return the zero element of the group.
+    fn new() -> Self;
+    fn one() -> Self;
+    fn add(&mut self, s2: &Self);
+    fn mul(&mut self, mul: &RHS);
+    fn pick<R: RngCore>(&mut self, rng: &mut R);
+    fn zero() -> Self {
+        Self::new()
+    }
+}
+
+/// Scalar can be multiplied by only a Scalar, no other elements.
+// TODO: is that truly enforced by Rust ?
+pub trait Scalar: Element + Encodable {
+    fn set_int(&mut self, i: u64);
+    fn inverse(&self) -> Option<Self>;
+    fn negate(&mut self);
+    fn sub(&mut self, other: &Self);
+    // TODO
+    // inverse()
+    // sub()
+    // unmarshal
+}
+
+/// Basic point functionality that can be multiplied by a scalar
+pub trait Point<A: Scalar>: Element<A> {
+    fn map(&mut self, data: &[u8]);
+}
+
+//type PPoint = Point<A: Scalar>;
+
+/// A group holds functionalities to create scalar and points related; it is
+/// similar to the Engine definition, just much more simpler.
+pub trait Curve {
+    type Scalar: Scalar;
+    type Point: Point<Self::Scalar>;
+}
+
+pub trait PairingCurve {
+    type Scalar: Scalar;
+    type G1: Point<Self::Scalar> + Encodable;
+    type G2: Point<Self::Scalar> + Encodable;
+    type GT: Element;
+
+    fn pair(a: &Self::G1, b: &Self::G2) -> Self::GT;
+}
+
+pub struct CurveFrom<S: Scalar, P: Point<S>> {
+    m: PhantomData<S>,
+    mm: PhantomData<P>,
+}
+
+impl<S, P> Curve for CurveFrom<S, P>
+where
+    S: Scalar,
+    P: Point<S>,
+{
+    type Scalar = S;
+    type Point = P;
+}
+
+pub type G1Curve<C> = CurveFrom<<C as PairingCurve>::Scalar, <C as PairingCurve>::G1>;
+pub type G2Curve<C> = CurveFrom<<C as PairingCurve>::Scalar, <C as PairingCurve>::G2>;
+
+pub trait Encodable {
+    fn marshal(&self) -> Vec<u8>;
+    fn unmarshal(&mut self, data: &[u8]) -> Result<(), Box<dyn Error>>;
+}
+
+pub enum DecodingError {
+    InvalidPoint,
+}

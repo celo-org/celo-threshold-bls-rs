@@ -1,0 +1,22 @@
+version: 2
+
+jobs:
+  build:
+    docker:
+      - image: circleci/rust:latest
+    steps:
+      - checkout
+      - run: cargo build --all
+  test:
+    docker:
+      - image: circleci/rust:latest
+    steps:
+      - checkout
+      - run: cargo test --all
+workflows:
+  version: 2
+  build_and_test:
+    jobs:
+      - build
+      - test
+
