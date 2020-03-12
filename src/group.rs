@@ -34,7 +34,7 @@ pub trait Scalar: Element + Encodable {
 
 /// Basic point functionality that can be multiplied by a scalar
 pub trait Point<A: Scalar>: Element<A> {
-    fn map(&mut self, data: &[u8]);
+    fn map(&mut self, data: &[u8]) -> Result<(), Box<dyn Error>>;
 }
 
 //type PPoint = Point<A: Scalar>;

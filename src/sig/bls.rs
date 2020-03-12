@@ -7,13 +7,13 @@ use std::fmt;
 use std::marker::PhantomData;
 
 pub trait BLSScheme: Scheme {
-    fn internal_sign(private: &Self::Private, msg: &[u8]) -> Vec<u8> {
+    fn internal_sign(private: &Self::Private, msg: &[u8]) -> Result<Vec<u8>, Box<dyn Error>> {
         // sig = H(m)^x
         let mut h = Self::Signature::new();
-        h.map(msg);
+        h.map(msg)?;
         //println!("sign: message {:?}", h);
         h.mul(private);
-        h.marshal()
+        Ok(h.marshal())
     }
 
     fn internal_verify(
@@ -27,7 +27,7 @@ pub trait BLSScheme: Scheme {
         }
         // H(m)
         let mut h = Self::Signature::new();
-        h.map(msg);
+        h.map(msg)?;
         return Ok((sigp, h));
     }
 
@@ -39,7 +39,7 @@ where
     T: BLSScheme,
 {
     fn sign(private: &Self::Private, msg: &[u8]) -> Result<Vec<u8>, Box<Error>> {
-        Ok(T::internal_sign(private, msg))
+        T::internal_sign(private, msg)
     }
     fn verify(public: &Self::Public, msg: &[u8], sig: &[u8]) -> Result<(), Box<Error>> {
         match T::internal_verify(public, msg, sig) {

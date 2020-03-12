@@ -80,6 +80,7 @@ where
 mod tests {
     use super::*;
     use crate::curve::bls12381::{PairingCurve as PCurve, Scalar, G1, G2};
+    use crate::curve::zexe::PairingCurve as Zexe;
     use crate::sig::bls;
     use rand::prelude::*;
 
@@ -96,6 +97,11 @@ mod tests {
             })
             .collect();
         (shares, private.commit())
+    }
+
+    #[test]
+    fn tblind_g1_zexe() {
+        tblind_test::<G1Scheme<Zexe>>();
     }
 
     #[test]

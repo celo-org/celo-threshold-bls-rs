@@ -19,4 +19,5 @@ sha2 = "0.8"
 
 smallbitvec = "2.4.0"
 algebra = { git = "https://github.com/scipr-lab/zexe", features = ["bls12_377", "edwards_sw6"] }
+bls-crypto = { git = "https://github.com/celo-org/bls-zexe" }
 #algebra_core = { git = "https://github.com/scipr-lab/zexe" }

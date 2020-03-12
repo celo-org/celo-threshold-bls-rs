@@ -154,15 +154,17 @@ impl Element<Scalar> for G2 {
 }
 /// Implementation of Point using G1 from BLS12-381
 impl Point<Fr> for G1 {
-    fn map(&mut self, data: &[u8]) {
+    fn map(&mut self, data: &[u8]) -> Result<(), Box<dyn Error>> {
         *self = G1::hash(data);
+        Ok(())
     }
 }
 
 /// Implementation of Point using G2 from BLS12-381
 impl Point<Fr> for G2 {
-    fn map(&mut self, data: &[u8]) {
+    fn map(&mut self, data: &[u8]) -> Result<(), Box<dyn Error>> {
         *self = G2::hash(data);
+        Ok(())
     }
 }
 
