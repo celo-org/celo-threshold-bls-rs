@@ -1,0 +1,23 @@
+[package]
+name = "dkg"
+version = "0.1.0"
+authors = ["nalos"]
+edition = "2018"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+paired = "0.16.1"
+ff = "0.5"
+groupy = "0.2.1"
+rand_core = "0.5.1"
+rand = "0.7"
+# for ECIES
+chacha20poly1305 = "0.3"
+hkdf = "0.8"
+sha2 = "0.8"
+
+smallbitvec = "2.4.0"
+algebra = { git = "https://github.com/scipr-lab/zexe", features = ["bls12_377", "edwards_sw6"] }
+bls-crypto = { git = "https://github.com/celo-org/bls-zexe" }
+#algebra_core = { git = "https://github.com/scipr-lab/zexe" }
