@@ -1,8 +1,8 @@
-use crate::group::{Curve, Element, Encodable, G1Curve, G2Curve, PairingCurve, Point, Scalar};
+use crate::group::{Element, Encodable};
 use crate::poly::{Eval, Poly};
 use crate::sig::bls;
-use crate::sig::{Partial, Scheme as SScheme, SignatureScheme, ThresholdScheme2};
-use crate::{Index, Public, Share};
+use crate::sig::{Partial, Scheme as SScheme, SignatureScheme, ThresholdScheme};
+use crate::{Index, Share};
 use std::convert::TryInto;
 use std::error::Error;
 use std::fmt;
@@ -31,11 +31,11 @@ where
     type Signature = I::Signature;
 }
 
-impl<I> ThresholdScheme2 for TScheme<I>
+impl<I> ThresholdScheme for TScheme<I>
 where
     I: SignatureScheme,
 {
-    fn partial_sign(private: &Share<Self::Private>, msg: &[u8]) -> Result<Vec<u8>, Box<Error>> {
+    fn partial_sign(private: &Share<Self::Private>, msg: &[u8]) -> Result<Vec<u8>, Box<dyn Error>> {
         let mut sig = I::sign(&private.private, msg)?;
         let ret = inject_index(private.index, &mut sig);
         Ok(ret)
@@ -44,7 +44,7 @@ where
         public: &Poly<Self::Private, Self::Public>,
         msg: &[u8],
         partial: &Partial,
-    ) -> Result<(), Box<Error>> {
+    ) -> Result<(), Box<dyn Error>> {
         match extract_index(partial) {
             Ok((idx, bls_sig)) => {
                 let public_i = public.eval(idx);
@@ -57,7 +57,7 @@ where
         public: &Poly<Self::Private, Self::Public>,
         msg: &[u8],
         partials: &[Partial],
-    ) -> Result<Vec<u8>, Box<Error>> {
+    ) -> Result<Vec<u8>, Box<dyn Error>> {
         let threshold = public.degree() + 1;
         if threshold > partials.len() {
             return Err(Box::new(TBLSError::NotEnoughPartialSignatures));
@@ -142,16 +142,17 @@ pub type TG2Scheme<C> = TScheme<bls::G2Scheme<C>>;
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::curve::bls12381::{PairingCurve as PCurve, Scalar, G1, G2};
-    use crate::poly::PrivatePoly;
-    use rand::prelude::*;
+    use crate::curve::bls12381::PairingCurve as PCurve;
 
-    type G1C = G1Curve<PCurve>;
+    type ShareCreator<T> = fn(
+        usize,
+        usize,
+    ) -> (
+        Vec<Share<<T as SScheme>::Private>>,
+        Poly<<T as SScheme>::Private, <T as SScheme>::Public>,
+    );
 
-    type ShareCreator<T: ThresholdScheme2> =
-        fn(usize, usize) -> (Vec<Share<T::Private>>, Poly<T::Private, T::Public>);
-
-    fn shares<T: ThresholdScheme2>(
+    fn shares<T: ThresholdScheme>(
         n: usize,
         t: usize,
     ) -> (Vec<Share<T::Private>>, Poly<T::Private, T::Public>) {
@@ -179,7 +180,7 @@ mod tests {
         assert_eq!(&extended[size_idx..], c.as_slice());
     }
 
-    fn test_threshold_scheme<T: ThresholdScheme2>(creator: ShareCreator<T>) {
+    fn test_threshold_scheme<T: ThresholdScheme>(creator: ShareCreator<T>) {
         let (shares, public) = creator(5, 4);
         let msg = vec![1, 9, 6, 9];
         let partials: Vec<_> = shares

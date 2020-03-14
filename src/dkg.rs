@@ -184,9 +184,9 @@ where
 }
 
 pub struct DKGOutput<C: Curve> {
-    qual: Group<C>,
-    public: Public<C>,
-    share: Share<C::Scalar>,
+    pub qual: Group<C>,
+    pub public: Public<C>,
+    pub share: Share<C::Scalar>,
 }
 
 #[derive(Debug)]
@@ -827,7 +827,7 @@ pub mod tests {
     use crate::poly::Eval;
     use rand::prelude::*;
 
-    fn setup_group(n: usize, thr: usize) -> (Vec<Scalar>, Group<BCurve>) {
+    fn setup_group(n: usize) -> (Vec<Scalar>, Group<BCurve>) {
         let privs: Vec<Scalar> = (0..n)
             .map(|_| {
                 let mut private = Scalar::new();
@@ -859,8 +859,8 @@ pub mod tests {
     #[test]
     fn group_index() {
         let n = 6;
-        let thr = default_threshold(n);
-        let (privs, group) = setup_group(n, thr);
+        //let thr = default_threshold(n);
+        let (privs, group) = setup_group(n);
         let cloned = group.clone();
         for private in privs {
             let mut public = G1::one();
@@ -873,7 +873,7 @@ pub mod tests {
     fn full_dkg() {
         let n = 5;
         let thr = default_threshold(n);
-        let (privs, group) = setup_group(n, thr);
+        let (privs, group) = setup_group(n);
         let dkgs: Vec<_> = privs
             .into_iter()
             .map(|p| DKG::new(p, group.clone()).unwrap())

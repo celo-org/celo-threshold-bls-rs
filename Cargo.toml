@@ -1,5 +1,5 @@
 [package]
-name = "dkg"
+name = "threshold"
 version = "0.1.0"
 authors = ["nalos"]
 edition = "2018"

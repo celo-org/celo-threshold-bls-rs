@@ -6,7 +6,7 @@ pub mod poly;
 pub mod sig;
 
 pub type Index = poly::Idx;
-// TODO rename, see todo
+//
 pub type Public<C> = poly::PublicPoly<C>;
 
 #[derive(Clone)]

@@ -4,7 +4,7 @@ use crate::group::{
 use ff::{Field, PrimeField, PrimeFieldRepr};
 use groupy::{CurveAffine, CurveProjective, EncodedPoint};
 use paired::bls12_381::{
-    Bls12, Fq12, Fr, FrRepr, G1Affine, G1Compressed, G2Affine, G2Compressed, G1 as PG1, G2 as PG2,
+    Bls12, Fq12, Fr, FrRepr, G1Compressed, G2Compressed, G1 as PG1, G2 as PG2,
 };
 use paired::Engine;
 use rand_core::RngCore;
@@ -191,6 +191,11 @@ impl Element for GT {
 // TODO rename to G1
 pub type Curve = CF<Scalar, G1>;
 pub type G2Curve = CF<Scalar, G2>;
+pub struct TrialCurve {}
+impl C for TrialCurve {
+    type Scalar = Scalar;
+    type Point = G1;
+}
 
 pub struct PairingCurve;
 

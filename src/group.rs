@@ -33,7 +33,7 @@ pub trait Scalar: Element + Encodable {
 }
 
 /// Basic point functionality that can be multiplied by a scalar
-pub trait Point<A: Scalar>: Element<A> {
+pub trait Point<A: Scalar>: Element<A> + Encodable {
     fn map(&mut self, data: &[u8]) -> Result<(), Box<dyn Error>>;
 }
 
@@ -44,6 +44,10 @@ pub trait Point<A: Scalar>: Element<A> {
 pub trait Curve {
     type Scalar: Scalar;
     type Point: Point<Self::Scalar>;
+
+    fn scalar() -> Self::Scalar {
+        Self::Scalar::one()
+    }
 }
 
 pub trait PairingCurve {

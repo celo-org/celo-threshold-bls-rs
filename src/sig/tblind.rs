@@ -1,24 +1,22 @@
 use crate::poly::Poly;
 use crate::sig::blind::{BG1Scheme, BG2Scheme};
 use crate::sig::tbls::{Serializer, TScheme};
-use crate::sig::{
-    BlindThreshold, Blinder, Partial, Scheme as SScheme, SignatureScheme, ThresholdScheme2,
-};
+use crate::sig::{BlindThreshold, Blinder, Partial, Scheme as SScheme, ThresholdScheme};
 use crate::{Index, Share};
 use std::error::Error;
 use std::marker::PhantomData;
 
-pub struct Scheme<T: ThresholdScheme2 + Serializer, B: Blinder> {
+pub struct Scheme<T: ThresholdScheme + Serializer, B: Blinder> {
     m: PhantomData<T>,
     b: PhantomData<B>,
 }
 
-type G1Scheme<C> = Scheme<TScheme<BG1Scheme<C>>, BG1Scheme<C>>;
-type G2Scheme<C> = Scheme<TScheme<BG2Scheme<C>>, BG2Scheme<C>>;
+pub type G1Scheme<C> = Scheme<TScheme<BG1Scheme<C>>, BG1Scheme<C>>;
+pub type G2Scheme<C> = Scheme<TScheme<BG2Scheme<C>>, BG2Scheme<C>>;
 
 impl<T, B> SScheme for Scheme<T, B>
 where
-    T: ThresholdScheme2 + Serializer,
+    T: ThresholdScheme + Serializer,
     B: Blinder,
 {
     type Private = T::Private;
@@ -26,19 +24,19 @@ where
     type Signature = T::Signature;
 }
 
-impl<T, B> ThresholdScheme2 for Scheme<T, B>
+impl<T, B> ThresholdScheme for Scheme<T, B>
 where
-    T: ThresholdScheme2 + Serializer,
+    T: ThresholdScheme + Serializer,
     B: Blinder,
 {
-    fn partial_sign(private: &Share<T::Private>, msg: &[u8]) -> Result<Partial, Box<Error>> {
+    fn partial_sign(private: &Share<T::Private>, msg: &[u8]) -> Result<Partial, Box<dyn Error>> {
         T::partial_sign(private, msg)
     }
     fn partial_verify(
         public: &Poly<T::Private, T::Public>,
         msg: &[u8],
         partial: &Partial,
-    ) -> Result<(), Box<Error>> {
+    ) -> Result<(), Box<dyn Error>> {
         T::partial_verify(public, msg, partial)
     }
     // XXX Is thre a way to map Vec<Vec<u8>> to &[&[u8]] ?
@@ -46,7 +44,7 @@ where
         public: &Poly<T::Private, T::Public>,
         msg: &[u8],
         partials: &[Partial],
-    ) -> Result<Partial, Box<Error>> {
+    ) -> Result<Partial, Box<dyn Error>> {
         T::aggregate(public, msg, partials)
     }
     fn verify(public: &T::Public, msg: &[u8], sig: &[u8]) -> Result<(), Box<dyn Error>> {
@@ -55,14 +53,14 @@ where
 }
 impl<T, B> Blinder for Scheme<T, B>
 where
-    T: ThresholdScheme2 + Serializer,
+    T: ThresholdScheme + Serializer,
     B: Blinder,
 {
     type Token = B::Token;
     fn blind(msg: &[u8]) -> (B::Token, Vec<u8>) {
         B::blind(msg)
     }
-    fn unblind(t: B::Token, buff_blindp: &[u8]) -> Result<Vec<u8>, Box<Error>> {
+    fn unblind(t: B::Token, buff_blindp: &[u8]) -> Result<Vec<u8>, Box<dyn Error>> {
         let (i, blind_partial) = T::extract(buff_blindp)?;
         let mut unblinded = B::unblind(t, &blind_partial)?;
         Ok(T::inject(i, &mut unblinded))
@@ -71,7 +69,7 @@ where
 
 impl<T, B> BlindThreshold for Scheme<T, B>
 where
-    T: ThresholdScheme2 + Serializer,
+    T: ThresholdScheme + Serializer,
     B: Blinder,
 {
 }
@@ -79,10 +77,8 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::curve::bls12381::{PairingCurve as PCurve, Scalar, G1, G2};
+    use crate::curve::bls12381::PairingCurve as PCurve;
     use crate::curve::zexe::PairingCurve as Zexe;
-    use crate::sig::bls;
-    use rand::prelude::*;
 
     fn shares<B: BlindThreshold>(
         n: usize,
@@ -122,7 +118,7 @@ mod tests {
         let thr = 4;
         let (shares, public) = shares::<B>(n, thr);
         let msg = vec![1, 9, 6, 9];
-        let mut tokens_and_blinded: Vec<_> = shares.iter().map(|_| B::blind(&msg)).collect();
+        let tokens_and_blinded: Vec<_> = shares.iter().map(|_| B::blind(&msg)).collect();
         let partials: Vec<_> = shares
             .iter()
             .enumerate()
@@ -133,7 +129,7 @@ mod tests {
             tokens_and_blinded
                 .into_iter()
                 .enumerate()
-                .fold(vec![], |mut acc, (i, (t, b))| {
+                .fold(vec![], |mut acc, (i, (t, _))| {
                     match B::unblind(t, &partials[i]) {
                         Ok(unblinded) => {
                             println!("Unblinded {:?}", unblinded);
