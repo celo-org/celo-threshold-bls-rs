@@ -4,8 +4,10 @@ pub mod ecies;
 pub mod group;
 pub mod poly;
 pub mod sig;
+pub use group::*;
 
 pub type Index = poly::Idx;
+
 //
 pub type Public<C> = poly::PublicPoly<C>;
 

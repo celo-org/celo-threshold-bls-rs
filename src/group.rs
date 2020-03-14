@@ -45,8 +45,14 @@ pub trait Curve {
     type Scalar: Scalar;
     type Point: Point<Self::Scalar>;
 
+    /// scalar returns the identity element of the field.
     fn scalar() -> Self::Scalar {
-        Self::Scalar::one()
+        Self::Scalar::new()
+    }
+
+    /// point returns the default additive generator of the group.
+    fn point() -> Self::Point {
+        Self::Point::one()
     }
 }
 

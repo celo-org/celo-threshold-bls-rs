@@ -7,20 +7,38 @@ use smallbitvec::SmallBitVec;
 use std::collections::HashMap;
 use std::fmt;
 
+/// Node is a participant in the DKG protocol. In a DKG protocol, each
+/// participant must be identified both by an index and a public key. At the end
+/// of the protocol, if sucessful, the index is used to verify the validity of
+/// the share this node holds.
+pub struct Node<C: Curve>(ID, C::Point);
+
+impl<C> Node<C>
+where
+    C: Curve,
+{
+    pub fn new(index: ID, public: C::Point) -> Self {
+        Self(index, public)
+    }
+}
+
+/// A Group is a collection of Nodes with an associated threshold. A DKG scheme
+/// takes in a group at the beginning of the protocol and outputs a potentially
+/// new group that contains members that succesfully ran the protocol. When
+/// creating a new group using the `from()` or `from_list()`method, the module
+/// sets the threshold to the output of `default_threshold()`.
+pub struct Group<C: Curve> {
+    pub nodes: Vec<Node<C>>,
+    pub threshold: usize,
+}
+
+type ID = Idx;
 // type alias for readability.
 type Bitset = SmallBitVec;
 
 // TODO
 // - check VSS-forgery article
 // - zeroise
-
-pub type ID = Idx;
-
-/// Node is a participant in the DKG protocol. In a DKG protocol, each
-/// participant must be identified both by an index and a public key. At the end
-/// of the protocol, if sucessful, the index is used to verify the validity of
-/// the share this node holds.
-pub struct Node<C: Curve>(ID, C::Point);
 
 impl<C> fmt::Debug for Node<C>
 where
@@ -52,12 +70,6 @@ where
     }
 }
 
-/// Group  TODO
-pub struct Group<C: Curve> {
-    nodes: Vec<Node<C>>,
-    threshold: usize,
-}
-
 impl<C> Clone for Group<C>
 where
     C: Curve,
@@ -75,6 +87,13 @@ impl<C> Group<C>
 where
     C: Curve,
 {
+    pub fn from_list(nodes: Vec<Node<C>>) -> Group<C> {
+        let l = nodes.len();
+        Self {
+            nodes: nodes,
+            threshold: default_threshold(l),
+        }
+    }
     pub fn new(nodes: Vec<Node<C>>, threshold: usize) -> DKGResult<Group<C>> {
         let minimum = minimum_threshold(nodes.len());
         let maximum = nodes.len();
@@ -112,9 +131,6 @@ where
     }
 }
 
-// TODO: maybe add another curve for the participants public key
-// so signature can be done using a different potentially faster/ligher
-// signature algo
 struct DKGInfo<C: Curve> {
     private_key: C::Scalar,
     index: ID,
@@ -135,14 +151,24 @@ where
     }
 }
 
+/// DKG is the struct containing the logic to run the Distributed Key Generation
+/// protocol from
+/// [Pedersen](https://link.springer.com/content/pdf/10.1007%2F3-540-48910-X_21.pdf).
+/// The protocol runs at minimum in two phases and at most in three phases as
+/// described in the module documentation. Each transition to a new phase is
+/// consuming the DKG state (struct) to produce a new state that only accepts to
+/// transition to the next phase.
 pub struct DKG<C: Curve> {
     info: DKGInfo<C>,
 }
 
+/// EncryptedShare holds the ECIES encryption of a share destined to the
+/// `share_idx`-th participant. When receiving the share, if the participant has
+/// the same specified index, the corresponding dkg state decrypts the share using
+/// the participant's private key.
 pub struct EncryptedShare<C: Curve> {
     share_idx: ID,
     secret: EciesCipher<C>,
-    // TODO add signature ?
 }
 
 impl<C> Clone for EncryptedShare<C>
@@ -157,6 +183,8 @@ where
     }
 }
 
+/// BundledShares holds all encrypted shares a dealer creates during the first
+/// phase of the protocol.
 pub struct BundledShares<C: Curve> {
     dealer_idx: ID,
     shares: Vec<EncryptedShare<C>>,
@@ -164,10 +192,6 @@ pub struct BundledShares<C: Curve> {
     /// created by the dealer. In the context of using a blockchain as a
     /// broadcast channel, it can be posted only once.
     public: PublicPoly<C>,
-    // TODO signature over all, or individually, or a mix ? or external ?
-    // ex: compoundshare.signed(i) returns a signed encryptedshare bundled with
-    // the public polynomial
-    // compoundshare.sign() signs the whole bundledshares
 }
 
 impl<C> Clone for BundledShares<C>
@@ -183,12 +207,23 @@ where
     }
 }
 
+/// DKGOutput is the final output of the DKG protocol in case it runs
+/// successfully. It contains the QUALified group (the list of nodes that
+/// sucessfully ran the protocol until the end), the distributed public key and
+/// the private share corresponding to the participant's index.
 pub struct DKGOutput<C: Curve> {
     pub qual: Group<C>,
     pub public: Public<C>,
     pub share: Share<C::Scalar>,
 }
 
+/// A `Status` holds the claim of a validity or not of a share from the point of
+/// a view of the share holder. A status is sent inside a `Response` during the
+/// second phase of the protocol.
+/// Currently, this protocol only outputs `Complaint` since that is how the protocol
+/// is specified using a synchronous network with a broadcast channel. In
+/// practice, that means any `Response` seen during the second phase is a
+/// `Complaint` from a participant about one of its received share.
 #[derive(Debug)]
 pub enum Status {
     Success,
@@ -206,8 +241,6 @@ impl From<bool> for Status {
 }
 
 impl Status {
-    // XXX why status.into() doesn't work to convert into bool: a blanked impl.
-    // because of From should be provided but is not?
     fn to_bool(&self) -> bool {
         self.is_success()
     }
@@ -220,6 +253,11 @@ impl Status {
     }
 }
 
+/// A `Response` is sent during the second phase of the protocol by all
+/// participants that have received invalid or inconsistent shares (all statuses
+/// are `Complaint`). Each `Response` contains the index of the participant that
+/// created the share (a *dealer*), the index of the participant that received
+/// the share (and created the `Response`) and
 #[derive(Debug)]
 pub struct Response {
     share_idx: ID,
@@ -227,6 +265,7 @@ pub struct Response {
     status: Status,
 }
 
+/// A `Justification` is
 pub struct Justification<C: Curve> {
     share_idx: ID,
     share: C::Scalar,
@@ -316,18 +355,6 @@ where
     C::Scalar: Encodable,
     C::Point: Encodable,
 {
-    // TODO look if that makes still sense w.r.t to global API
-    // /// Returns how many shares should we receive at this stage if all honest
-    // /// players are honest. If during the first period, we received that many
-    // /// shares and all are from a distinct party, we can already (try to ) pass
-    // /// to the second period. To know how many shares in minimum should we
-    // /// have received at the end of the period, call `minimum_expected_shares()`.
-    // // TODO make way to verify share authenticity -> signature
-    // fn expected_shares(&self) -> usize {
-    //     // don't count our own share
-    //     self.info.n() - 1
-    // }
-
     /// (a) Report complaint on invalid dealer index
     /// (b) Report complaint on absentee shares for us
     /// (c) Report complaint on invalid encryption
@@ -501,27 +528,6 @@ impl<C> DKGWaitingResponse<C>
 where
     C: Curve,
 {
-    /// default_resp defines the capability of the protocol to finish before an
-    /// epoch or not if all responses are correct.
-    /// A `true` value indicates that participants should only broadcast their
-    /// complaint (negative response) in the event they have complaints and "do
-    /// nothing" in case there is no complaints to broadcast. At the end of the
-    /// period, each participant will call this method with all responses seen
-    /// so far. At the end of the period, all absent responses are assumed to
-    /// have the success status meaning their issuer have not found any problem
-    /// with their received shares. Hence, it forces the protocol to wait until
-    /// the end of the period, to make sure there is no complaint unseen. This
-    /// case follows the paper specification of the protocol and is especially
-    /// relevant in the context of having a blockchain as a bulletin board,
-    /// where periods are clearly delimited,for example with block heights.
-    /// **Note**: this is the default behavior of this implementation.
-    ///
-    /// On the other hand, a `false` value indicates miners MUST broadcast all
-    /// of their responses, regardless of their status for them to be
-    /// considered. Otherwise, a participant risk to be considered absent. This
-    /// specific case is useful in the context of streamlining the protocol, so
-    /// it can move to the next period before the end, in case all responses are
-    /// success. Note this mode is currently *not* used.
     fn new(
         info: DKGInfo<C>,
         dist_share: C::Scalar,
@@ -535,6 +541,30 @@ where
             dist_share,
             dist_pub,
             own_responses: own,
+            // default_resp defines the capability of the protocol to finish
+            // before an epoch or not if all responses are correct.  A `true`
+            // value indicates that participants should only broadcast their
+            // complaint (negative response) in the event they have complaints
+            // and "do nothing" in case there is no complaints to broadcast. At
+            // the end of the period, each participant will call this method
+            // with all responses seen so far. At the end of the period, all
+            // absent responses are assumed to have the success status meaning
+            // their issuer have not found any problem with their received
+            // shares. Hence, it forces the protocol to wait until the end of
+            // the period, to make sure there is no complaint unseen. This case
+            // follows the paper specification of the protocol and is especially
+            // relevant in the context of having a blockchain as a bulletin
+            // board, where periods are clearly delimited,for example with block
+            // heights.  **Note**: this is the default behavior of this
+            // implementation.
+            //
+            // On the other hand, a `false` value indicates miners MUST
+            // broadcast all of their responses, regardless of their status for
+            // them to be considered. Otherwise, a participant risk to be
+            // considered absent. This specific case is useful in the context of
+            // streamlining the protocol, so it can move to the next period
+            // before the end, in case all responses are success. Note this mode
+            // is currently *not* used.
             default_resp: Status::Success,
             publics,
         }
@@ -615,7 +645,7 @@ where
         let my_idx = self.info.index;
         let n = self.info.n();
         // (a)
-        let mut statuses = vec![Bitset::from_elem(n, self.default_resp.to_bool()); n];
+        let mut statuses = vec![Bitset::from_elem(n, (&self.default_resp).to_bool()); n];
         // makes sure the API doesn't take into account our own responses!
         let not_from_me = responses.iter().filter(|r| r.share_idx != my_idx);
         let valid_idx = not_from_me.filter(|r| {

@@ -1,4 +1,4 @@
-use crate::group::{CurveFrom, Element, Encodable, PairingCurve as PC, Point, Scalar as Sc};
+use crate::group::{Curve, CurveFrom, Element, Encodable, PairingCurve as PC, Point, Scalar as Sc};
 use algebra::bls12_377 as zexe;
 use algebra::bls12_377::Parameters as Bls12_377Parameters;
 use algebra::bytes::{FromBytes, ToBytes};
@@ -242,7 +242,13 @@ impl fmt::Display for GT {
 }
 
 pub type G1Curve = CurveFrom<Scalar, G1>;
-pub type G2Curve = CurveFrom<Scalar, G2>;
+//pub type G2Curve = CurveFrom<Scalar, G2>;
+pub struct G2Curve {}
+impl Curve for G2Curve {
+    type Scalar = Scalar;
+    type Point = G2;
+}
+
 pub struct PairingCurve {}
 
 impl PC for PairingCurve {
