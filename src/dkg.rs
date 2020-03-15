@@ -5,6 +5,7 @@ use crate::{Public, Share};
 use rand_core::RngCore;
 use smallbitvec::SmallBitVec;
 use std::collections::HashMap;
+use std::error::Error;
 use std::fmt;
 
 /// Node is a participant in the DKG protocol. In a DKG protocol, each
@@ -27,6 +28,7 @@ where
 /// new group that contains members that succesfully ran the protocol. When
 /// creating a new group using the `from()` or `from_list()`method, the module
 /// sets the threshold to the output of `default_threshold()`.
+#[derive(Debug)]
 pub struct Group<C: Curve> {
     pub nodes: Vec<Node<C>>,
     pub threshold: usize,
@@ -186,12 +188,12 @@ where
 /// BundledShares holds all encrypted shares a dealer creates during the first
 /// phase of the protocol.
 pub struct BundledShares<C: Curve> {
-    dealer_idx: ID,
-    shares: Vec<EncryptedShare<C>>,
+    pub dealer_idx: ID,
+    pub shares: Vec<EncryptedShare<C>>,
     /// public is the commitment of the secret polynomial
     /// created by the dealer. In the context of using a blockchain as a
     /// broadcast channel, it can be posted only once.
-    public: PublicPoly<C>,
+    pub public: PublicPoly<C>,
 }
 
 impl<C> Clone for BundledShares<C>
@@ -224,7 +226,7 @@ pub struct DKGOutput<C: Curve> {
 /// is specified using a synchronous network with a broadcast channel. In
 /// practice, that means any `Response` seen during the second phase is a
 /// `Complaint` from a participant about one of its received share.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum Status {
     Success,
     Complaint,
@@ -258,11 +260,11 @@ impl Status {
 /// are `Complaint`). Each `Response` contains the index of the participant that
 /// created the share (a *dealer*), the index of the participant that received
 /// the share (and created the `Response`) and
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Response {
-    share_idx: ID,
-    dealer_idx: ID,
-    status: Status,
+    pub share_idx: ID,
+    pub dealer_idx: ID,
+    pub status: Status,
 }
 
 /// A `Justification` is
@@ -272,9 +274,9 @@ pub struct Justification<C: Curve> {
 }
 
 pub struct BundledJustification<C: Curve> {
-    dealer_idx: ID,
-    justifications: Vec<Justification<C>>,
-    public: PublicPoly<C>,
+    pub dealer_idx: ID,
+    pub justifications: Vec<Justification<C>>,
+    pub public: PublicPoly<C>,
 }
 
 impl<C> DKG<C>
@@ -321,12 +323,6 @@ where
             .iter()
             .map(|n| {
                 let sec = self.info.secret.eval(n.id() as Idx);
-                println!(
-                    "dealer {} - holder {} - share {:?}",
-                    self.info.index,
-                    n.id(),
-                    sec.value
-                );
                 let buff = sec.value.marshal();
                 let cipher = ecies::encrypt::<C>(n.key(), &buff);
                 EncryptedShare::<C> {
@@ -479,7 +475,6 @@ where
         use ShareErrorType::*;
         let thr = self.info.thr();
         if public.degree() + 1 != thr {
-            println!("SHARE #1");
             // report (d) error
             return Err(ShareError::from(
                 dealer,
@@ -490,7 +485,6 @@ where
         let res = ecies::decrypt::<C>(&self.info.private_key, &share.secret);
         if res.is_err() {
             // report (c) error
-            println!("SHARE #2");
             return Err(ShareError::from(
                 dealer,
                 InvalidCiphertext(res.unwrap_err()),
@@ -503,12 +497,6 @@ where
             // TODO verify that !!!
             .expect("scalar should not fail when unmarshaling");
         if !share_correct::<C>(self.info.index, &share, public) {
-            println!(
-                "decrypt: dealer {} - holder {} - share {:?}",
-                dealer, self.info.index, &share
-            );
-            // report (e) error
-            println!("SHARE #3");
             return Err(ShareError::from(dealer, InvalidShare));
         }
         Ok(share)
@@ -577,11 +565,11 @@ where
         responses: &Vec<Response>,
     ) -> Result<DKGOutput<C>, (DKGWaitingJustification<C>, Option<BundledJustification<C>>)> {
         let matrix = self.compute_statuses(responses);
-        println!("Responses matrix for party {}", self.info.index);
-        for (i, row) in matrix.iter().enumerate() {
-            let row_str: String = row.iter().map(|b| if b { '1' } else { '0' }).collect();
-            println!("\t-party {} -> {}", i, row_str);
-        }
+        /*println!("Responses matrix for party {}", self.info.index);*/
+        //for (i, row) in matrix.iter().enumerate() {
+        //let row_str: String = row.iter().map(|b| if b { '1' } else { '0' }).collect();
+        //println!("\t-party {} -> {}", i, row_str);
+        /*}*/
         // find out if justifications are required
         // if there is a least one participant that issued one complaint
         let required = matrix.iter().any(|row| !row.all_true());
@@ -831,6 +819,14 @@ impl fmt::Display for DKGError {
                 write!(f, "threshold {} is not in range [{},{}]", have, min, max)
             }
         }
+    }
+}
+
+impl Error for DKGError {
+    fn source(&self) -> Option<&(dyn Error + 'static)> {
+        // Generic error, underlying cause isn't tracked.
+        // TODO
+        None
     }
 }
 

@@ -5,5 +5,8 @@
 //! pub use threshold::curve::bls12381::PairingCurve;
 //! ```
 pub use threshold::curve::zexe::{G2Curve, PairingCurve as Pairing};
+use threshold::group::Curve;
 
 pub type KeyCurve = G2Curve;
+pub type PrivateKey = <KeyCurve as Curve>::Scalar;
+pub type PublicKey = <KeyCurve as Curve>::Point;
