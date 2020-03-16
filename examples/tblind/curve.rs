@@ -6,7 +6,9 @@
 //! ```
 pub use threshold::curve::zexe::{G2Curve, PairingCurve as Pairing};
 use threshold::group::Curve;
+use threshold::sig::tblind::G2Scheme;
 
 pub type KeyCurve = G2Curve;
 pub type PrivateKey = <KeyCurve as Curve>::Scalar;
 pub type PublicKey = <KeyCurve as Curve>::Point;
+pub type Scheme = G2Scheme<Pairing>;

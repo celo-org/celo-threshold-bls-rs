@@ -1,8 +1,9 @@
 use crate::board::Board;
-use crate::curve::{KeyCurve, Pairing, PrivateKey, PublicKey};
+use crate::curve::{KeyCurve, Pairing, PrivateKey, PublicKey, Scheme};
 use rand::prelude::*;
 use std::error::Error;
 use threshold::dkg;
+use threshold::sig::ThresholdScheme;
 use threshold::*;
 /// Node holds the logic of a participants, for the different phases of the
 /// example.
@@ -94,5 +95,19 @@ impl Node {
             }
             Err(e) => Err(Box::new(e)),
         }
+    }
+
+    pub fn partial(&mut self, partial: &[u8]) -> Result<Vec<u8>, Box<dyn Error>> {
+        let out = self.output.take().unwrap();
+        let res = Scheme::partial_sign(&out.share, partial);
+        self.output = Some(out);
+        res
+    }
+
+    pub fn publickey(&mut self) -> threshold::Public<KeyCurve> {
+        let out = self.output.take().unwrap();
+        let public = out.public.clone();
+        self.output = Some(out);
+        public
     }
 }

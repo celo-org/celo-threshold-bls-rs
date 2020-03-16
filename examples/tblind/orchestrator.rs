@@ -1,8 +1,10 @@
 use crate::board::Board;
-use crate::curve::{KeyCurve, PrivateKey, PublicKey};
+use crate::curve::{KeyCurve, PrivateKey, PublicKey, Scheme};
 use crate::node::Node;
 use rand::prelude::*;
+use std::error::Error;
 use threshold::dkg;
+use threshold::sig::*;
 use threshold::*;
 
 pub struct Orchestrator {
@@ -66,6 +68,32 @@ impl Orchestrator {
             // XXX do justification phase
         }
         Ok(())
+    }
+
+    pub fn threshold_blind_sign(&mut self, msg: &[u8]) -> Result<(), Box<dyn Error>> {
+        // 1. blind the message for each destination
+        let blindeds: Vec<_> = self.nodes.iter().map(|_| Scheme::blind(msg)).collect();
+        // 2. request partial signatures from t nodes
+        let partials: Vec<_> = self
+            .nodes
+            .iter_mut()
+            .enumerate()
+            .map(|(i, n)| n.partial(&blindeds[i].1))
+            .filter_map(Result::ok)
+            .collect();
+
+        // 3. unblind each partial signatures
+        let unblindeds: Vec<_> = blindeds
+            .into_iter()
+            .enumerate()
+            .map(|(i, b)| Scheme::unblind(b.0, &partials[i]))
+            .filter_map(Result::ok)
+            .collect();
+        // 3. reconstruct final signature
+        let dist_public = self.nodes[0].publickey();
+        let reconstructed = Scheme::aggregate(&dist_public, msg, &unblindeds)?;
+        // 5. verify
+        Scheme::verify(&dist_public.free_coeff(), msg, &reconstructed)
     }
 }
 fn new_keypair() -> (PrivateKey, PublicKey) {
