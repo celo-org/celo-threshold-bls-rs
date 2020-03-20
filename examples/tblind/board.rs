@@ -10,7 +10,7 @@ pub struct Board {
     phase3: bool,
     dkg_finished: bool,
     bundles: Vec<dkg::BundledShares<KeyCurve>>,
-    responses: Vec<dkg::Response>,
+    responses: Vec<dkg::BundledResponses>,
     justifs: Vec<dkg::BundledJustification<KeyCurve>>,
 }
 
@@ -82,18 +82,12 @@ impl Board {
     /// NOTE: this call should verify the authenticity of the sender! This
     /// function only checks the public key at the moment - Needs further
     /// clarification from actual use case
-    pub fn publish_responses(&mut self, sender_pk: &PublicKey, responses: &mut Vec<dkg::Response>) {
+    pub fn publish_responses(&mut self, sender_pk: &PublicKey, bundle: dkg::BundledResponses) {
         if !self.phase2 {
             panic!("dkg is not in phase2 - can't publish responses");
         }
-        if responses
-            .iter()
-            .any(|r| r.dealer_idx != responses[0].dealer_idx)
-        {
-            panic!("responses dealer index are not consistents")
-        }
-        match self.check_authenticity(sender_pk, responses[0].dealer_idx) {
-            Ok(i) => self.responses.append(responses),
+        match self.check_authenticity(sender_pk, bundle.share_idx) {
+            Ok(i) => self.responses.push(bundle),
             Err(e) => panic!(e),
         }
     }
@@ -113,7 +107,7 @@ impl Board {
         return self.bundles.clone();
     }
 
-    pub fn get_responses(&self) -> Vec<dkg::Response> {
+    pub fn get_responses(&self) -> Vec<dkg::BundledResponses> {
         return self.responses.clone();
     }
 

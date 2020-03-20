@@ -58,17 +58,17 @@ impl Node {
     pub fn dkg_phase2(&mut self, board: &mut Board, shares: &Vec<dkg::BundledShares<KeyCurve>>) {
         let to_phase2 = self.dkg1.take().unwrap();
         match to_phase2.process_shares(shares) {
-            Ok((ndkg, mut responses)) => {
-                board.publish_responses(&self.public, &mut responses);
+            Ok((ndkg, responses)) => {
+                board.publish_responses(&self.public, responses);
                 self.dkg2 = Some(ndkg);
             }
             Err(e) => panic!(e),
         }
     }
 
-    pub fn dkg_endphase2(&mut self, board: &mut Board, responses: &Vec<dkg::Response>) {
+    pub fn dkg_endphase2(&mut self, board: &mut Board, bundle: &Vec<dkg::BundledResponses>) {
         let end_phase2 = self.dkg2.take().unwrap();
-        match end_phase2.process_responses(responses) {
+        match end_phase2.process_responses(bundle) {
             Ok(output) => self.output = Some(output),
             Err((ndkg, justifs)) => {
                 self.dkg3 = Some(ndkg);

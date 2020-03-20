@@ -255,16 +255,22 @@ impl Status {
     }
 }
 
-/// A `Response` is sent during the second phase of the protocol by all
-/// participants that have received invalid or inconsistent shares (all statuses
-/// are `Complaint`). Each `Response` contains the index of the participant that
-/// created the share (a *dealer*), the index of the participant that received
-/// the share (and created the `Response`) and
 #[derive(Debug, Clone)]
 pub struct Response {
-    pub share_idx: ID,
     pub dealer_idx: ID,
     pub status: Status,
+}
+
+/// A `BundledResponse` is sent during the second phase of the protocol by all
+/// participants that have received invalid or inconsistent shares (all statuses
+/// are `Complaint`). The bundles contains the index of the recipient of the
+/// shares, the one that created the response.  Each `Response` contains the
+/// index of the participant that created the share (a *dealer*),
+#[derive(Debug, Clone)]
+pub struct BundledResponses {
+    /// share_idx is the index of the node that received the shares
+    pub share_idx: ID,
+    pub responses: Vec<Response>,
 }
 
 /// A `Justification` is
@@ -359,23 +365,31 @@ where
     pub fn process_shares(
         self,
         bundles: &Vec<BundledShares<C>>,
-    ) -> DKGResult<(DKGWaitingResponse<C>, Vec<Response>)> {
+    ) -> DKGResult<(DKGWaitingResponse<C>, BundledResponses)> {
         self.process_shares_get_complaint(bundles)
     }
 
     fn process_shares_get_complaint(
         self,
         bundles: &Vec<BundledShares<C>>,
-    ) -> DKGResult<(DKGWaitingResponse<C>, Vec<Response>)> {
+    ) -> DKGResult<(DKGWaitingResponse<C>, BundledResponses)> {
         // true means we suppose every missing responses is a success at the end of
         // the period. Hence we only need to get & broadcast the complaints.
         // See DKGWaitingResponse::new for more information.
-        let (newdkg, responses) = self.process_shares_get_all(bundles)?;
-        let complaints = responses
+        let myidx = self.info.index.clone();
+        let (newdkg, bundle) = self.process_shares_get_all(bundles)?;
+        let complaints = bundle
+            .responses
             .into_iter()
             .filter(|r| !r.status.is_success())
             .collect();
-        Ok((newdkg, complaints))
+        Ok((
+            newdkg,
+            BundledResponses {
+                responses: complaints,
+                share_idx: myidx,
+            },
+        ))
     }
 
     // get_all exists to make the dkg impl. handle the case where we don't want
@@ -386,7 +400,7 @@ where
     fn process_shares_get_all(
         self,
         bundles: &Vec<BundledShares<C>>,
-    ) -> DKGResult<(DKGWaitingResponse<C>, Vec<Response>)> {
+    ) -> DKGResult<(DKGWaitingResponse<C>, BundledResponses)> {
         use Status::{Complaint, Success};
         let n = self.info.n();
         let thr = self.info.thr();
@@ -441,11 +455,14 @@ where
             .iter()
             .enumerate()
             .map(|(i, b)| Response {
-                share_idx: my_idx,
                 dealer_idx: i as ID,
                 status: Status::from(b),
             })
             .collect();
+        let bundle = BundledResponses {
+            share_idx: my_idx,
+            responses: responses,
+        };
         let new_dkg = DKGWaitingResponse::new(
             self.info,
             fshare,
@@ -453,7 +470,7 @@ where
             responses_bitset,
             public_polynomials,
         );
-        Ok((new_dkg, responses))
+        Ok((new_dkg, bundle))
     }
 
     // extract_poly maps the bundles into a map: ID -> public poly for ease of
@@ -562,7 +579,7 @@ where
     /// - no more than
     pub fn process_responses(
         self,
-        responses: &Vec<Response>,
+        responses: &Vec<BundledResponses>,
     ) -> Result<DKGOutput<C>, (DKGWaitingJustification<C>, Option<BundledJustification<C>>)> {
         let matrix = self.compute_statuses(responses);
         /*println!("Responses matrix for party {}", self.info.index);*/
@@ -629,7 +646,7 @@ where
     /// broadcast its response to its own share.
     /// (d) set the positions of our own responses computed during previous step,
     /// at `process_shares`.
-    fn compute_statuses(&self, responses: &Vec<Response>) -> Vec<Bitset> {
+    fn compute_statuses(&self, responses: &Vec<BundledResponses>) -> Vec<Bitset> {
         let my_idx = self.info.index;
         let n = self.info.n();
         // (a)
@@ -637,16 +654,18 @@ where
         // makes sure the API doesn't take into account our own responses!
         let not_from_me = responses.iter().filter(|r| r.share_idx != my_idx);
         let valid_idx = not_from_me.filter(|r| {
-            let good_dealer = r.dealer_idx < n as ID;
             let good_holder = r.share_idx < n as ID;
-            good_dealer && good_holder
+            let good_dealers = !r.responses.iter().any(|resp| resp.dealer_idx >= n as ID);
+            good_dealers && good_holder
         });
-        for resp in valid_idx {
-            let dealer_index = resp.dealer_idx as usize;
-            let holder_index = resp.share_idx as usize;
-            // (b)
-            // bit set = Success, bit unset = Complaint
-            statuses[dealer_index].set(holder_index, resp.status.to_bool());
+        for bundle in valid_idx {
+            let holder_index = bundle.share_idx as usize;
+            for response in bundle.responses.iter() {
+                let dealer_index = response.dealer_idx as usize;
+                // (b)
+                // bit set = Success, bit unset = Complaint
+                statuses[dealer_index].set(holder_index, response.status.to_bool());
+            }
         }
         // (d) add our "own" previous responses
         statuses[self.info.index as usize] = self.own_responses.clone();
@@ -916,22 +935,21 @@ pub mod tests {
                 ndkg
             })
             .collect();
-        let mut all_responses = Vec::with_capacity(n);
+        let mut response_bundles = Vec::with_capacity(n);
         let dkgs: Vec<_> = dkgs
             .into_iter()
             .map(|dkg| {
                 // TODO clone inneficient for test but likely use case for API
                 // Make that take a reference
-                let (ndkg, responses) = dkg.process_shares(&all_shares).unwrap();
-                all_responses.push(responses);
+                let (ndkg, bundle) = dkg.process_shares(&all_shares).unwrap();
+                response_bundles.push(bundle);
                 ndkg
             })
             .collect();
-        let flattened_responses: Vec<_> = all_responses.into_iter().flatten().collect();
         let outputs: Vec<_> = dkgs
             .into_iter()
             // TODO implement debug for err return so we can use unwrap
-            .map(|dkg| match dkg.process_responses(&flattened_responses) {
+            .map(|dkg| match dkg.process_responses(&response_bundles) {
                 Ok(out) => out,
                 // Err((ndkg,justifs)) =>
                 Err((_, _)) => panic!("should not happen"),
