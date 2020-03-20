@@ -45,12 +45,12 @@ impl Encodable for Scalar {
         out
     }
 
-    // TODO make it return an error
     fn unmarshal(&mut self, data: &[u8]) -> Result<(), Box<dyn Error>> {
-        // TODO check on the length !
+        if data.len() != 32 {
+            return Err(Box::new(crate::curve::InvalidLength(data.len(), 32)));
+        }
         let mut out = FrRepr::default();
         out.read_le(data)?;
-        // TODO check 200% that FrRepr doesn't yield an error
         *self = Fr::from_repr(out)?.into();
         Ok(())
     }
