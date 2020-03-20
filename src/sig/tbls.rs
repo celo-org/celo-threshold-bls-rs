@@ -62,7 +62,7 @@ where
         if threshold > partials.len() {
             return Err(Box::new(TBLSError::NotEnoughPartialSignatures));
         }
-        let valid_partials = partials
+        let valid_partials: Vec<Eval<Self::Signature>> = partials
             .iter()
             .filter(|s| Self::partial_verify(public, msg, s).is_ok())
             .map(|s| extract_index(s))
@@ -80,7 +80,7 @@ where
             .filter_map(Result::ok)
             .collect();
         let recovered_poly =
-            Poly::<Self::Private, Self::Signature>::recover(threshold, valid_partials);
+            Poly::<Self::Private, Self::Signature>::recover(threshold, valid_partials)?;
         // TODO avoid useless cloning here
         let recoverd_sig = recovered_poly.free_coeff();
         Ok(recoverd_sig.marshal())

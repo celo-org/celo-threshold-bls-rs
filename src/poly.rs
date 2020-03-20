@@ -11,7 +11,8 @@ pub type PublicPoly<C> = Poly<<C as Curve>::Scalar, <C as Curve>::Point>;
 
 pub type Idx = u32;
 
-pub struct Eval<A> {
+#[derive(Debug, Clone)]
+pub struct Eval<A: Clone> {
     pub value: A,
     pub index: Idx,
 }
@@ -31,6 +32,7 @@ where
 //  TODO Annoying to have an unused type warning here for Var: it is used in the
 //  constraint but not in the struct directly.-> phantomdata ?
 //  TODO: make it implement Element trait ;) ?
+#[derive(Debug)]
 pub struct Poly<Var: Scalar, Coeff: Element<Var>> {
     c: Vec<Coeff>,
     phantom: PhantomData<Var>,
@@ -99,7 +101,10 @@ where
 
     // TODO: make it return a Result in case inverse() fails
     // TODO: check t parameters w.r.t. to shares
-    pub fn recover(t: usize, mut shares: Vec<Eval<C>>) -> Self {
+    pub fn recover(t: usize, mut shares: Vec<Eval<C>>) -> Result<Self, InvalidRecovery> {
+        if shares.len() < t {
+            return Err(InvalidRecovery(shares.len(), t));
+        }
         // first sort the shares as it can happens recovery happens for
         // non-correlated shares so the subset chosen becomes important
         shares.sort_by(|a, b| a.index.cmp(&b.index));
@@ -132,7 +137,7 @@ where
             let linear_poly = Self::from_vec(lin);
             acc.add(&linear_poly);
         }
-        acc
+        Ok(acc)
     }
 
     /// Computes the lagrange basis polynomial of index i
@@ -188,6 +193,10 @@ where
 
     pub fn free_coeff(&self) -> C {
         self.c[0].clone()
+    }
+
+    pub fn public_key(&self) -> C {
+        self.free_coeff()
     }
 }
 
@@ -255,18 +264,24 @@ where
     }
 }
 
-#[derive(Debug)]
-pub struct InvalidRecovery(String);
+pub struct InvalidRecovery(usize, usize);
 
 impl fmt::Display for InvalidRecovery {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{}", self.0)
+        write!(f, "Invalid recovery: only has {}/{} shares", self.0, self.1)
+    }
+}
+impl fmt::Debug for InvalidRecovery {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "Invalid recovery: only has {}/{} shares", self.0, self.1)
     }
 }
 
 impl Error for InvalidRecovery {
-    fn description(&self) -> &str {
-        &self.0
+    fn source(&self) -> Option<&(dyn Error + 'static)> {
+        // Generic error, underlying cause isn't tracked.
+        // TODO
+        None
     }
 }
 
@@ -292,10 +307,12 @@ pub mod tests {
         let shares = (0..threshold)
             .map(|i| poly.eval(i as Idx))
             .collect::<Vec<Eval<Sc>>>();
-        let recovered = Poly::<Sc, Sc>::recover(threshold as usize, shares);
+        let smaller_shares: Vec<_> = shares.iter().take(threshold - 1).cloned().collect();
+        let recovered = Poly::<Sc, Sc>::recover(threshold as usize, shares).unwrap();
         let expected = poly.c[0];
         let computed = recovered.c[0];
         assert_eq!(expected, computed);
+        Poly::<Sc, Sc>::recover(threshold as usize, smaller_shares).unwrap_err();
     }
 
     #[test]

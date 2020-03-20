@@ -1,6 +1,6 @@
 use crate::ecies::{self, EciesCipher};
 use crate::group::{Curve, Element, Encodable};
-use crate::poly::{Idx, Poly, PrivatePoly, PublicPoly};
+use crate::poly::{Idx, InvalidRecovery, Poly, PrivatePoly, PublicPoly};
 use crate::{Public, Share};
 use rand_core::RngCore;
 use smallbitvec::SmallBitVec;
@@ -872,7 +872,10 @@ pub mod tests {
         return (privs, pubs.into());
     }
 
-    fn reconstruct<C: Curve>(thr: usize, shares: &Vec<DKGOutput<C>>) -> PrivatePoly<C> {
+    fn reconstruct<C: Curve>(
+        thr: usize,
+        shares: &Vec<DKGOutput<C>>,
+    ) -> Result<PrivatePoly<C>, InvalidRecovery> {
         let evals: Vec<_> = shares
             .iter()
             .map(|o| Eval {
@@ -934,7 +937,7 @@ pub mod tests {
                 Err((_, _)) => panic!("should not happen"),
             })
             .collect();
-        let recovered_private = reconstruct(thr, &outputs);
+        let recovered_private = reconstruct(thr, &outputs).unwrap();
         let recovered_public = recovered_private.commit::<G1>();
         let recovered_key = recovered_public.free_coeff();
         for out in outputs.iter() {

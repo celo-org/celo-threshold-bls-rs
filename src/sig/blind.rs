@@ -74,7 +74,7 @@ where
         h.mul(&r);
         (Token(r), h.marshal())
     }
-    fn unblind(t: Self::Token, sigbuff: &[u8]) -> Result<Vec<u8>, Box<dyn Error>> {
+    fn unblind(t: &Self::Token, sigbuff: &[u8]) -> Result<Vec<u8>, Box<dyn Error>> {
         let mut sig = I::Signature::new();
         if let Err(_) = sig.unmarshal(sigbuff) {
             return Err(Box::new(BlindError::SigError(BLSError::InvalidPoint)));
@@ -162,7 +162,7 @@ mod tests {
         let msg = vec![1, 9, 6, 9];
         let (token, blinded) = B::blind(&msg);
         let blinded_sig = B::sign(&private, &blinded).unwrap();
-        let clear_sig = B::unblind(token, &blinded_sig).expect("unblind should go well");
+        let clear_sig = B::unblind(&token, &blinded_sig).expect("unblind should go well");
         match B::verify(&public, &msg, &clear_sig) {
             Ok(()) => {}
             Err(e) => {

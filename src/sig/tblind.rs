@@ -60,9 +60,9 @@ where
     fn blind(msg: &[u8]) -> (B::Token, Vec<u8>) {
         B::blind(msg)
     }
-    fn unblind(t: B::Token, buff_blindp: &[u8]) -> Result<Vec<u8>, Box<dyn Error>> {
+    fn unblind(t: &B::Token, buff_blindp: &[u8]) -> Result<Vec<u8>, Box<dyn Error>> {
         let (i, blind_partial) = T::extract(buff_blindp)?;
-        let mut unblinded = B::unblind(t, &blind_partial)?;
+        let mut unblinded = B::unblind(&t, &blind_partial)?;
         Ok(T::inject(i, &mut unblinded))
     }
 }
@@ -118,29 +118,25 @@ mod tests {
         let thr = 4;
         let (shares, public) = shares::<B>(n, thr);
         let msg = vec![1, 9, 6, 9];
-        let tokens_and_blinded: Vec<_> = shares.iter().map(|_| B::blind(&msg)).collect();
+        let (token, blinded) = B::blind(&msg);
         let partials: Vec<_> = shares
             .iter()
             .enumerate()
-            .map(|(i, share)| B::partial_sign(share, &tokens_and_blinded[i].1).unwrap())
+            .map(|(i, share)| B::partial_sign(share, &blinded).unwrap())
             .collect();
 
-        let unblindeds: Vec<_> =
-            tokens_and_blinded
-                .into_iter()
-                .enumerate()
-                .fold(vec![], |mut acc, (i, (t, _))| {
-                    match B::unblind(t, &partials[i]) {
-                        Ok(unblinded) => {
-                            println!("Unblinded {:?}", unblinded);
-                            acc.push(unblinded);
-                        }
-                        Err(e) => {
-                            panic!("error: {:?}", e);
-                        }
-                    };
-                    acc
-                });
+        let unblindeds: Vec<_> = partials.iter().fold(vec![], |mut acc, p| {
+            match B::unblind(&token, p) {
+                Ok(unblinded) => {
+                    println!("Unblinded {:?}", unblinded);
+                    acc.push(unblinded);
+                }
+                Err(e) => {
+                    panic!("error: {:?}", e);
+                }
+            };
+            acc
+        });
         println!("unblindeds {:?}", unblindeds);
         unblindeds
             .iter()

@@ -61,28 +61,13 @@ pub trait SignatureScheme: Scheme {
 pub trait Blinder {
     type Token: Encodable;
     fn blind(msg: &[u8]) -> (Self::Token, Vec<u8>);
-    fn unblind(t: Self::Token, sig: &[u8]) -> Result<Vec<u8>, Box<dyn Error>>;
+    fn unblind(t: &Self::Token, sig: &[u8]) -> Result<Vec<u8>, Box<dyn Error>>;
 }
 
 /// BlindScheme is a signature scheme where the message can be blinded before
 /// signature so the signer does not know the real message. The signature can
 /// later be "unblinded" as to reveal a valid signature over the initial
-/// message. This scheme can be used as the following:
-/// // by the client
-/// let message = vec![1,9,6,9];
-/// let (token,blinded) = scheme.blind(&message);
-/// //    --->
-/// // by the signer
-/// let (private,public) = scheme.keypair(&mut thread_rng());
-/// let blind_signature = scheme.sign(&private,&blinded)?;
-/// //   <---
-/// // by the client
-/// let signature = scheme.unblind(token,&blind_signature)?;
-/// match scheme.verify(&public,&message,&signature) {
-///     Ok(_) => println!("signature is correct!"),
-///     Err(e) => println!("signature is invalid: {}",e),
-///  };
-///
+/// message.
 pub trait BlindScheme: SignatureScheme + Blinder {}
 
 /// Partial is simply an alias to denote a partial signature.
@@ -92,20 +77,7 @@ pub type Partial = Vec<u8>;
 /// such a scheme means at least `t` participants are required produce a "partial
 /// signature" to then produce a regular signature.
 /// The `dkg` module allows participants to create a distributed private/public key
-/// that can be used with implementations `ThresholdScheme`. Once done, one can
-/// use the scheme as follows:
-/// let message = vec![1,9,6,9];
-/// // assumes a list of private shares and corresponding public key.
-/// let privates : Vec<Share<_>>;
-/// let public : Poly<_,_>;
-/// // each participants calls "partial_sign" with their share
-/// let partials :Vec<Partial> = privates.iter().map(|s|
-///     scheme.partial_sign(&privates[i],&message)
-/// ).collect();
-/// // anybody can aggregate such partial signatures - only "t" of them are
-/// // required - any subset.
-/// let signature = scheme.aggregate(&public,&message,&partials);
-///
+/// that can be used with implementations `ThresholdScheme`.
 pub trait ThresholdScheme: Scheme {
     fn partial_sign(private: &Share<Self::Private>, msg: &[u8]) -> Result<Partial, Box<dyn Error>>;
     fn partial_verify(
