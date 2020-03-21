@@ -9,7 +9,7 @@ pub use group::*;
 pub type Index = poly::Idx;
 
 //
-pub type Public<C> = poly::PublicPoly<C>;
+pub type DistPublic<C> = poly::PublicPoly<C>;
 
 #[derive(Clone)]
 pub struct Share<S: group::Scalar> {

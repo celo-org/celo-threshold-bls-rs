@@ -188,7 +188,7 @@ where
     // TODO fix semantics of zero:
     // it should be G1::zero() as only element
     pub fn zero() -> Self {
-        Self::from_vec(vec![])
+        Self::from_vec(vec![C::zero()])
     }
 
     pub fn free_coeff(&self) -> C {
@@ -314,6 +314,27 @@ pub mod tests {
         assert_eq!(expected, computed);
         Poly::<Sc, Sc>::recover(threshold as usize, smaller_shares).unwrap_err();
     }
+    /*#[test]*/
+    //fn benchy() {
+    //use std::time::{Duration, SystemTime};
+    //let degree = 49;
+    //let threshold = degree + 1;
+    //let poly = Poly::<Sc, Sc>::new(degree);
+    //let shares = (0..threshold)
+    //.map(|i| poly.eval(i as Idx))
+    //.collect::<Vec<Eval<Sc>>>();
+    //let smaller_shares: Vec<_> = shares.iter().take(threshold - 1).cloned().collect();
+    //let now = SystemTime::now();
+    //let recovered = Poly::<Sc, Sc>::recover(threshold as usize, shares).unwrap();
+    //match now.elapsed() {
+    //Ok(e) => println!("time elapsed {:?}", e),
+    //Err(e) => panic!("{}", e),
+    //}
+    //let expected = poly.c[0];
+    //let computed = recovered.c[0];
+    //assert_eq!(expected, computed);
+    //Poly::<Sc, Sc>::recover(threshold as usize, smaller_shares).unwrap_err();
+    //}
 
     #[test]
     fn eval() {

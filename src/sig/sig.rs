@@ -1,6 +1,6 @@
 use crate::group::{Element, Encodable, Point, Scalar};
 use crate::poly::Poly;
-use crate::{Public, Share};
+use crate::Share;
 use rand_core::RngCore;
 use std::error::Error;
 

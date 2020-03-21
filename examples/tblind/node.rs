@@ -85,7 +85,7 @@ impl Node {
 
     pub fn dkg_phase3(
         &mut self,
-        justifications: Vec<dkg::BundledJustification<KeyCurve>>,
+        justifications: &Vec<dkg::BundledJustification<KeyCurve>>,
     ) -> Result<(), Box<dyn Error>> {
         let phase3 = self.dkg3.take().unwrap();
         match phase3.process_justifications(justifications) {
@@ -104,7 +104,7 @@ impl Node {
         res
     }
 
-    pub fn publickey(&mut self) -> threshold::Public<KeyCurve> {
+    pub fn publickey(&mut self) -> threshold::DistPublic<KeyCurve> {
         let out = self.output.take().unwrap();
         let public = out.public.clone();
         self.output = Some(out);
