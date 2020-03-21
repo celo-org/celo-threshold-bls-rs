@@ -935,7 +935,7 @@ pub mod tests {
                 index: o.share.index,
             })
             .collect();
-        Poly::<C::Scalar, C::Scalar>::recover(thr, evals)
+        Poly::<C::Scalar, C::Scalar>::full_recover(thr, evals)
     }
     #[test]
     fn group_index() {

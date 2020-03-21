@@ -99,9 +99,49 @@ where
         zipped.for_each(|(a, b)| a.add(&b));
     }
 
-    // TODO: make it return a Result in case inverse() fails
-    // TODO: check t parameters w.r.t. to shares
-    pub fn recover(t: usize, mut shares: Vec<Eval<C>>) -> Result<Self, InvalidRecovery> {
+    pub fn recover(t: usize, mut shares: Vec<Eval<C>>) -> Result<C, InvalidRecovery> {
+        if shares.len() < t {
+            return Err(InvalidRecovery(shares.len(), t));
+        }
+        // first sort the shares as it can happens recovery happens for
+        // non-correlated shares so the subset chosen becomes important
+        shares.sort_by(|a, b| a.index.cmp(&b.index));
+
+        // convert the indexes of the shares into scalars
+        let xs = shares.iter().take(t).fold(HashMap::new(), |mut m, sh| {
+            let mut xi = X::new();
+            xi.set_int((sh.index + 1).into());
+            m.insert(sh.index, (xi, &sh.value));
+            m
+        });
+        assert!(xs.len() == t);
+        let mut acc = C::zero();
+        // iterate over all indices and for each multiply the lagrange basis
+        // with the value of the share
+        for (i, xi) in &xs {
+            let mut yi = xi.1.clone();
+            let mut num = X::one();
+            let mut den = X::one();
+            for (j, xj) in &xs {
+                if i == j {
+                    continue;
+                }
+                // xj - 0
+                num.mul(&xj.0);
+                // 1 / (xj - xi)
+                let mut tmp = xj.0.clone();
+                tmp.sub(&xi.0);
+                den.mul(&tmp);
+            }
+            let inv = den.inverse().unwrap();
+            num.mul(&inv);
+            yi.mul(&num);
+            acc.add(&yi);
+        }
+        Ok(acc)
+    }
+
+    pub fn full_recover(t: usize, mut shares: Vec<Eval<C>>) -> Result<Self, InvalidRecovery> {
         if shares.len() < t {
             return Err(InvalidRecovery(shares.len(), t));
         }
@@ -300,6 +340,22 @@ pub mod tests {
     }
 
     #[test]
+    fn full_interpolation() {
+        let degree = 4;
+        let threshold = degree + 1;
+        let poly = Poly::<Sc, Sc>::new(degree);
+        let shares = (0..threshold)
+            .map(|i| poly.eval(i as Idx))
+            .collect::<Vec<Eval<Sc>>>();
+        let smaller_shares: Vec<_> = shares.iter().take(threshold - 1).cloned().collect();
+        let recovered = Poly::<Sc, Sc>::full_recover(threshold as usize, shares).unwrap();
+        let expected = poly.c[0];
+        let computed = recovered.c[0];
+        assert_eq!(expected, computed);
+        Poly::<Sc, Sc>::recover(threshold as usize, smaller_shares).unwrap_err();
+    }
+
+    #[test]
     fn interpolation() {
         let degree = 4;
         let threshold = degree + 1;
@@ -310,31 +366,36 @@ pub mod tests {
         let smaller_shares: Vec<_> = shares.iter().take(threshold - 1).cloned().collect();
         let recovered = Poly::<Sc, Sc>::recover(threshold as usize, shares).unwrap();
         let expected = poly.c[0];
-        let computed = recovered.c[0];
-        assert_eq!(expected, computed);
+        assert_eq!(expected, recovered);
         Poly::<Sc, Sc>::recover(threshold as usize, smaller_shares).unwrap_err();
     }
-    /*#[test]*/
-    //fn benchy() {
-    //use std::time::{Duration, SystemTime};
-    //let degree = 49;
-    //let threshold = degree + 1;
-    //let poly = Poly::<Sc, Sc>::new(degree);
-    //let shares = (0..threshold)
-    //.map(|i| poly.eval(i as Idx))
-    //.collect::<Vec<Eval<Sc>>>();
-    //let smaller_shares: Vec<_> = shares.iter().take(threshold - 1).cloned().collect();
-    //let now = SystemTime::now();
-    //let recovered = Poly::<Sc, Sc>::recover(threshold as usize, shares).unwrap();
-    //match now.elapsed() {
-    //Ok(e) => println!("time elapsed {:?}", e),
-    //Err(e) => panic!("{}", e),
-    //}
-    //let expected = poly.c[0];
-    //let computed = recovered.c[0];
-    //assert_eq!(expected, computed);
-    //Poly::<Sc, Sc>::recover(threshold as usize, smaller_shares).unwrap_err();
-    //}
+
+    #[test]
+    fn benchy() {
+        use std::time::{Duration, SystemTime};
+        let degree = 49;
+        let threshold = degree + 1;
+        let poly = Poly::<Sc, Sc>::new(degree);
+        let shares = (0..threshold)
+            .map(|i| poly.eval(i as Idx))
+            .collect::<Vec<Eval<Sc>>>();
+        let now = SystemTime::now();
+        let recovered = Poly::<Sc, Sc>::recover(threshold as usize, shares).unwrap();
+        match now.elapsed() {
+            Ok(e) => println!("single recover: time elapsed {:?}", e),
+            Err(e) => panic!("{}", e),
+        }
+        let shares = (0..threshold)
+            .map(|i| poly.eval(i as Idx))
+            .collect::<Vec<Eval<Sc>>>();
+
+        let now = SystemTime::now();
+        let recovered = Poly::<Sc, Sc>::full_recover(threshold as usize, shares).unwrap();
+        match now.elapsed() {
+            Ok(e) => println!("full_recover: time elapsed {:?}", e),
+            Err(e) => panic!("{}", e),
+        }
+    }
 
     #[test]
     fn eval() {

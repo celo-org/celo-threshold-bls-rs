@@ -79,11 +79,9 @@ where
             })
             .filter_map(Result::ok)
             .collect();
-        let recovered_poly =
+        let recovered_sig =
             Poly::<Self::Private, Self::Signature>::recover(threshold, valid_partials)?;
-        // TODO avoid useless cloning here
-        let recoverd_sig = recovered_poly.free_coeff();
-        Ok(recoverd_sig.marshal())
+        Ok(recovered_sig.marshal())
     }
 
     fn verify(public: &Self::Public, msg: &[u8], sig: &[u8]) -> Result<(), Box<dyn Error>> {

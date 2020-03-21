@@ -27,9 +27,6 @@ pub trait Scalar: Element + Encodable {
     fn negate(&mut self);
     fn sub(&mut self, other: &Self);
     // TODO
-    // inverse()
-    // sub()
-    // unmarshal
 }
 
 /// Basic point functionality that can be multiplied by a scalar
