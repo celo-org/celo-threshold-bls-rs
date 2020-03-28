@@ -28,7 +28,6 @@ where
 /// new group that contains members that succesfully ran the protocol. When
 /// creating a new group using the `from()` or `from_list()`method, the module
 /// sets the threshold to the output of `default_threshold()`.
-#[derive(Debug)]
 pub struct Group<C: Curve> {
     pub nodes: Vec<Node<C>>,
     pub threshold: usize,
@@ -42,7 +41,7 @@ struct StatusMatrix(Vec<Bitset>);
 
 impl StatusMatrix {
     pub fn new(dealers: usize, share_holders: usize, def: Status) -> StatusMatrix {
-        let mut m = (0..dealers)
+        let m = (0..dealers)
             .map(|i| {
                 let mut bs = Bitset::from_elem(share_holders, def.to_bool());
                 bs.set(i, Status::Success.to_bool());
@@ -77,7 +76,10 @@ impl StatusMatrix {
 impl fmt::Display for StatusMatrix {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         for (dealer, shares) in self.0.iter().enumerate() {
-            write!(f, "-> dealer {}: {:?}\n", dealer, shares);
+            match write!(f, "-> dealer {}: {:?}\n", dealer, shares) {
+                Ok(()) => continue,
+                Err(e) => return Err(e),
+            }
         }
         Ok(())
     }
@@ -167,7 +169,22 @@ where
         }
     }
 }
-
+impl<C> fmt::Debug for Group<C>
+where
+    C: Curve,
+{
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self
+            .nodes
+            .iter()
+            .map(|n| write!(f, " {:?} ", n.0))
+            .collect::<fmt::Result>()
+        {
+            Ok(_) => Ok(()),
+            Err(e) => Err(e),
+        }
+    }
+}
 impl<C> From<Vec<C::Point>> for Group<C>
 where
     C: Curve,
@@ -324,16 +341,42 @@ pub struct BundledResponses {
     pub responses: Vec<Response>,
 }
 
-/// A `Justification` is
+/// A `Justification` contains the share of the share holder that issued a
+/// complaint, in plaintext.
 pub struct Justification<C: Curve> {
     share_idx: ID,
     share: C::Scalar,
+}
+
+impl<C> Clone for Justification<C>
+where
+    C: Curve,
+{
+    fn clone(&self) -> Self {
+        Justification {
+            share_idx: self.share_idx,
+            share: self.share.clone(),
+        }
+    }
 }
 
 pub struct BundledJustification<C: Curve> {
     pub dealer_idx: ID,
     pub justifications: Vec<Justification<C>>,
     pub public: PublicPoly<C>,
+}
+
+impl<C> Clone for BundledJustification<C>
+where
+    C: Curve,
+{
+    fn clone(&self) -> Self {
+        BundledJustification {
+            dealer_idx: self.dealer_idx,
+            public: self.public.clone(),
+            justifications: self.justifications.clone(),
+        }
+    }
 }
 
 impl<C> DKG<C>
@@ -416,14 +459,14 @@ where
     pub fn process_shares(
         self,
         bundles: &Vec<BundledShares<C>>,
-    ) -> DKGResult<(DKGWaitingResponse<C>, BundledResponses)> {
+    ) -> DKGResult<(DKGWaitingResponse<C>, Option<BundledResponses>)> {
         self.process_shares_get_complaint(bundles)
     }
 
     fn process_shares_get_complaint(
         self,
         bundles: &Vec<BundledShares<C>>,
-    ) -> DKGResult<(DKGWaitingResponse<C>, BundledResponses)> {
+    ) -> DKGResult<(DKGWaitingResponse<C>, Option<BundledResponses>)> {
         // true means we suppose every missing responses is a success at the end of
         // the period. Hence we only need to get & broadcast the complaints.
         // See DKGWaitingResponse::new for more information.
@@ -434,13 +477,14 @@ where
             .into_iter()
             .filter(|r| !r.status.is_success())
             .collect();
-        Ok((
-            newdkg,
-            BundledResponses {
+        let mut bundle: Option<BundledResponses> = None;
+        if complaints.len() > 0 {
+            bundle = Some(BundledResponses {
                 responses: complaints,
                 share_idx: myidx,
-            },
-        ))
+            });
+        }
+        Ok((newdkg, bundle))
     }
 
     // get_all exists to make the dkg impl. handle the case where we don't want
@@ -746,7 +790,7 @@ where
             .filter(|b| b.dealer_idx != self.info.index)
             .filter(|b| self.publics.contains_key(&b.dealer_idx))
         {
-            // safe because we filter it from before
+            // guaranteed unwrap from previous filter
             let public = self.publics.get(&bundle.dealer_idx).unwrap();
             for j in bundle.justifications.iter() {
                 if !share_correct::<C>(j.share_idx, &j.share, public) {
@@ -763,13 +807,20 @@ where
         }
 
         let n = self.info.n();
+        let mut rejected = false;
         // QUAL is the set of all entries in the matrix where all bits are set
         let qual_indices = (0..n).fold(Vec::new(), |mut acc, dealer| {
             if statuses.all_true(dealer as ID) {
                 acc.push(dealer);
+            } else if dealer as ID == self.info.index {
+                // i am rejected !
+                rejected = true;
             }
             acc
         });
+        if rejected {
+            return Err(DKGError::Rejected);
+        }
         let thr = self.info.group.threshold;
         if qual_indices.len() < thr {
             // too many unanswered justifications, DKG abort !
@@ -818,6 +869,10 @@ pub enum DKGError {
     /// can not continue, the protocol MUST be aborted.
     NotEnoughValidShares(usize, usize),
     NotEnoughJustifications(usize, usize),
+
+    /// Rejected is thrown when the participant is rejected from the final
+    /// output
+    Rejected,
 }
 
 // TODO: potentially add to the API the ability to streamline the decryption of
@@ -869,6 +924,7 @@ impl fmt::Display for DKGError {
             InvalidThreshold(have, min, max) => {
                 write!(f, "threshold {} is not in range [{},{}]", have, min, max)
             }
+            Rejected => write!(f, " this participant is rejected from the qualified set"),
         }
     }
 }
@@ -974,8 +1030,11 @@ pub mod tests {
             .map(|dkg| {
                 // TODO clone inneficient for test but likely use case for API
                 // Make that take a reference
-                let (ndkg, bundle) = dkg.process_shares(&all_shares).unwrap();
-                response_bundles.push(bundle);
+                let (ndkg, bundleO) = dkg.process_shares(&all_shares).unwrap();
+                if let Some(bundle) = bundleO {
+                    panic!("full dkg should not return any complaint")
+                    //response_bundles.push(bundle);
+                }
                 ndkg
             })
             .collect();
@@ -1024,8 +1083,10 @@ pub mod tests {
             .map(|dkg| {
                 // TODO clone inneficient for test but likely use case for API
                 // Make that take a reference
-                let (ndkg, bundle) = dkg.process_shares(&all_shares).unwrap();
-                response_bundles.push(bundle);
+                let (ndkg, bundleO) = dkg.process_shares(&all_shares).unwrap();
+                if let Some(bundle) = bundleO {
+                    response_bundles.push(bundle);
+                }
                 ndkg
             })
             .collect();
@@ -1036,7 +1097,7 @@ pub mod tests {
             .map(|dkg| match dkg.process_responses(&response_bundles) {
                 // it shouldn't be ok if there are some justifications
                 // since some shares are invalid there should be
-                Ok(out) => panic!("that should not happen"),
+                Ok(_out) => panic!("that should not happen"),
                 Err((ndkg, justifs)) => {
                     if let Some(j) = justifs {
                         justifications.push(j);

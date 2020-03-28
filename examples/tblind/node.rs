@@ -1,6 +1,5 @@
 use crate::board::Board;
-use crate::curve::{KeyCurve, Pairing, PrivateKey, PublicKey, Scheme};
-use rand::prelude::*;
+use crate::curve::{KeyCurve, PrivateKey, PublicKey, Scheme};
 use std::error::Error;
 use threshold::dkg;
 use threshold::sig::ThresholdScheme;
@@ -13,7 +12,6 @@ pub struct Node {
     // changed depending on the size of the network - u16 is likely to work for
     // most cases though.
     index: Index,
-    group: dkg::Group<KeyCurve>,
     dkg0: Option<dkg::DKG<KeyCurve>>,
     dkg1: Option<dkg::DKGWaitingShare<KeyCurve>>,
     dkg2: Option<dkg::DKGWaitingResponse<KeyCurve>>,
@@ -39,7 +37,6 @@ impl Node {
         Self {
             public,
             index: index as Index,
-            group: group,
             dkg0: Some(d),
             dkg1: None::<dkg::DKGWaitingShare<KeyCurve>>,
             dkg2: None,
@@ -48,21 +45,26 @@ impl Node {
         }
     }
 
-    pub fn dkg_phase1(&mut self, board: &mut Board) {
+    pub fn dkg_phase1(&mut self, board: &mut Board, be_bad: bool) {
         let to_phase1 = self.dkg0.take().unwrap();
         let (ndkg, shares) = to_phase1.shares();
-        board.publish_shares(&self.public, shares);
+        if !be_bad {
+            board.publish_shares(&self.public, shares);
+        }
         self.dkg1 = Some(ndkg);
     }
 
     pub fn dkg_phase2(&mut self, board: &mut Board, shares: &Vec<dkg::BundledShares<KeyCurve>>) {
         let to_phase2 = self.dkg1.take().unwrap();
         match to_phase2.process_shares(shares) {
-            Ok((ndkg, responses)) => {
-                board.publish_responses(&self.public, responses);
+            Ok((ndkg, bundle_o)) => {
+                if let Some(bundle) = bundle_o {
+                    println!("\t\t -> node publish {} responses", self.index);
+                    board.publish_responses(&self.public, bundle);
+                }
                 self.dkg2 = Some(ndkg);
             }
-            Err(e) => panic!(e),
+            Err(e) => panic!("index {}: {:?}", self.index, e),
         }
     }
 
@@ -104,10 +106,17 @@ impl Node {
         res
     }
 
-    pub fn publickey(&mut self) -> threshold::DistPublic<KeyCurve> {
-        let out = self.output.take().unwrap();
-        let public = out.public.clone();
-        self.output = Some(out);
-        public
+    pub fn qual(&mut self) -> dkg::Group<KeyCurve> {
+        let output = self.output.take().unwrap();
+        let qual = output.qual.clone();
+        self.output = Some(output);
+        qual
+    }
+
+    pub fn dist_public(&mut self) -> DistPublic<KeyCurve> {
+        let output = self.output.take().unwrap();
+        let dpub = output.public.clone();
+        self.output = Some(output);
+        dpub
     }
 }

@@ -372,7 +372,7 @@ pub mod tests {
 
     #[test]
     fn benchy() {
-        use std::time::{Duration, SystemTime};
+        use std::time::SystemTime;
         let degree = 49;
         let threshold = degree + 1;
         let poly = Poly::<Sc, Sc>::new(degree);
@@ -380,7 +380,7 @@ pub mod tests {
             .map(|i| poly.eval(i as Idx))
             .collect::<Vec<Eval<Sc>>>();
         let now = SystemTime::now();
-        let recovered = Poly::<Sc, Sc>::recover(threshold as usize, shares).unwrap();
+        Poly::<Sc, Sc>::recover(threshold as usize, shares).unwrap();
         match now.elapsed() {
             Ok(e) => println!("single recover: time elapsed {:?}", e),
             Err(e) => panic!("{}", e),
@@ -390,7 +390,7 @@ pub mod tests {
             .collect::<Vec<Eval<Sc>>>();
 
         let now = SystemTime::now();
-        let recovered = Poly::<Sc, Sc>::full_recover(threshold as usize, shares).unwrap();
+        Poly::<Sc, Sc>::full_recover(threshold as usize, shares).unwrap();
         match now.elapsed() {
             Ok(e) => println!("full_recover: time elapsed {:?}", e),
             Err(e) => panic!("{}", e),

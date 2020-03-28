@@ -85,6 +85,9 @@ pub trait ThresholdScheme: Scheme {
         msg: &[u8],
         partial: &Partial,
     ) -> Result<(), Box<dyn Error>>;
+    /// Aggregates all partials signature together. Note that this method does
+    /// not verify if the partial signatures are correct or not; it only
+    /// aggregates them.
     fn aggregate(threshold: usize, partials: &[Partial]) -> Result<Vec<u8>, Box<dyn Error>>;
     fn verify(public: &Self::Public, msg: &[u8], sig: &[u8]) -> Result<(), Box<dyn Error>>;
 }

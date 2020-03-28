@@ -1,5 +1,4 @@
-use crate::curve::{KeyCurve, Pairing, PublicKey};
-use rand::prelude::*;
+use crate::curve::{KeyCurve, PublicKey};
 use threshold::dkg;
 use threshold::*;
 
@@ -43,7 +42,8 @@ impl Board {
     }
 
     pub fn dkg_need_phase3(&self) -> bool {
-        return self.responses.len() == 0;
+        // if there is no complaint we dont need any justifications
+        return self.responses.len() != 0;
     }
 
     pub fn dkg_phase3(&mut self) {
@@ -72,7 +72,7 @@ impl Board {
             panic!("dkg is not in phase1 - can't publish shares");
         }
         match self.check_authenticity(sender_pk, bundle.dealer_idx) {
-            Ok(i) => self.bundles.push(bundle),
+            Ok(_) => self.bundles.push(bundle),
             Err(s) => panic!(s),
         }
     }
@@ -87,7 +87,7 @@ impl Board {
             panic!("dkg is not in phase2 - can't publish responses");
         }
         match self.check_authenticity(sender_pk, bundle.share_idx) {
-            Ok(i) => self.responses.push(bundle),
+            Ok(_) => self.responses.push(bundle),
             Err(e) => panic!(e),
         }
     }
@@ -97,8 +97,11 @@ impl Board {
         sender_pk: &PublicKey,
         bundle: dkg::BundledJustification<KeyCurve>,
     ) {
+        if !self.phase3 {
+            panic!("dkg is not in phase3 - can't publish justifications");
+        }
         match self.check_authenticity(sender_pk, bundle.dealer_idx) {
-            Ok(i) => self.justifs.push(bundle),
+            Ok(_) => self.justifs.push(bundle),
             Err(e) => panic!(e),
         }
     }
@@ -109,6 +112,10 @@ impl Board {
 
     pub fn get_responses(&self) -> Vec<dkg::BundledResponses> {
         return self.responses.clone();
+    }
+
+    pub fn get_justifications(&self) -> Vec<dkg::BundledJustification<KeyCurve>> {
+        return self.justifs.clone();
     }
 
     fn check_authenticity(

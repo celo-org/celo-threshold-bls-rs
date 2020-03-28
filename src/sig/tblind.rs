@@ -2,7 +2,7 @@ use crate::poly::Poly;
 use crate::sig::blind::{BG1Scheme, BG2Scheme};
 use crate::sig::tbls::{Serializer, TScheme};
 use crate::sig::{BlindThreshold, Blinder, Partial, Scheme as SScheme, ThresholdScheme};
-use crate::{Index, Share};
+use crate::Share;
 use std::error::Error;
 use std::marker::PhantomData;
 
@@ -84,6 +84,7 @@ mod tests {
     use crate::curve::bls12381::PairingCurve as PCurve;
     use crate::curve::zexe::PairingCurve as Zexe;
 
+    use crate::Index;
     fn shares<B: BlindThreshold>(
         n: usize,
         t: usize,
@@ -130,8 +131,7 @@ mod tests {
         let (token, blinded) = B::blind(&msg);
         let partials: Vec<_> = shares
             .iter()
-            .enumerate()
-            .map(|(i, share)| B::partial_sign(share, &blinded).unwrap())
+            .map(|share| B::partial_sign(share, &blinded).unwrap())
             .collect();
 
         let blinded_sig = B::aggregate(thr, &partials).unwrap();
@@ -150,8 +150,7 @@ mod tests {
         let (token, blinded) = B::blind(&msg);
         let partials: Vec<_> = shares
             .iter()
-            .enumerate()
-            .map(|(i, share)| B::partial_sign(share, &blinded).unwrap())
+            .map(|share| B::partial_sign(share, &blinded).unwrap())
             .collect();
         let unblindeds: Vec<_> = partials
             .iter()
