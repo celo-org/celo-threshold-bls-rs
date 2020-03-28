@@ -16,6 +16,7 @@ pub trait Serializer {
         inject_index(idx, partial)
     }
 }
+
 impl<I> Serializer for TScheme<I> where I: SignatureScheme {}
 
 pub struct TScheme<I: SignatureScheme> {
@@ -53,18 +54,12 @@ where
             Err(e) => Err(Box::new(e)),
         }
     }
-    fn aggregate(
-        public: &Poly<Self::Private, Self::Public>,
-        msg: &[u8],
-        partials: &[Partial],
-    ) -> Result<Vec<u8>, Box<dyn Error>> {
-        let threshold = public.degree() + 1;
+    fn aggregate(threshold: usize, partials: &[Partial]) -> Result<Vec<u8>, Box<dyn Error>> {
         if threshold > partials.len() {
             return Err(Box::new(TBLSError::NotEnoughPartialSignatures));
         }
         let valid_partials: Vec<Eval<Self::Signature>> = partials
             .iter()
-            .filter(|s| Self::partial_verify(public, msg, s).is_ok())
             .map(|s| extract_index(s))
             .filter_map(Result::ok)
             .map(|(idx, bls_sig)| {
@@ -179,7 +174,8 @@ mod tests {
     }
 
     fn test_threshold_scheme<T: ThresholdScheme>(creator: ShareCreator<T>) {
-        let (shares, public) = creator(5, 4);
+        let threshold = 4;
+        let (shares, public) = creator(5, threshold);
         let msg = vec![1, 9, 6, 9];
         let partials: Vec<_> = shares
             .iter()
@@ -191,7 +187,7 @@ mod tests {
                 .iter()
                 .any(|p| T::partial_verify(&public, &msg, &p).is_err())
         );
-        let final_sig = T::aggregate(&public, &msg, &partials).unwrap();
+        let final_sig = T::aggregate(threshold, &partials).unwrap();
         T::verify(&public.free_coeff(), &msg, &final_sig).unwrap();
     }
 

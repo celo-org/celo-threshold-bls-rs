@@ -85,13 +85,15 @@ pub trait ThresholdScheme: Scheme {
         msg: &[u8],
         partial: &Partial,
     ) -> Result<(), Box<dyn Error>>;
-    fn aggregate(
-        public: &Poly<Self::Private, Self::Public>,
-        msg: &[u8],
-        partials: &[Partial],
-    ) -> Result<Vec<u8>, Box<dyn Error>>;
+    fn aggregate(threshold: usize, partials: &[Partial]) -> Result<Vec<u8>, Box<dyn Error>>;
     fn verify(public: &Self::Public, msg: &[u8], sig: &[u8]) -> Result<(), Box<dyn Error>>;
-    //fn index(p: &Partial) -> Index;
 }
 
-pub trait BlindThreshold: ThresholdScheme + Blinder {}
+/// BlindThreshold is ThresholdScheme that allows to verifiy a partial blinded
+/// signature as well blinded message, to aggregate them into one blinded signature
+/// such that it can be unblinded after and verified as a regular signature.
+pub trait BlindThreshold: ThresholdScheme + Blinder {
+    /// unblind_partial takes a blinded partial signatures and removes the blind
+    /// component.
+    fn unblind_partial(t: &Self::Token, partial: &Partial) -> Result<Partial, Box<dyn Error>>;
+}

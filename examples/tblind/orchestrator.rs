@@ -82,19 +82,14 @@ impl Orchestrator {
             .filter_map(Result::ok)
             .collect();
 
-        // 3. unblind each partial signatures
-        let unblindeds: Vec<_> = partials
-            .iter()
-            .map(|p| Scheme::unblind(&token, p))
-            .filter_map(Result::ok)
-            .collect();
-
-        // 4. reconstruct final signature
+        // 3. aggregate all blinded signatures together
+        // It can be done by any third party
         let dist_public = self.nodes[0].publickey();
-        let reconstructed = Scheme::aggregate(&dist_public, msg, &unblindeds)?;
-
+        let blinded_sig = Scheme::aggregate(self.thr, &partials)?;
+        // 4. unblind the signature
+        let final_sig = Scheme::unblind(&token, &blinded_sig)?;
         // 5. verify
-        Scheme::verify(&dist_public.public_key(), msg, &reconstructed)
+        Scheme::verify(&dist_public.public_key(), msg, &final_sig)
     }
 }
 fn new_keypair() -> (PrivateKey, PublicKey) {

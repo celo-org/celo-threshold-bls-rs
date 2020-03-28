@@ -120,6 +120,9 @@ impl Encodable for G2 {
         out.to_vec()
     }
     fn unmarshal(&mut self, data: &[u8]) -> Result<(), Box<dyn Error>> {
+        if data.len() != 96 {
+            return Err(Box::new(crate::curve::InvalidLength(data.len(), 96)));
+        }
         let mut c = G2Compressed::empty();
         // TODO this can panic !
         c.as_mut().copy_from_slice(data);

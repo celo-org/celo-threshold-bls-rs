@@ -32,6 +32,7 @@ where
     fn partial_sign(private: &Share<T::Private>, msg: &[u8]) -> Result<Partial, Box<dyn Error>> {
         T::partial_sign(private, msg)
     }
+    /// partial verify takes a blinded partial signature.
     fn partial_verify(
         public: &Poly<T::Private, T::Public>,
         msg: &[u8],
@@ -39,13 +40,8 @@ where
     ) -> Result<(), Box<dyn Error>> {
         T::partial_verify(public, msg, partial)
     }
-    // XXX Is thre a way to map Vec<Vec<u8>> to &[&[u8]] ?
-    fn aggregate(
-        public: &Poly<T::Private, T::Public>,
-        msg: &[u8],
-        partials: &[Partial],
-    ) -> Result<Partial, Box<dyn Error>> {
-        T::aggregate(public, msg, partials)
+    fn aggregate(threshold: usize, partials: &[Partial]) -> Result<Partial, Box<dyn Error>> {
+        T::aggregate(threshold, partials)
     }
     fn verify(public: &T::Public, msg: &[u8], sig: &[u8]) -> Result<(), Box<dyn Error>> {
         T::verify(public, msg, sig)
@@ -60,10 +56,8 @@ where
     fn blind(msg: &[u8]) -> (B::Token, Vec<u8>) {
         B::blind(msg)
     }
-    fn unblind(t: &B::Token, buff_blindp: &[u8]) -> Result<Vec<u8>, Box<dyn Error>> {
-        let (i, blind_partial) = T::extract(buff_blindp)?;
-        let mut unblinded = B::unblind(&t, &blind_partial)?;
-        Ok(T::inject(i, &mut unblinded))
+    fn unblind(t: &B::Token, blind_sig: &[u8]) -> Result<Vec<u8>, Box<dyn Error>> {
+        B::unblind(&t, &blind_sig)
     }
 }
 
@@ -72,6 +66,10 @@ where
     T: ThresholdScheme + Serializer,
     B: Blinder,
 {
+    fn unblind_partial(t: &Self::Token, partial: &Partial) -> Result<Partial, Box<dyn Error>> {
+        let (index, sig) = T::extract(partial)?;
+        B::unblind(t, &sig)
+    }
 }
 
 #[cfg(test)]
@@ -125,27 +123,9 @@ mod tests {
             .map(|(i, share)| B::partial_sign(share, &blinded).unwrap())
             .collect();
 
-        let unblindeds: Vec<_> = partials.iter().fold(vec![], |mut acc, p| {
-            match B::unblind(&token, p) {
-                Ok(unblinded) => {
-                    println!("Unblinded {:?}", unblinded);
-                    acc.push(unblinded);
-                }
-                Err(e) => {
-                    panic!("error: {:?}", e);
-                }
-            };
-            acc
-        });
-        println!("unblindeds {:?}", unblindeds);
-        unblindeds
-            .iter()
-            .for_each(|p| match B::partial_verify(&public, &msg, p) {
-                Ok(()) => println!("all good"),
-                Err(e) => panic!("e {:?}", e),
-            });
+        let blinded_sig = B::aggregate(thr, &partials).unwrap();
+        let unblinded = B::unblind(&token, &blinded_sig).unwrap();
 
-        let final_sig = B::aggregate(&public, &msg, &unblindeds).unwrap();
-        B::verify(&public.free_coeff(), &msg, &final_sig).unwrap();
+        B::verify(&public.public_key(), &msg, &unblinded).unwrap();
     }
 }
