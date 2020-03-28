@@ -49,6 +49,9 @@ impl Element<Scalar> for Scalar {
 }
 
 impl Encodable for Scalar {
+    fn marshal_len() -> usize {
+        32
+    }
     fn marshal(&self) -> Vec<u8> {
         let mut out = Vec::with_capacity(32);
         self.0
@@ -114,6 +117,9 @@ impl Element<Scalar> for G1 {
 }
 
 impl Encodable for G1 {
+    fn marshal_len() -> usize {
+        97
+    }
     fn marshal(&self) -> Vec<u8> {
         let mut out = Vec::with_capacity(144);
         self.0
@@ -177,6 +183,9 @@ impl Element<Scalar> for G2 {
 }
 
 impl Encodable for G2 {
+    fn marshal_len() -> usize {
+        return 193;
+    }
     fn marshal(&self) -> Vec<u8> {
         let mut out = Vec::with_capacity(144);
         self.0

@@ -32,6 +32,7 @@ where
     fn partial_sign(private: &Share<T::Private>, msg: &[u8]) -> Result<Partial, Box<dyn Error>> {
         T::partial_sign(private, msg)
     }
+
     /// partial verify takes a blinded partial signature.
     fn partial_verify(
         public: &Poly<T::Private, T::Public>,
@@ -40,9 +41,11 @@ where
     ) -> Result<(), Box<dyn Error>> {
         T::partial_verify(public, msg, partial)
     }
+
     fn aggregate(threshold: usize, partials: &[Partial]) -> Result<Partial, Box<dyn Error>> {
         T::aggregate(threshold, partials)
     }
+
     fn verify(public: &T::Public, msg: &[u8], sig: &[u8]) -> Result<(), Box<dyn Error>> {
         T::verify(public, msg, sig)
     }
@@ -68,7 +71,10 @@ where
 {
     fn unblind_partial(t: &Self::Token, partial: &Partial) -> Result<Partial, Box<dyn Error>> {
         let (index, sig) = T::extract(partial)?;
-        B::unblind(t, &sig)
+        match B::unblind(t, &sig) {
+            Ok(mut p) => Ok(T::inject(index, &mut p)),
+            Err(e) => Err(e),
+        }
     }
 }
 
@@ -96,6 +102,11 @@ mod tests {
     #[test]
     fn tblind_g1_zexe() {
         tblind_test::<G1Scheme<Zexe>>();
+    }
+
+    #[test]
+    fn tblind_g1_zexe_unblind() {
+        unblind_then_aggregate_test::<G1Scheme<Zexe>>();
     }
 
     #[test]
@@ -127,5 +138,28 @@ mod tests {
         let unblinded = B::unblind(&token, &blinded_sig).unwrap();
 
         B::verify(&public.public_key(), &msg, &unblinded).unwrap();
+    }
+    fn unblind_then_aggregate_test<B>()
+    where
+        B: BlindThreshold,
+    {
+        let n = 5;
+        let thr = 4;
+        let (shares, public) = shares::<B>(n, thr);
+        let msg = vec![1, 9, 6, 9];
+        let (token, blinded) = B::blind(&msg);
+        let partials: Vec<_> = shares
+            .iter()
+            .enumerate()
+            .map(|(i, share)| B::partial_sign(share, &blinded).unwrap())
+            .collect();
+        let unblindeds: Vec<_> = partials
+            .iter()
+            .map(|p| B::unblind_partial(&token, p))
+            .filter_map(Result::ok)
+            .collect();
+        let final_sig = B::aggregate(thr, &unblindeds).unwrap();
+
+        B::verify(&public.public_key(), &msg, &final_sig).unwrap();
     }
 }

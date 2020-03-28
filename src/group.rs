@@ -80,6 +80,7 @@ pub type G1Curve<C> = CurveFrom<<C as PairingCurve>::Scalar, <C as PairingCurve>
 pub type G2Curve<C> = CurveFrom<<C as PairingCurve>::Scalar, <C as PairingCurve>::G2>;
 
 pub trait Encodable {
+    fn marshal_len() -> usize;
     fn marshal(&self) -> Vec<u8>;
     fn unmarshal(&mut self, data: &[u8]) -> Result<(), Box<dyn Error>>;
 }

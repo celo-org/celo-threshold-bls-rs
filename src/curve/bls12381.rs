@@ -37,6 +37,9 @@ impl Element<Scalar> for Scalar {
 }
 
 impl Encodable for Scalar {
+    fn marshal_len() -> usize {
+        32
+    }
     fn marshal(&self) -> Vec<u8> {
         let repr = self.into_repr();
         let mut out = Vec::with_capacity((repr.num_bits() / 8) as usize);
@@ -95,12 +98,21 @@ impl Element<Scalar> for G1 {
 }
 
 impl Encodable for G1 {
+    fn marshal_len() -> usize {
+        48
+    }
     fn marshal(&self) -> Vec<u8> {
         let c = self.into_affine().into_compressed();
         let out = c.as_ref().clone();
         out.to_vec()
     }
     fn unmarshal(&mut self, data: &[u8]) -> Result<(), Box<dyn Error>> {
+        if data.len() != Self::marshal_len() {
+            return Err(Box::new(crate::curve::InvalidLength(
+                data.len(),
+                Self::marshal_len(),
+            )));
+        }
         let mut c = G1Compressed::empty();
         c.as_mut().copy_from_slice(data);
         match c.into_affine() {
@@ -114,13 +126,17 @@ impl Encodable for G1 {
 }
 
 impl Encodable for G2 {
+    fn marshal_len() -> usize {
+        96
+    }
+
     fn marshal(&self) -> Vec<u8> {
         let c = self.into_affine().into_compressed();
         let out = c.as_ref().clone();
         out.to_vec()
     }
     fn unmarshal(&mut self, data: &[u8]) -> Result<(), Box<dyn Error>> {
-        if data.len() != 96 {
+        if data.len() != Self::marshal_len() {
             return Err(Box::new(crate::curve::InvalidLength(data.len(), 96)));
         }
         let mut c = G2Compressed::empty();

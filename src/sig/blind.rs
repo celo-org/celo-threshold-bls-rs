@@ -16,6 +16,9 @@ impl<S> Encodable for Token<S>
 where
     S: Scalar,
 {
+    fn marshal_len() -> usize {
+        <S as Encodable>::marshal_len()
+    }
     fn marshal(&self) -> Vec<u8> {
         self.0.marshal()
     }

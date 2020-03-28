@@ -63,13 +63,16 @@ where
             .map(|s| extract_index(s))
             .filter_map(Result::ok)
             .map(|(idx, bls_sig)| {
-                let mut p = Self::Signature::new();
+                let mut p = Self::Signature::one();
                 match p.unmarshal(&bls_sig) {
                     Ok(_) => Ok(Eval {
                         value: p,
                         index: idx,
                     }),
-                    Err(e) => Err(e),
+                    Err(e) => {
+                        println!("error unmarshalling signature when aggregating: buff {:?} \n\t err ->  {:?}", bls_sig.len() ,e);
+                        Err(e)
+                    }
                 }
             })
             .filter_map(Result::ok)
