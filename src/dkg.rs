@@ -807,20 +807,13 @@ where
         }
 
         let n = self.info.n();
-        let mut rejected = false;
         // QUAL is the set of all entries in the matrix where all bits are set
         let qual_indices = (0..n).fold(Vec::new(), |mut acc, dealer| {
             if statuses.all_true(dealer as ID) {
                 acc.push(dealer);
-            } else if dealer as ID == self.info.index {
-                // i am rejected !
-                rejected = true;
             }
             acc
         });
-        if rejected {
-            return Err(DKGError::Rejected);
-        }
         let thr = self.info.group.threshold;
         if qual_indices.len() < thr {
             // too many unanswered justifications, DKG abort !
@@ -1024,14 +1017,14 @@ pub mod tests {
                 ndkg
             })
             .collect();
-        let mut response_bundles = Vec::with_capacity(n);
+        let response_bundles = Vec::with_capacity(n);
         let dkgs: Vec<_> = dkgs
             .into_iter()
             .map(|dkg| {
                 // TODO clone inneficient for test but likely use case for API
                 // Make that take a reference
-                let (ndkg, bundleO) = dkg.process_shares(&all_shares).unwrap();
-                if let Some(bundle) = bundleO {
+                let (ndkg, bundle_o) = dkg.process_shares(&all_shares).unwrap();
+                if let Some(_) = bundle_o {
                     panic!("full dkg should not return any complaint")
                     //response_bundles.push(bundle);
                 }
@@ -1083,8 +1076,8 @@ pub mod tests {
             .map(|dkg| {
                 // TODO clone inneficient for test but likely use case for API
                 // Make that take a reference
-                let (ndkg, bundleO) = dkg.process_shares(&all_shares).unwrap();
-                if let Some(bundle) = bundleO {
+                let (ndkg, bundle_o) = dkg.process_shares(&all_shares).unwrap();
+                if let Some(bundle) = bundle_o {
                     response_bundles.push(bundle);
                 }
                 ndkg

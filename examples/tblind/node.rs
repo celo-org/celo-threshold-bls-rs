@@ -12,6 +12,7 @@ pub struct Node {
     // changed depending on the size of the network - u16 is likely to work for
     // most cases though.
     index: Index,
+    bad: bool,
     dkg0: Option<dkg::DKG<KeyCurve>>,
     dkg1: Option<dkg::DKGWaitingShare<KeyCurve>>,
     dkg2: Option<dkg::DKGWaitingResponse<KeyCurve>>,
@@ -37,6 +38,7 @@ impl Node {
         Self {
             public,
             index: index as Index,
+            bad: false,
             dkg0: Some(d),
             dkg1: None::<dkg::DKGWaitingShare<KeyCurve>>,
             dkg2: None,
@@ -49,6 +51,7 @@ impl Node {
         let to_phase1 = self.dkg0.take().unwrap();
         let (ndkg, shares) = to_phase1.shares();
         if !be_bad {
+            self.bad = true;
             board.publish_shares(&self.public, shares);
         }
         self.dkg1 = Some(ndkg);

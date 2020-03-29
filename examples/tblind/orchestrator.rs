@@ -102,6 +102,11 @@ impl Orchestrator {
                         }
                     }
                     _ => {
+                        if i == 0 {
+                            // we dont take qualified from node 0 since he's a
+                            // bad node
+                            continue;
+                        }
                         self.qual = Some(node.qual());
                         self.dist_public = Some(node.dist_public());
                         println!("\t -> dealer {} has qualified set {:?}", i, node.qual());
