@@ -7,9 +7,9 @@ edition = "2018"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-paired = "0.16.1"
-ff = "0.5"
-groupy = "0.2.1"
+ff = { version = "0.2", package = "fff" }
+groupy = "0.3.0"
+paired = "0.18.0"
 rand_core = "0.5.1"
 rand = "0.7"
 # for ECIES
