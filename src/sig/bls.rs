@@ -1,63 +1,71 @@
-use crate::group::{Curve, Element, Encodable, G1Curve, G2Curve, PairingCurve, Point, Scalar};
-use crate::poly::PublicPoly;
+use crate::group::{Element, Encodable, PairingCurve, Point};
 use crate::sig::{Scheme, SignatureScheme};
-use rand_core::RngCore;
 use std::error::Error;
 use std::fmt;
 use std::marker::PhantomData;
 
-pub trait BLSScheme: Scheme {
-    fn internal_sign(private: &Self::Private, msg: &[u8]) -> Result<Vec<u8>, Box<dyn Error>> {
-        // sig = H(m)^x
-        let mut h = Self::Signature::new();
-        h.map(msg)?;
-        //println!("sign: message {:?}", h);
-        h.mul(private);
-        Ok(h.marshal())
-    }
-
-    fn internal_verify(
-        public: &Self::Public,
-        msg: &[u8],
-        sig: &[u8],
-    ) -> Result<(Self::Signature, Self::Signature), Box<Error>> {
-        let mut sigp = Self::Signature::new();
-        if let Err(_) = sigp.unmarshal(sig) {
-            return Err(Box::new(BLSError::InvalidPoint));
+// private module workaround to avoid leaking a private
+// trait into a public trait
+// see https://github.com/rust-lang/rust/issues/34537
+// XXX another way to pull it off without this hack?
+mod common {
+    use super::*;
+    // BLSScheme is an internal trait that encompasses the common work between a
+    // BLS signature over G1 or G2.
+    pub trait BLSScheme: Scheme {
+        fn internal_sign(private: &Self::Private, msg: &[u8]) -> Result<Vec<u8>, Box<dyn Error>> {
+            // sig = H(m)^x
+            let mut h = Self::Signature::new();
+            h.map(msg)?;
+            //println!("sign: message {:?}", h);
+            h.mul(private);
+            Ok(h.marshal())
         }
-        // H(m)
-        let mut h = Self::Signature::new();
-        h.map(msg)?;
-        return Ok((sigp, h));
-    }
 
-    fn final_exp(p: &Self::Public, sig: &Self::Signature, hm: &Self::Signature) -> bool;
-}
-
-impl<T> SignatureScheme for T
-where
-    T: BLSScheme,
-{
-    fn sign(private: &Self::Private, msg: &[u8]) -> Result<Vec<u8>, Box<Error>> {
-        T::internal_sign(private, msg)
-    }
-    fn verify(public: &Self::Public, msg: &[u8], sig: &[u8]) -> Result<(), Box<Error>> {
-        match T::internal_verify(public, msg, sig) {
-            Ok((sig, hm)) => {
-                if T::final_exp(public, &sig, &hm) {
-                    Ok(())
-                } else {
-                    Err(Box::new(BLSError::InvalidSig))
-                }
+        fn internal_verify(
+            msg: &[u8],
+            sig: &[u8],
+        ) -> Result<(Self::Signature, Self::Signature), Box<dyn Error>> {
+            let mut sigp = Self::Signature::new();
+            if let Err(_) = sigp.unmarshal(sig) {
+                return Err(Box::new(BLSError::InvalidPoint));
             }
-            Err(e) => Err(e),
+            // H(m)
+            let mut h = Self::Signature::new();
+            h.map(msg)?;
+            return Ok((sigp, h));
+        }
+
+        fn final_exp(p: &Self::Public, sig: &Self::Signature, hm: &Self::Signature) -> bool;
+    }
+    impl<T> SignatureScheme for T
+    where
+        T: BLSScheme,
+    {
+        fn sign(private: &Self::Private, msg: &[u8]) -> Result<Vec<u8>, Box<dyn Error>> {
+            T::internal_sign(private, msg)
+        }
+        fn verify(public: &Self::Public, msg: &[u8], sig: &[u8]) -> Result<(), Box<dyn Error>> {
+            match T::internal_verify(msg, sig) {
+                Ok((sig, hm)) => {
+                    if T::final_exp(public, &sig, &hm) {
+                        Ok(())
+                    } else {
+                        Err(Box::new(BLSError::InvalidSig))
+                    }
+                }
+                Err(e) => Err(e),
+            }
         }
     }
 }
 
+/// G1Scheme implements the BLS signature scheme with G1 as private / public
+/// keys and G2 as signature elements over the given pairing curve.
 pub struct G1Scheme<C: PairingCurve> {
     m: PhantomData<C>,
 }
+
 impl<C> Scheme for G1Scheme<C>
 where
     C: PairingCurve,
@@ -67,7 +75,7 @@ where
     type Signature = C::G2;
 }
 
-impl<C> BLSScheme for G1Scheme<C>
+impl<C> common::BLSScheme for G1Scheme<C>
 where
     C: PairingCurve,
 {
@@ -80,6 +88,8 @@ where
     }
 }
 
+/// G2Scheme implements the BLS signature scheme with G2 as private / public
+/// keys and G1 as signature elements over the given pairing curve.
 pub struct G2Scheme<C: PairingCurve> {
     m: PhantomData<C>,
 }
@@ -93,7 +103,7 @@ where
     type Signature = C::G1;
 }
 
-impl<C> BLSScheme for G2Scheme<C>
+impl<C> common::BLSScheme for G2Scheme<C>
 where
     C: PairingCurve,
 {
@@ -106,12 +116,15 @@ where
     }
 }
 
+/// BLSError are thrown out when using the BLS signature scheme.
 #[derive(Debug)]
 pub enum BLSError {
+    /// InvalidPoint is raised when signature given to verification is not a
+    /// valid point on the curve.
     InvalidPoint,
+    /// InvalidSig is raised when the validation routine of the BLS algorithm
+    /// does not finish successfully,i.e. it is an invalid signature.
     InvalidSig,
-    InvalidBlindedMessage,
-    InvalidBlindingFactor,
 }
 
 impl fmt::Display for BLSError {
@@ -120,13 +133,10 @@ impl fmt::Display for BLSError {
         match self {
             InvalidPoint => write!(f, "invalid point signature"),
             InvalidSig => write!(f, "invalid signature"),
-            InvalidBlindedMessage => write!(f, "invalid blinded message"),
-            InvalidBlindingFactor => write!(f, "invalid blinding token"),
         }
     }
 }
 
-// This is important for other errors to wrap this one.
 impl Error for BLSError {
     fn source(&self) -> Option<&(dyn Error + 'static)> {
         // Generic error, underlying cause isn't tracked.
@@ -171,12 +181,5 @@ mod tests {
         let msg = vec![1, 9, 6, 9];
         let sig = G1Scheme::<PCurve>::sign(&private, &msg).unwrap();
         G1Scheme::<PCurve>::verify(&public, &msg, &sig).expect("that should not happen");
-        pass(&private, &msg);
-    }
-
-    // Simple wrapper around g1/g2; test how the api looks like
-    type g1bls = G1Scheme<PCurve>;
-    fn pass(private: &Scalar, msg: &[u8]) {
-        g1bls::sign(private, msg);
     }
 }

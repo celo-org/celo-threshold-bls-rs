@@ -4,7 +4,7 @@ use crate::group::{
 use ff::{Field, PrimeField, PrimeFieldRepr};
 use groupy::{CurveAffine, CurveProjective, EncodedPoint};
 use paired::bls12_381::{
-    Bls12, Fq12, Fr, FrRepr, G1Affine, G1Compressed, G2Affine, G2Compressed, G1 as PG1, G2 as PG2,
+    Bls12, Fq12, Fr, FrRepr, G1Compressed, G2Compressed, G1 as PG1, G2 as PG2,
 };
 use paired::Engine;
 use rand_core::RngCore;
@@ -37,6 +37,9 @@ impl Element<Scalar> for Scalar {
 }
 
 impl Encodable for Scalar {
+    fn marshal_len() -> usize {
+        32
+    }
     fn marshal(&self) -> Vec<u8> {
         let repr = self.into_repr();
         let mut out = Vec::with_capacity((repr.num_bits() / 8) as usize);
@@ -45,12 +48,12 @@ impl Encodable for Scalar {
         out
     }
 
-    // TODO make it return an error
     fn unmarshal(&mut self, data: &[u8]) -> Result<(), Box<dyn Error>> {
-        // TODO check on the length !
+        if data.len() != 32 {
+            return Err(Box::new(crate::curve::InvalidLength(data.len(), 32)));
+        }
         let mut out = FrRepr::default();
         out.read_le(data)?;
-        // TODO check 200% that FrRepr doesn't yield an error
         *self = Fr::from_repr(out)?.into();
         Ok(())
     }
@@ -95,12 +98,21 @@ impl Element<Scalar> for G1 {
 }
 
 impl Encodable for G1 {
+    fn marshal_len() -> usize {
+        48
+    }
     fn marshal(&self) -> Vec<u8> {
         let c = self.into_affine().into_compressed();
         let out = c.as_ref().clone();
         out.to_vec()
     }
     fn unmarshal(&mut self, data: &[u8]) -> Result<(), Box<dyn Error>> {
+        if data.len() != Self::marshal_len() {
+            return Err(Box::new(crate::curve::InvalidLength(
+                data.len(),
+                Self::marshal_len(),
+            )));
+        }
         let mut c = G1Compressed::empty();
         c.as_mut().copy_from_slice(data);
         match c.into_affine() {
@@ -114,12 +126,19 @@ impl Encodable for G1 {
 }
 
 impl Encodable for G2 {
+    fn marshal_len() -> usize {
+        96
+    }
+
     fn marshal(&self) -> Vec<u8> {
         let c = self.into_affine().into_compressed();
         let out = c.as_ref().clone();
         out.to_vec()
     }
     fn unmarshal(&mut self, data: &[u8]) -> Result<(), Box<dyn Error>> {
+        if data.len() != Self::marshal_len() {
+            return Err(Box::new(crate::curve::InvalidLength(data.len(), 96)));
+        }
         let mut c = G2Compressed::empty();
         // TODO this can panic !
         c.as_mut().copy_from_slice(data);
@@ -191,6 +210,11 @@ impl Element for GT {
 // TODO rename to G1
 pub type Curve = CF<Scalar, G1>;
 pub type G2Curve = CF<Scalar, G2>;
+pub struct TrialCurve {}
+impl C for TrialCurve {
+    type Scalar = Scalar;
+    type Point = G1;
+}
 
 pub struct PairingCurve;
 

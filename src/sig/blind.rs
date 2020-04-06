@@ -1,16 +1,24 @@
-use crate::group::{Element, Encodable, PairingCurve, Point, Scalar};
+use crate::group::{Element, Encodable, Point, Scalar};
 use crate::sig::bls::{self, BLSError};
 use crate::sig::{BlindScheme, Blinder, Scheme as SScheme, SignatureScheme};
 use rand::prelude::thread_rng;
-use rand_core::RngCore;
 use std::error::Error;
+use std::fmt;
 use std::marker::PhantomData;
 
+/// Blinding a message before requesting a signature requires the usage of a
+/// private blinding factor that is called a Token. To unblind the signature
+/// afterwards, one needs the same token as what the blinding method returned.
+/// In this blind signature scheme, the token is simply a field element.
 pub struct Token<S: Scalar>(S);
+
 impl<S> Encodable for Token<S>
 where
     S: Scalar,
 {
+    fn marshal_len() -> usize {
+        <S as Encodable>::marshal_len()
+    }
     fn marshal(&self) -> Vec<u8> {
         self.0.marshal()
     }
@@ -18,7 +26,9 @@ where
         self.0.unmarshal(data)
     }
 }
-// https://eprint.iacr.org/2018/733.pdf
+/// Scheme implements the signature scheme interface as well as the blinder
+/// interface to provide a blind signature scheme. It follows the protocol described
+/// in this [paper](https://eprint.iacr.org/2018/733.pdf).
 pub struct Scheme<I: SignatureScheme> {
     i: PhantomData<I>,
 }
@@ -37,7 +47,7 @@ impl<I> SignatureScheme for Scheme<I>
 where
     I: SignatureScheme,
 {
-    fn sign(private: &Self::Private, blinded: &[u8]) -> Result<Vec<u8>, Box<Error>> {
+    fn sign(private: &Self::Private, blinded: &[u8]) -> Result<Vec<u8>, Box<dyn Error>> {
         let mut hm = I::Signature::new();
         match hm.unmarshal(blinded) {
             Ok(()) => {
@@ -47,7 +57,7 @@ where
             Err(e) => Err(e),
         }
     }
-    fn verify(public: &Self::Public, msg: &[u8], sig: &[u8]) -> Result<(), Box<Error>> {
+    fn verify(public: &Self::Public, msg: &[u8], sig: &[u8]) -> Result<(), Box<dyn Error>> {
         I::verify(public, msg, sig)
     }
 }
@@ -62,14 +72,15 @@ where
         r.pick(&mut thread_rng());
         let mut h = I::Signature::new();
         // r * H(m)
-        h.map(msg);
+        // XXX result from zexe API but it shouldn't
+        h.map(msg).unwrap();
         h.mul(&r);
         (Token(r), h.marshal())
     }
-    fn unblind(t: Self::Token, sigbuff: &[u8]) -> Result<Vec<u8>, Box<Error>> {
+    fn unblind(t: &Self::Token, sigbuff: &[u8]) -> Result<Vec<u8>, Box<dyn Error>> {
         let mut sig = I::Signature::new();
         if let Err(_) = sig.unmarshal(sigbuff) {
-            return Err(Box::new(BLSError::InvalidPoint));
+            return Err(Box::new(BlindError::SigError(BLSError::InvalidPoint)));
         }
         match t.0.inverse() {
             Some(ri) => {
@@ -77,79 +88,56 @@ where
                 sig.mul(&ri);
                 Ok(sig.marshal())
             }
-            None => Err(Box::new(BLSError::InvalidBlindingFactor)),
+            None => Err(Box::new(BlindError::InvalidToken)),
         }
     }
 }
 
 impl<I> BlindScheme for Scheme<I> where I: SignatureScheme {}
 
+/// BlindError are a type of errors that blind signature scheme can return.
+#[derive(Debug)]
 pub enum BlindError {
-    InvalidBlindedMessage,
+    /// InvalidToken is thrown out when the token used to unblind can not be
+    /// inversed. This error should not happen if you use the Token that was
+    /// returned by the blind operation.
     InvalidToken,
-    BLSError,
+    /// BLS errors are thrown out by the currently implemented scheme since it
+    /// uses BLS verification routines underneath.
+    SigError(BLSError),
 }
 
-/*pub fn blind_from<C: PairingCurve>(msg: &[u8], rng: &mut impl RngCore) -> (Token<C>, Vec<u8>)*/
-//where
-//C::G1: Encodable,
-//{
-//let mut r = C::Scalar::new();
-//r.pick(&mut thread_rng());
-//let mut h = C::G1::new();
-//// r * H(m)
-//h.map(msg);
-//h.mul(&r);
-//(Token(r), h.marshal())
-//}
-//pub fn blind<C: PairingCurve>(msg: &[u8]) -> (Token<C>, Vec<u8>)
-//where
-//C::G1: Encodable,
-//{
-//use rand::prelude::*;
-//blind_from(msg, &mut thread_rng())
-//}
-
-//pub fn sign<C: PairingCurve>(private: &C::Scalar, blinded_msg: &[u8]) -> Result<Vec<u8>, BLSError>
-//where
-//C::G1: Encodable,
-//{
-//let mut bm = C::G1::new();
-//if let Err(_) = bm.unmarshal(blinded_msg) {
-//return Err(BLSError::InvalidBlindedMessage);
-//}
-//bm.mul(private);
-//Ok(bm.marshal())
-//}
-
-///// move occurs here as this blinding factor should not be kept around.
-//pub fn unblind<C: PairingCurve>(factor: Token<C>, signature: &[u8]) -> Result<Vec<u8>, BLSError>
-//where
-//C::G1: Encodable,
-//{
-//let mut sig = C::G1::new();
-//if let Err(_) = sig.unmarshal(signature) {
-//return Err(BLSError::InvalidPoint);
-//}
-//match factor.0.inverse() {
-//Some(ri) => {
-//// r^-1 * ( r * H(m)^x) = H(m)^x
-//sig.mul(&ri);
-//Ok(sig.marshal())
-//}
-//None => Err(BLSError::InvalidBlindingFactor),
-//}
-//}
-
+/// BG2Scheme is a blind signature scheme implementation that operates with
+/// private/public key pairs over G1 and signatures over G2 using the
+/// parametrized pairing curve.
 pub type BG2Scheme<C> = Scheme<bls::G2Scheme<C>>;
+/// BG1Scheme is a blind signature scheme implementation that operates with
+/// private/public key pairs over G2 and signatures over G1 using the
+/// parametrized pairing curve.
 pub type BG1Scheme<C> = Scheme<bls::G1Scheme<C>>;
+
+impl fmt::Display for BlindError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            BlindError::InvalidToken => write!(f, "invalid token"),
+            BlindError::SigError(e) => write!(f, "BLS error: {}", e),
+        }
+    }
+}
+
+impl Error for BlindError {
+    fn source(&self) -> Option<&(dyn Error + 'static)> {
+        match self {
+            BlindError::InvalidToken => None,
+            BlindError::SigError(e) => Some(e),
+        }
+    }
+}
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::curve::bls12381::{PairingCurve as PCurve, Scalar, G1, G2};
-    use crate::sig::bls;
-    use rand::prelude::*;
+    use crate::curve::bls12381::PairingCurve as PCurve;
 
     fn pair<B: SignatureScheme>() -> (B::Private, B::Public) {
         let mut private = B::Private::new();
@@ -177,7 +165,7 @@ mod tests {
         let msg = vec![1, 9, 6, 9];
         let (token, blinded) = B::blind(&msg);
         let blinded_sig = B::sign(&private, &blinded).unwrap();
-        let clear_sig = B::unblind(token, &blinded_sig).expect("unblind should go well");
+        let clear_sig = B::unblind(&token, &blinded_sig).expect("unblind should go well");
         match B::verify(&public, &msg, &clear_sig) {
             Ok(()) => {}
             Err(e) => {

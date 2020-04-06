@@ -27,13 +27,10 @@ pub trait Scalar: Element + Encodable {
     fn negate(&mut self);
     fn sub(&mut self, other: &Self);
     // TODO
-    // inverse()
-    // sub()
-    // unmarshal
 }
 
 /// Basic point functionality that can be multiplied by a scalar
-pub trait Point<A: Scalar>: Element<A> {
+pub trait Point<A: Scalar>: Element<A> + Encodable {
     fn map(&mut self, data: &[u8]) -> Result<(), Box<dyn Error>>;
 }
 
@@ -44,6 +41,16 @@ pub trait Point<A: Scalar>: Element<A> {
 pub trait Curve {
     type Scalar: Scalar;
     type Point: Point<Self::Scalar>;
+
+    /// scalar returns the identity element of the field.
+    fn scalar() -> Self::Scalar {
+        Self::Scalar::new()
+    }
+
+    /// point returns the default additive generator of the group.
+    fn point() -> Self::Point {
+        Self::Point::one()
+    }
 }
 
 pub trait PairingCurve {
@@ -73,6 +80,7 @@ pub type G1Curve<C> = CurveFrom<<C as PairingCurve>::Scalar, <C as PairingCurve>
 pub type G2Curve<C> = CurveFrom<<C as PairingCurve>::Scalar, <C as PairingCurve>::G2>;
 
 pub trait Encodable {
+    fn marshal_len() -> usize;
     fn marshal(&self) -> Vec<u8>;
     fn unmarshal(&mut self, data: &[u8]) -> Result<(), Box<dyn Error>>;
 }

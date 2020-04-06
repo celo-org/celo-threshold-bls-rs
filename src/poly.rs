@@ -11,7 +11,8 @@ pub type PublicPoly<C> = Poly<<C as Curve>::Scalar, <C as Curve>::Point>;
 
 pub type Idx = u32;
 
-pub struct Eval<A> {
+#[derive(Debug, Clone)]
+pub struct Eval<A: Clone> {
     pub value: A,
     pub index: Idx,
 }
@@ -31,6 +32,7 @@ where
 //  TODO Annoying to have an unused type warning here for Var: it is used in the
 //  constraint but not in the struct directly.-> phantomdata ?
 //  TODO: make it implement Element trait ;) ?
+#[derive(Debug)]
 pub struct Poly<Var: Scalar, Coeff: Element<Var>> {
     c: Vec<Coeff>,
     phantom: PhantomData<Var>,
@@ -97,9 +99,52 @@ where
         zipped.for_each(|(a, b)| a.add(&b));
     }
 
-    // TODO: make it return a Result in case inverse() fails
-    // TODO: check t parameters w.r.t. to shares
-    pub fn recover(t: usize, mut shares: Vec<Eval<C>>) -> Self {
+    pub fn recover(t: usize, mut shares: Vec<Eval<C>>) -> Result<C, InvalidRecovery> {
+        if shares.len() < t {
+            return Err(InvalidRecovery(shares.len(), t));
+        }
+        // first sort the shares as it can happens recovery happens for
+        // non-correlated shares so the subset chosen becomes important
+        shares.sort_by(|a, b| a.index.cmp(&b.index));
+
+        // convert the indexes of the shares into scalars
+        let xs = shares.iter().take(t).fold(HashMap::new(), |mut m, sh| {
+            let mut xi = X::new();
+            xi.set_int((sh.index + 1).into());
+            m.insert(sh.index, (xi, &sh.value));
+            m
+        });
+        assert!(xs.len() == t);
+        let mut acc = C::zero();
+        // iterate over all indices and for each multiply the lagrange basis
+        // with the value of the share
+        for (i, xi) in &xs {
+            let mut yi = xi.1.clone();
+            let mut num = X::one();
+            let mut den = X::one();
+            for (j, xj) in &xs {
+                if i == j {
+                    continue;
+                }
+                // xj - 0
+                num.mul(&xj.0);
+                // 1 / (xj - xi)
+                let mut tmp = xj.0.clone();
+                tmp.sub(&xi.0);
+                den.mul(&tmp);
+            }
+            let inv = den.inverse().unwrap();
+            num.mul(&inv);
+            yi.mul(&num);
+            acc.add(&yi);
+        }
+        Ok(acc)
+    }
+
+    pub fn full_recover(t: usize, mut shares: Vec<Eval<C>>) -> Result<Self, InvalidRecovery> {
+        if shares.len() < t {
+            return Err(InvalidRecovery(shares.len(), t));
+        }
         // first sort the shares as it can happens recovery happens for
         // non-correlated shares so the subset chosen becomes important
         shares.sort_by(|a, b| a.index.cmp(&b.index));
@@ -132,7 +177,7 @@ where
             let linear_poly = Self::from_vec(lin);
             acc.add(&linear_poly);
         }
-        acc
+        Ok(acc)
     }
 
     /// Computes the lagrange basis polynomial of index i
@@ -183,11 +228,15 @@ where
     // TODO fix semantics of zero:
     // it should be G1::zero() as only element
     pub fn zero() -> Self {
-        Self::from_vec(vec![])
+        Self::from_vec(vec![C::zero()])
     }
 
     pub fn free_coeff(&self) -> C {
         self.c[0].clone()
+    }
+
+    pub fn public_key(&self) -> C {
+        self.free_coeff()
     }
 }
 
@@ -255,18 +304,24 @@ where
     }
 }
 
-#[derive(Debug)]
-pub struct InvalidRecovery(String);
+pub struct InvalidRecovery(usize, usize);
 
 impl fmt::Display for InvalidRecovery {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{}", self.0)
+        write!(f, "Invalid recovery: only has {}/{} shares", self.0, self.1)
+    }
+}
+impl fmt::Debug for InvalidRecovery {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "Invalid recovery: only has {}/{} shares", self.0, self.1)
     }
 }
 
 impl Error for InvalidRecovery {
-    fn description(&self) -> &str {
-        &self.0
+    fn source(&self) -> Option<&(dyn Error + 'static)> {
+        // Generic error, underlying cause isn't tracked.
+        // TODO
+        None
     }
 }
 
@@ -285,6 +340,22 @@ pub mod tests {
     }
 
     #[test]
+    fn full_interpolation() {
+        let degree = 4;
+        let threshold = degree + 1;
+        let poly = Poly::<Sc, Sc>::new(degree);
+        let shares = (0..threshold)
+            .map(|i| poly.eval(i as Idx))
+            .collect::<Vec<Eval<Sc>>>();
+        let smaller_shares: Vec<_> = shares.iter().take(threshold - 1).cloned().collect();
+        let recovered = Poly::<Sc, Sc>::full_recover(threshold as usize, shares).unwrap();
+        let expected = poly.c[0];
+        let computed = recovered.c[0];
+        assert_eq!(expected, computed);
+        Poly::<Sc, Sc>::recover(threshold as usize, smaller_shares).unwrap_err();
+    }
+
+    #[test]
     fn interpolation() {
         let degree = 4;
         let threshold = degree + 1;
@@ -292,10 +363,38 @@ pub mod tests {
         let shares = (0..threshold)
             .map(|i| poly.eval(i as Idx))
             .collect::<Vec<Eval<Sc>>>();
-        let recovered = Poly::<Sc, Sc>::recover(threshold as usize, shares);
+        let smaller_shares: Vec<_> = shares.iter().take(threshold - 1).cloned().collect();
+        let recovered = Poly::<Sc, Sc>::recover(threshold as usize, shares).unwrap();
         let expected = poly.c[0];
-        let computed = recovered.c[0];
-        assert_eq!(expected, computed);
+        assert_eq!(expected, recovered);
+        Poly::<Sc, Sc>::recover(threshold as usize, smaller_shares).unwrap_err();
+    }
+
+    #[test]
+    fn benchy() {
+        use std::time::SystemTime;
+        let degree = 49;
+        let threshold = degree + 1;
+        let poly = Poly::<Sc, Sc>::new(degree);
+        let shares = (0..threshold)
+            .map(|i| poly.eval(i as Idx))
+            .collect::<Vec<Eval<Sc>>>();
+        let now = SystemTime::now();
+        Poly::<Sc, Sc>::recover(threshold as usize, shares).unwrap();
+        match now.elapsed() {
+            Ok(e) => println!("single recover: time elapsed {:?}", e),
+            Err(e) => panic!("{}", e),
+        }
+        let shares = (0..threshold)
+            .map(|i| poly.eval(i as Idx))
+            .collect::<Vec<Eval<Sc>>>();
+
+        let now = SystemTime::now();
+        Poly::<Sc, Sc>::full_recover(threshold as usize, shares).unwrap();
+        match now.elapsed() {
+            Ok(e) => println!("full_recover: time elapsed {:?}", e),
+            Err(e) => panic!("{}", e),
+        }
     }
 
     #[test]

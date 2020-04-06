@@ -1,20 +1,15 @@
-use crate::group::{CurveFrom, Element, Encodable, PairingCurve as PC, Point, Scalar as Sc};
+use crate::group::{Curve, CurveFrom, Element, Encodable, PairingCurve as PC, Point, Scalar as Sc};
 use algebra::bls12_377 as zexe;
-use algebra::bls12_377::{
-    g1::Parameters as Bls12_377G1Parameters, g2::Parameters as Bls12_377G2Parameters, Bls12_377,
-    Parameters as Bls12_377Parameters,
-};
+use algebra::bls12_377::Parameters as Bls12_377Parameters;
 use algebra::bytes::{FromBytes, ToBytes};
-use algebra::curves::models::bls12::{Bls12, Bls12Parameters};
 use algebra::curves::{AffineCurve, PairingEngine, ProjectiveCurve};
 use algebra::fields::Field;
 use algebra::prelude::{One, UniformRand, Zero};
-use algebra::PairingEngine as pe;
 use bls_crypto::{
     bls::keys as bls,
     curve::hash::try_and_increment::TryAndIncrement,
     curve::hash::{HashToG1, HashToG2},
-    hash::{composite::CompositeHasher, direct::DirectHasher},
+    hash::direct::DirectHasher,
 };
 use rand_core::RngCore;
 use std::error::Error;
@@ -54,6 +49,9 @@ impl Element<Scalar> for Scalar {
 }
 
 impl Encodable for Scalar {
+    fn marshal_len() -> usize {
+        32
+    }
     fn marshal(&self) -> Vec<u8> {
         let mut out = Vec::with_capacity(32);
         self.0
@@ -119,6 +117,9 @@ impl Element<Scalar> for G1 {
 }
 
 impl Encodable for G1 {
+    fn marshal_len() -> usize {
+        97
+    }
     fn marshal(&self) -> Vec<u8> {
         let mut out = Vec::with_capacity(144);
         self.0
@@ -182,6 +183,9 @@ impl Element<Scalar> for G2 {
 }
 
 impl Encodable for G2 {
+    fn marshal_len() -> usize {
+        return 193;
+    }
     fn marshal(&self) -> Vec<u8> {
         let mut out = Vec::with_capacity(144);
         self.0
@@ -247,7 +251,13 @@ impl fmt::Display for GT {
 }
 
 pub type G1Curve = CurveFrom<Scalar, G1>;
-pub type G2Curve = CurveFrom<Scalar, G2>;
+//pub type G2Curve = CurveFrom<Scalar, G2>;
+pub struct G2Curve {}
+impl Curve for G2Curve {
+    type Scalar = Scalar;
+    type Point = G2;
+}
+
 pub struct PairingCurve {}
 
 impl PC for PairingCurve {
@@ -263,8 +273,6 @@ impl PC for PairingCurve {
 #[cfg(test)]
 mod tests {
     use super::*;
-    //use rand::{SeedableRng, XorShiftRng};
-    use rand::prelude::*;
 
     #[test]
     fn size377() {

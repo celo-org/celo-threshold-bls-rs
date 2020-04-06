@@ -4,10 +4,12 @@ pub mod ecies;
 pub mod group;
 pub mod poly;
 pub mod sig;
+pub use group::*;
 
 pub type Index = poly::Idx;
-// TODO rename, see todo
-pub type Public<C> = poly::PublicPoly<C>;
+
+//
+pub type DistPublic<C> = poly::PublicPoly<C>;
 
 #[derive(Clone)]
 pub struct Share<S: group::Scalar> {
