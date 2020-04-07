@@ -81,7 +81,9 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[cfg(feature = "bls12_381")]
     use crate::curve::bls12381::PairingCurve as PCurve;
+    #[cfg(feature = "bls12_377")]
     use crate::curve::zexe::PairingCurve as Zexe;
 
     use crate::Index;
@@ -100,21 +102,25 @@ mod tests {
         (shares, private.commit())
     }
 
+    #[cfg(feature = "bls12_377")]
     #[test]
     fn tblind_g1_zexe() {
         tblind_test::<G1Scheme<Zexe>>();
     }
 
+    #[cfg(feature = "bls12_377")]
     #[test]
     fn tblind_g1_zexe_unblind() {
         unblind_then_aggregate_test::<G1Scheme<Zexe>>();
     }
 
+    #[cfg(feature = "bls12_381")]
     #[test]
     fn tblind_g1() {
         tblind_test::<G1Scheme<PCurve>>();
     }
 
+    #[cfg(feature = "bls12_381")]
     #[test]
     fn tblind_g2() {
         tblind_test::<G2Scheme<PCurve>>();

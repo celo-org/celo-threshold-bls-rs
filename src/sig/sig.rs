@@ -34,6 +34,8 @@ pub trait Scheme {
 /// signature scheme based on BLS, using the BLS12-381 curves.
 ///
 /// ```
+///  # #[cfg(feature = "bls12_381")]
+///  # {
 ///  use rand::prelude::*;
 ///  use threshold::sig::{SignatureScheme,Scheme};
 ///  use threshold::curve::bls12381::PairingCurve as PC;
@@ -48,6 +50,7 @@ pub trait Scheme {
 ///     Ok(_) => println!("signature is correct!"),
 ///     Err(e) => println!("signature is invalid: {}",e),
 ///  };
+/// # }
 /// ```
 /// Note signature scheme handles the format of the signature itself.
 pub trait SignatureScheme: Scheme {

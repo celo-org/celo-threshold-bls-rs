@@ -135,6 +135,7 @@ fn extract_index(sig: &[u8]) -> Result<(Index, Vec<u8>), TBLSError> {
 pub type TG1Scheme<C> = TScheme<bls::G1Scheme<C>>;
 pub type TG2Scheme<C> = TScheme<bls::G2Scheme<C>>;
 
+#[cfg(feature = "bls12_381")]
 #[cfg(test)]
 mod tests {
     use super::*;

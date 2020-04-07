@@ -135,6 +135,7 @@ where
     encrypt_with(to, msg, &mut thread_rng())
 }
 
+#[cfg(feature = "bls12_381")]
 #[cfg(test)]
 mod tests {
     use super::*;
