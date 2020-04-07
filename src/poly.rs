@@ -325,6 +325,7 @@ impl Error for InvalidRecovery {
     }
 }
 
+#[cfg(feature = "bls12_381")]
 #[cfg(test)]
 pub mod tests {
     use super::*;

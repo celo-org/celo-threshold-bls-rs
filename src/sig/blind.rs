@@ -137,6 +137,7 @@ impl Error for BlindError {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[cfg(feature = "bls12_381")]
     use crate::curve::bls12381::PairingCurve as PCurve;
 
     fn pair<B: SignatureScheme>() -> (B::Private, B::Public) {
@@ -147,11 +148,13 @@ mod tests {
         (private, public)
     }
 
+    #[cfg(feature = "bls12_381")]
     #[test]
     fn blind_g1() {
         blind_test::<BG1Scheme<PCurve>>();
     }
 
+    #[cfg(feature = "bls12_381")]
     #[test]
     fn blind_g2() {
         blind_test::<BG2Scheme<PCurve>>();

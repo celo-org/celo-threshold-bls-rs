@@ -946,6 +946,7 @@ pub fn default_threshold(n: usize) -> usize {
     (((n as f64) * 2.0 / 3.0) + 1.0) as usize
 }
 
+#[cfg(feature = "bls12_381")]
 #[cfg(test)]
 pub mod tests {
     use super::*;

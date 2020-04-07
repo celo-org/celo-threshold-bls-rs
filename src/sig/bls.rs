@@ -144,6 +144,8 @@ impl Error for BLSError {
         None
     }
 }
+
+#[cfg(feature = "bls12_381")]
 #[cfg(test)]
 mod tests {
     use super::*;

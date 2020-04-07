@@ -54,6 +54,23 @@ fn interpolation() {
 }
 ```
 
+## Curve Implementations
+
+Curently there are two curves available, `BLS12 381` and `BLS 377`. By default they are enabled both, but you can select which one you want to use using
+the features `bls12_381` and `bls_377`.
+
+You can use them like this when adding the dependency to your `Cargo.toml` file.
+
+```toml
+# Only bls12_381
+threshold = { version = "0.1", default-features = false, features = ["bls12_381"] }
+# Only bls12_377
+threshold = { version = "0.1", default-features = false, features = ["bls12_377"] }
+# Both
+threshold = { version = "0.1" }
+```
+
+
 ## TODO:
 
 - [ ] doc for DKG
