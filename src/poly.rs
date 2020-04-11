@@ -1,5 +1,6 @@
 use crate::group::{Curve, Element, Point, Scalar};
 use rand_core::RngCore;
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::error::Error;
 use std::fmt;
@@ -32,7 +33,7 @@ where
 //  TODO Annoying to have an unused type warning here for Var: it is used in the
 //  constraint but not in the struct directly.-> phantomdata ?
 //  TODO: make it implement Element trait ;) ?
-#[derive(Debug)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Poly<Var: Scalar, Coeff: Element<Var>> {
     c: Vec<Coeff>,
     phantom: PhantomData<Var>,
@@ -277,16 +278,6 @@ impl<X: Scalar> Poly<X, X> {
     }
 }
 
-impl<X, C> Clone for Poly<X, C>
-where
-    X: Scalar,
-    C: Element<X>,
-{
-    fn clone(&self) -> Self {
-        let cc = self.c.clone();
-        Self::from_vec(cc)
-    }
-}
 impl<X, Y> fmt::Display for Poly<X, Y>
 where
     X: Scalar,

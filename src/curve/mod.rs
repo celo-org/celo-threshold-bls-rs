@@ -3,6 +3,7 @@ use std::fmt;
 
 #[cfg(feature = "bls12_381")]
 pub mod bls12381;
+
 #[cfg(feature = "bls12_377")]
 pub mod zexe;
 

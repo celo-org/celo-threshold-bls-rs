@@ -2,6 +2,7 @@ use crate::group::{Element, Encodable, Point, Scalar};
 use crate::sig::bls::{self, BLSError};
 use crate::sig::{BlindScheme, Blinder, Scheme as SScheme, SignatureScheme};
 use rand::prelude::thread_rng;
+use serde::{Deserialize, Serialize};
 use std::error::Error;
 use std::fmt;
 use std::marker::PhantomData;
@@ -10,6 +11,8 @@ use std::marker::PhantomData;
 /// private blinding factor that is called a Token. To unblind the signature
 /// afterwards, one needs the same token as what the blinding method returned.
 /// In this blind signature scheme, the token is simply a field element.
+#[derive(Serialize, Deserialize)]
+#[serde(bound = "S: Serialize + serde::de::DeserializeOwned")]
 pub struct Token<S: Scalar>(S);
 
 impl<S> Encodable for Token<S>
