@@ -3,9 +3,9 @@ use crate::sig::blind::{BG1Scheme, BG2Scheme};
 use crate::sig::tbls::{Serializer, TScheme};
 use crate::sig::{BlindThreshold, Blinder, Partial, Scheme as SScheme, ThresholdScheme};
 use crate::Share;
+use rand::RngCore;
 use std::error::Error;
 use std::marker::PhantomData;
-use rand::RngCore;
 
 pub struct Scheme<T: ThresholdScheme + Serializer, B: Blinder> {
     m: PhantomData<T>,
