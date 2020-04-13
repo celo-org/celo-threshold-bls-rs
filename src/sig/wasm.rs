@@ -5,14 +5,18 @@ use rand_core::{RngCore, SeedableRng};
 
 use crate::{
     curve::zexe::PairingCurve as Bls12_377,
-    group::{Element, Encodable},
     sig::{
         blind::{BG1Scheme, Token},
-        Blinder, Scheme, SignatureScheme,
+        tblind::G1Scheme,
+        Blinder, Scheme, SignatureScheme, ThresholdScheme,
     },
 };
 
+type BlindThresholdSigs = G1Scheme<Bls12_377>;
 type BlindSigs = BG1Scheme<Bls12_377>;
+type PublicKey = <BlindThresholdSigs as Scheme>::Public;
+type PrivateKey = <BlindThresholdSigs as Scheme>::Private;
+type Result<T> = std::result::Result<T, JsValue>;
 
 ///////////////////////////////////////////////////////////////////////////
 // User -> Library
@@ -24,12 +28,12 @@ type BlindSigs = BG1Scheme<Bls12_377>;
 /// # Safety
 /// NOTE: If the same seed is used twice, the blinded result WILL be the same
 pub fn blind(msg: Vec<u8>, seed: Vec<u8>) -> BlindedMessage {
-    // an RNG is obtained from the provided seed and is used to blind the msg
     let mut rng = get_rng(&seed);
-    let (scalar, blinded_message) = BlindSigs::blind(&msg, &mut rng);
+    let (scalar, blinded_message) = BlindThresholdSigs::blind(&msg, &mut rng);
+
     BlindedMessage {
         message: blinded_message,
-        scalar: scalar.marshal(),
+        scalar,
     }
 }
 
@@ -39,32 +43,29 @@ pub fn blind(msg: Vec<u8>, seed: Vec<u8>) -> BlindedMessage {
 /// If unmarshalling the scalar or unblinding the signature errored, it will return an empty
 /// vector
 #[wasm_bindgen]
-pub fn unblind_signature(blinded_msg: Vec<u8>, scalar_buf: Vec<u8>) -> Vec<u8> {
-    let mut scalar = Token::new();
-    if let Err(_) = scalar.unmarshal(&scalar_buf) {
-        return vec![];
-    }
+pub fn unblind_signature(
+    blinded_msg: Vec<u8>,
+    scalar: *const Token<PrivateKey>,
+) -> Result<Vec<u8>> {
+    let scalar = unsafe { &*scalar };
 
-    match BlindSigs::unblind(&scalar, &blinded_msg) {
-        Ok(res) => res,
-        Err(_) => vec![],
-    }
+    BlindThresholdSigs::unblind(&scalar, &blinded_msg)
+        .map_err(|_| JsValue::from_str("could not unblind signature"))
 }
 
 #[wasm_bindgen]
-/// Verifies the signature after it has been unblinded
-pub fn verify_sign(public_key: Vec<u8>, msg: Vec<u8>, signature: Vec<u8>) -> bool {
-    // wasm-bindgen cannot understand this type if inlined
-    type Public = <BlindSigs as Scheme>::Public;
-    let mut key = Public::new();
-    if let Err(_) = key.unmarshal(&public_key) {
-        return false;
-    }
+/// Verifies the signature after it has been unblinded. Users will call this on the
+/// threshold signature against the full public key
+pub fn verify_sign(
+    public_key: *const PublicKey,
+    msg: Vec<u8>,
+    signature: Vec<u8>,
+) -> Result<bool> {
+    let key = unsafe { &*public_key };
 
-    match BlindSigs::verify(&key, &msg, &signature) {
-        Ok(_) => true,
-        Err(_) => false,
-    }
+    BlindThresholdSigs::verify(&key, &msg, &signature)
+        .map_err(|_| JsValue::from_str("signature verifiaction failed"))?;
+    Ok(true)
 }
 
 ///////////////////////////////////////////////////////////////////////////
@@ -74,12 +75,21 @@ pub fn verify_sign(public_key: Vec<u8>, msg: Vec<u8>, signature: Vec<u8>) -> boo
 #[wasm_bindgen]
 /// Signs the blinded message with the provided private key and returns the partial
 /// blind signature
-pub fn sign(private_key: Vec<u8>, blinded_message: Vec<u8>) -> Vec<u8> {
-    let mut key = <<BlindSigs as Scheme>::Private as Element>::new();
-    key.unmarshal(&private_key)
-        .expect("could not deserialize private key");
+pub fn sign(private_key: *const PrivateKey, blinded_message: Vec<u8>) -> Result<Vec<u8>> {
+    let key = unsafe { &*private_key };
 
-    BlindSigs::sign(&key, &blinded_message).expect("could not sign blinded message")
+    BlindSigs::sign(&key, &blinded_message)
+        .map_err(|_| JsValue::from_str("could not sign message"))
+}
+
+#[wasm_bindgen]
+/// Signs the blinded message with the provided private key and returns the partial
+/// blind signature
+pub fn partial_sign(share: *const Share<PrivateKey>, blinded_message: Vec<u8>) -> Result<Vec<u8>> {
+    let share = unsafe { &*share };
+
+    BlindThresholdSigs::partial_sign(&share, &blinded_message)
+        .map_err(|_| JsValue::from_str("could not partially sign message"))
 }
 
 ///////////////////////////////////////////////////////////////////////////
@@ -113,7 +123,7 @@ pub struct BlindedMessage {
     /// The scalar which was used to generate the blinded message. This will be used
     /// to unblind the signature received on the blinded message to a valid signature
     /// on the unblinded message
-    scalar: Vec<u8>,
+    scalar: Token<PrivateKey>,
 }
 
 #[wasm_bindgen]
@@ -124,8 +134,8 @@ impl BlindedMessage {
     }
 
     #[wasm_bindgen(getter)]
-    pub fn scalar(&self) -> Vec<u8> {
-        self.scalar.clone()
+    pub fn scalar(&self) -> *const Token<PrivateKey> {
+        &self.scalar as *const Token<PrivateKey>
     }
 }
 
@@ -146,9 +156,9 @@ fn from_slice(bytes: &[u8]) -> [u8; 32] {
 /// A BLS12-377 Keypair
 pub struct Keypair {
     /// The private key
-    private: Vec<u8>,
+    private: PrivateKey,
     /// The public key
-    public: Vec<u8>,
+    public: PublicKey,
 }
 
 // Need to implement custom getters if we want to return more than one value
@@ -156,24 +166,60 @@ pub struct Keypair {
 #[wasm_bindgen]
 impl Keypair {
     #[wasm_bindgen(getter)]
-    pub fn private(&self) -> Vec<u8> {
-        self.private.clone()
+    pub fn private(&self) -> *const PrivateKey {
+        &self.private as *const PrivateKey
     }
 
     #[wasm_bindgen(getter)]
-    pub fn public(&self) -> Vec<u8> {
-        self.public.clone()
+    pub fn public(&self) -> *const PublicKey {
+        &self.public as *const PublicKey
     }
 }
 
-/// Generates a private key
+/// Generates a single private key
 #[wasm_bindgen]
 pub fn keygen(seed: Vec<u8>) -> Keypair {
     // wasm_bindgen requires fully qualified syntax
     let mut rng = get_rng(&seed);
-    let (private, public) = BlindSigs::keypair(&mut rng);
-    Keypair {
-        private: private.marshal(),
-        public: public.marshal(),
+    let (private, public) = BlindThresholdSigs::keypair(&mut rng);
+    Keypair { private, public }
+}
+
+use crate::{poly::Poly, Index, Share};
+
+#[wasm_bindgen]
+pub struct Keys {
+    shares: Vec<Share<PrivateKey>>,
+    polynomial: Poly<PrivateKey, PublicKey>,
+}
+
+#[wasm_bindgen]
+impl Keys {
+    #[wasm_bindgen(getter)]
+    pub fn shares(&self) -> Vec<u8> {
+        let _s = self.shares.clone();
+        vec![]
+    }
+
+    #[wasm_bindgen(getter)]
+    pub fn polynomial(&self) -> Vec<u64> {
+        let _s = self.polynomial.clone();
+        vec![]
+    }
+}
+
+#[wasm_bindgen]
+pub fn threshold_keygen(n: usize, t: usize) -> Keys {
+    let private = Poly::<PrivateKey, PrivateKey>::new(t - 1);
+    let shares = (0..n)
+        .map(|i| private.eval(i as Index))
+        .map(|e| Share {
+            index: e.index,
+            private: e.value,
+        })
+        .collect();
+    Keys {
+        shares,
+        polynomial: private.commit(),
     }
 }
