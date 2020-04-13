@@ -2,7 +2,7 @@ use rand_core::RngCore;
 use std::error::Error;
 use std::fmt;
 use std::marker::PhantomData;
-use std::result::Result;
+
 /// Element represents an element of a group with the additive notation
 /// which is also equipped with a multiplication transformation.
 /// Two implementations are for Scalar which forms a ring so RHS is the same
