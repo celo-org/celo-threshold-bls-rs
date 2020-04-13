@@ -141,7 +141,6 @@ mod tests {
             .iter()
             .map(|share| B::partial_sign(share, &blinded).unwrap())
             .collect();
-
         let blinded_sig = B::aggregate(thr, &partials).unwrap();
         let unblinded = B::unblind(&token, &blinded_sig).unwrap();
 

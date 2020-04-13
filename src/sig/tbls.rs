@@ -41,6 +41,7 @@ where
         let ret = inject_index(private.index, &mut sig);
         Ok(ret)
     }
+
     fn partial_verify(
         public: &Poly<Self::Private, Self::Public>,
         msg: &[u8],
@@ -54,6 +55,7 @@ where
             Err(e) => Err(Box::new(e)),
         }
     }
+
     fn aggregate(threshold: usize, partials: &[Partial]) -> Result<Vec<u8>, Box<dyn Error>> {
         if threshold > partials.len() {
             return Err(Box::new(TBLSError::NotEnoughPartialSignatures));

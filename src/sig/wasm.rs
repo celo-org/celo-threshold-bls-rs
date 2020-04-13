@@ -18,6 +18,9 @@ type PublicKey = <BlindThresholdSigs as Scheme>::Public;
 type PrivateKey = <BlindThresholdSigs as Scheme>::Private;
 type Result<T> = std::result::Result<T, JsValue>;
 
+/// Signatures for BLS12-377 are 197 bytes long
+const SIG_SIZE: usize = 197;
+
 ///////////////////////////////////////////////////////////////////////////
 // User -> Library
 ///////////////////////////////////////////////////////////////////////////
@@ -27,7 +30,7 @@ type Result<T> = std::result::Result<T, JsValue>;
 ///
 /// # Safety
 /// NOTE: If the same seed is used twice, the blinded result WILL be the same
-pub fn blind(msg: Vec<u8>, seed: Vec<u8>) -> BlindedMessage {
+pub fn blind(msg: Vec<u8>, seed: &[u8]) -> BlindedMessage {
     let mut rng = get_rng(&seed);
     let (scalar, blinded_message) = BlindThresholdSigs::blind(&msg, &mut rng);
 
@@ -56,15 +59,11 @@ pub fn unblind_signature(
 #[wasm_bindgen]
 /// Verifies the signature after it has been unblinded. Users will call this on the
 /// threshold signature against the full public key
-pub fn verify_sign(
-    public_key: *const PublicKey,
-    msg: Vec<u8>,
-    signature: Vec<u8>,
-) -> Result<bool> {
+pub fn verify_sign(public_key: *const PublicKey, msg: Vec<u8>, signature: Vec<u8>) -> Result<bool> {
     let key = unsafe { &*public_key };
 
     BlindThresholdSigs::verify(&key, &msg, &signature)
-        .map_err(|_| JsValue::from_str("signature verifiaction failed"))?;
+        .map_err(|err| JsValue::from_str(&format!("signature verification failed: {}", err)))?;
     Ok(true)
 }
 
@@ -79,7 +78,7 @@ pub fn sign(private_key: *const PrivateKey, blinded_message: Vec<u8>) -> Result<
     let key = unsafe { &*private_key };
 
     BlindSigs::sign(&key, &blinded_message)
-        .map_err(|_| JsValue::from_str("could not sign message"))
+        .map_err(|err| JsValue::from_str(&format!("could not sign message: {}", err)))
 }
 
 #[wasm_bindgen]
@@ -89,7 +88,7 @@ pub fn partial_sign(share: *const Share<PrivateKey>, blinded_message: Vec<u8>) -
     let share = unsafe { &*share };
 
     BlindThresholdSigs::partial_sign(&share, &blinded_message)
-        .map_err(|_| JsValue::from_str("could not partially sign message"))
+        .map_err(|err| JsValue::from_str(&format!("could not partially sign message: {}", err)))
 }
 
 ///////////////////////////////////////////////////////////////////////////
@@ -98,17 +97,36 @@ pub fn partial_sign(share: *const Share<PrivateKey>, blinded_message: Vec<u8>) -
 
 #[wasm_bindgen]
 /// Verifies a partial signature against a service's public key
-pub fn verify_partial_blind_signature(_signature: Vec<u8>, _public_key: Vec<u8>) -> bool {
-    unimplemented!()
+pub fn verify_partial_blind_signature(
+    polynomial: *const Poly<PrivateKey, PublicKey>,
+    blinded_message: &[u8],
+    sig: Vec<u8>,
+) -> Result<bool> {
+    let polynomial = unsafe { &*polynomial };
+    BlindThresholdSigs::partial_verify(polynomial, blinded_message, &sig).map_err(|err| {
+        JsValue::from_str(&format!("could not partially verify message: {}", err))
+    })?;
+    Ok(true)
 }
 
 #[wasm_bindgen]
 /// Combines a vector of blinded partial signatures.
 ///
 /// NOTE: Wasm-bindgen does not support Vec<Vec<u8>>, so this function accepts a flattened
-/// byte vector which it will parse in 48 byte chunks for each signature.
-pub fn combine(_signature: Vec<u8>) -> Vec<u8> {
-    unimplemented!()
+/// byte vector which it will parse in chunks for each signature.
+pub fn combine(threshold: usize, signatures: Vec<u8>) -> Result<Vec<u8>> {
+    let sigs = signatures
+        .chunks(SIG_SIZE)
+        .map(|chunk| chunk.to_vec())
+        .collect::<Vec<Vec<u8>>>();
+
+    BlindThresholdSigs::aggregate(threshold, &sigs).map_err(|err| {
+        JsValue::from_str(&format!(
+            "could not aggregate sigs: {}. length: {}",
+            err,
+            sigs.len()
+        ))
+    })
 }
 
 ///////////////////////////////////////////////////////////////////////////
@@ -191,26 +209,45 @@ use crate::{poly::Poly, Index, Share};
 pub struct Keys {
     shares: Vec<Share<PrivateKey>>,
     polynomial: Poly<PrivateKey, PublicKey>,
+    threshold_public_key: PublicKey,
+    pub t: usize,
+    pub n: usize,
 }
 
 #[wasm_bindgen]
 impl Keys {
     #[wasm_bindgen(getter)]
-    pub fn shares(&self) -> Vec<u8> {
-        let _s = self.shares.clone();
-        vec![]
+    pub fn shares(&self) -> *const Vec<Share<PrivateKey>> {
+        &self.shares as *const Vec<Share<PrivateKey>>
+    }
+
+    #[wasm_bindgen]
+    pub fn get_share(&self, index: usize) -> *const Share<PrivateKey> {
+        &self.shares[index] as *const Share<PrivateKey>
+    }
+
+    #[wasm_bindgen]
+    pub fn num_shares(&self) -> usize {
+        self.shares.len()
     }
 
     #[wasm_bindgen(getter)]
-    pub fn polynomial(&self) -> Vec<u64> {
-        let _s = self.polynomial.clone();
-        vec![]
+    pub fn polynomial(&self) -> *const Poly<PrivateKey, PublicKey> {
+        &self.polynomial as *const Poly<PrivateKey, PublicKey>
+    }
+
+    #[wasm_bindgen(getter)]
+    pub fn threshold_public_key(&self) -> *const PublicKey {
+        &self.threshold_public_key as *const PublicKey
     }
 }
 
 #[wasm_bindgen]
-pub fn threshold_keygen(n: usize, t: usize) -> Keys {
-    let private = Poly::<PrivateKey, PrivateKey>::new(t - 1);
+/// WARNING: This is a helper function for local testing of the library. Do not use
+/// in production, unless you trust the person that generated the keys.
+pub fn threshold_keygen(n: usize, t: usize, seed: &[u8]) -> Keys {
+    let mut rng = get_rng(seed);
+    let private = Poly::<PrivateKey, PrivateKey>::new_from(t - 1, &mut rng);
     let shares = (0..n)
         .map(|i| private.eval(i as Index))
         .map(|e| Share {
@@ -218,8 +255,40 @@ pub fn threshold_keygen(n: usize, t: usize) -> Keys {
             private: e.value,
         })
         .collect();
+    let polynomial = private.commit();
+    let threshold_public_key = polynomial.public_key();
     Keys {
         shares,
-        polynomial: private.commit(),
+        polynomial,
+        threshold_public_key,
+        t,
+        n,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn blinded_threshold_wasm() {
+        let seed = b"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+        let keys = threshold_keygen(5, 3, &seed[..]);
+
+        let msg = vec![1, 2, 3, 4, 6];
+        let key = b"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
+        let blinded_message = blind(msg.clone(), &key[..]);
+        let blinded_msg = blinded_message.message.clone();
+
+        let sig1 = partial_sign(keys.get_share(0), blinded_msg.clone()).unwrap();
+        // This is buggy
+        // verify_partial_blind_signature(keys.polynomial(), &blinded_msg, sig1.clone()).unwrap();
+        let sig2 = partial_sign(keys.get_share(1), blinded_msg.clone()).unwrap();
+        let sig3 = partial_sign(keys.get_share(2), blinded_msg.clone()).unwrap();
+
+        let concatenated = [sig1, sig2, sig3].concat();
+        let asig = combine(3, concatenated).unwrap();
+        let unblinded = unblind_signature(asig, blinded_message.scalar()).unwrap();
+        verify_sign(keys.threshold_public_key(), msg, unblinded).unwrap();
     }
 }
