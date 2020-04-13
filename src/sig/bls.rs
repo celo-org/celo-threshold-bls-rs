@@ -1,4 +1,4 @@
-use crate::group::{Element, Encodable, PairingCurve, Point};
+use crate::group::{Element, Encodable, PairingCurve};
 use crate::sig::{Scheme, SignatureScheme};
 use std::error::Error;
 use std::fmt;
@@ -16,7 +16,7 @@ mod common {
         fn internal_sign(private: &Self::Private, msg: &[u8]) -> Result<Vec<u8>, Box<dyn Error>> {
             // sig = H(m)^x
             let mut h = Self::Signature::new();
-            h.map(msg)?;
+            h.unmarshal(msg)?;
             //println!("sign: message {:?}", h);
             h.mul(private);
             Ok(h.marshal())
@@ -32,7 +32,7 @@ mod common {
             }
             // H(m)
             let mut h = Self::Signature::new();
-            h.map(msg)?;
+            h.unmarshal(msg)?;
             return Ok((sigp, h));
         }
 
