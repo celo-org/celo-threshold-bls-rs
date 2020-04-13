@@ -5,10 +5,7 @@ authors = ["nikkolasg"]
 edition = "2018"
 
 [lib]
-crate-type = ["cdylib"]
-# [lib]
-# crate-type = ["lib", "staticlib"]
-
+crate-type = ["lib", "staticlib"]
 
 [dependencies]
 rand_core = { version = "0.5.1", default-features = false }
@@ -39,7 +36,7 @@ default = ["bls12_377", "bls12_381"]
 bls12_377 = ["algebra", "bls-crypto"]
 bls12_381 = ["paired", "groupy", "ff"]
 
-# [[example]]
-# name = "tblind"
-# path = "examples/tblind/main.rs"
-# required-features = ["bls12_377"]
+[[example]]
+name = "tblind"
+path = "examples/tblind/main.rs"
+required-features = ["bls12_377"]
