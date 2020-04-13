@@ -143,7 +143,7 @@ mod tests {
             false,
             partials
                 .iter()
-                .any(|p| B::partial_verify(&public, &msg, &p).is_err())
+                .any(|p| B::partial_verify(&public, &blinded, &p).is_err())
         );
 
         let blinded_sig = B::aggregate(thr, &partials).unwrap();
