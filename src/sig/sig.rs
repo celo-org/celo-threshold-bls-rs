@@ -37,16 +37,20 @@ pub trait Scheme {
 ///  # #[cfg(feature = "bls12_381")]
 ///  # {
 ///  use rand::prelude::*;
-///  use threshold::sig::{SignatureScheme,Scheme};
+///  use threshold::{sig::{SignatureScheme,Scheme}, Element, Encodable, Point};
 ///  use threshold::curve::bls12381::PairingCurve as PC;
 ///  // import BLS signatures with public keys over G2
 ///  use threshold::sig::bls::G2Scheme;
 ///
 ///
-///  let message = vec![1,9,6,9];
+///  let msg = vec![1,9,6,9];
+///  let mut msg_point = <G2Scheme::<PC> as Scheme>::Signature::new();
+///  msg_point.map(&msg).unwrap();
+///  let msg_point_bytes = msg_point.marshal();
+///
 ///  let (private,public) = G2Scheme::<PC>::keypair(&mut thread_rng());
-///  let signature = G2Scheme::<PC>::sign(&private,&message).unwrap();
-///  match G2Scheme::<PC>::verify(&public,&message,&signature) {
+///  let signature = G2Scheme::<PC>::sign(&private,&msg_point_bytes).unwrap();
+///  match G2Scheme::<PC>::verify(&public,&msg_point_bytes,&signature) {
 ///     Ok(_) => println!("signature is correct!"),
 ///     Err(e) => println!("signature is invalid: {}",e),
 ///  };

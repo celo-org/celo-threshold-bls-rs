@@ -174,7 +174,10 @@ mod tests {
         let (token, blinded) = B::blind(&msg, &mut thread_rng());
         let blinded_sig = B::sign(&private, &blinded).unwrap();
         let clear_sig = B::unblind(&token, &blinded_sig).expect("unblind should go well");
-        match B::verify(&public, &msg, &clear_sig) {
+        let mut msg_point = B::Signature::new();
+        msg_point.map(&msg).unwrap();
+        let msg_point_bytes = msg_point.marshal();
+        match B::verify(&public, &msg_point_bytes, &clear_sig) {
             Ok(()) => {}
             Err(e) => {
                 println!("{:?}", e);
