@@ -1107,7 +1107,6 @@ dependencies = [
  "rand_core",
  "sha2",
  "smallbitvec",
- "thiserror",
  "wasm-bindgen",
 ]
 

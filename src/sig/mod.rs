@@ -5,5 +5,5 @@ pub mod tblind;
 pub mod tbls;
 pub use sig::*;
 
-#[cfg(feature = "bls12_377")]
+#[cfg(feature = "wasm")]
 pub mod wasm;

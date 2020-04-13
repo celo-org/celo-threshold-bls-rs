@@ -80,6 +80,7 @@ under [`examples/blind.js`](./examples/blind.js). You can run it yourself by exe
 ```
 $ wasm-pack build --target nodejs
 $ node examples/blind.js
+$ node examples/tblind.js
 ```
 
 The bundled wasm package will be under the `pkg/` directory. You can then either pack and publish it 

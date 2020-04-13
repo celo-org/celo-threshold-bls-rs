@@ -12,15 +12,6 @@ use std::marker::PhantomData;
 /// In this blind signature scheme, the token is simply a field element.
 pub struct Token<S: Scalar>(S);
 
-impl<S> Token<S>
-where
-    S: Scalar,
-{
-    pub fn new() -> Self {
-        Self(S::new())
-    }
-}
-
 impl<S> Encodable for Token<S>
 where
     S: Scalar,

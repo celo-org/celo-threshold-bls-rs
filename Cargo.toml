@@ -16,7 +16,10 @@ smallbitvec = "2.4.0"
 chacha20poly1305 = "0.3"
 hkdf = "0.8"
 sha2 = "0.8"
-wasm-bindgen = "0.2.60"
+
+
+wasm-bindgen = { version = "0.2.60", optional = true }
+rand_chacha = { version = "0.2.2", default-features = false, optional = true }
 
 # bls12_381
 paired = { version = "0.18.0", optional = true }
@@ -28,13 +31,12 @@ groupy = {version = "0.3.0", optional = true }
 
 algebra = { git = "https://github.com/scipr-lab/zexe", features = ["bls12_377", "edwards_sw6"], optional = true }
 bls-crypto = { git = "https://github.com/celo-org/bls-zexe", optional = true }
-thiserror = "1.0.15"
-rand_chacha = { version = "0.2.2", default-features = false }
 
 [features]
 default = ["bls12_377", "bls12_381"]
 bls12_377 = ["algebra", "bls-crypto"]
 bls12_381 = ["paired", "groupy", "ff"]
+wasm = ["wasm-bindgen", "rand_chacha", "bls12_377"]
 
 [[example]]
 name = "tblind"
