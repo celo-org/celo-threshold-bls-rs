@@ -6,6 +6,9 @@ pub mod poly;
 pub mod sig;
 pub use group::*;
 
+#[cfg(feature = "wasm")]
+pub mod wasm;
+
 pub type Index = poly::Idx;
 
 pub type DistPublic<C> = poly::PublicPoly<C>;

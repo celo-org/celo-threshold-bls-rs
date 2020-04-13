@@ -1,3 +1,4 @@
+//! # BLS12-377 WASM Bindings for Blind Threshold Signatures.
 use wasm_bindgen::prelude::*;
 
 use rand_chacha::ChaChaRng;
