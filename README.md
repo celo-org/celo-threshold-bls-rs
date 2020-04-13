@@ -70,6 +70,20 @@ threshold = { version = "0.1", default-features = false, features = ["bls12_377"
 threshold = { version = "0.1" }
 ```
 
+## WASM Bindings
+
+This library provides wasm bindings for signing under the `sig/wasm.rs` module. These can be built
+via the [`wasm-pack`](https://github.com/rustwasm/wasm-pack) tool. Depending on the platform you are 
+targetting, you'll need to use a different build flag. In order to see this in practice, look at the example
+under [`examples/blind.js`](./examples/blind.js). You can run it yourself by executing the following commands.
+
+```
+$ wasm-pack build --target nodejs
+$ node examples/blind.js
+```
+
+The bundled wasm package will be under the `pkg/` directory. You can then either pack and publish it 
+with `wasm-pack`'s `pack` and `publish` commands, or manually import it in your application.
 
 ## TODO:
 
