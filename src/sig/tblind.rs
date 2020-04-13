@@ -139,6 +139,12 @@ mod tests {
             .iter()
             .map(|share| B::partial_sign(share, &blinded).unwrap())
             .collect();
+        assert_eq!(
+            false,
+            partials
+                .iter()
+                .any(|p| B::partial_verify(&public, &msg, &p).is_err())
+        );
 
         let blinded_sig = B::aggregate(thr, &partials).unwrap();
         let unblinded = B::unblind(&token, &blinded_sig).unwrap();
