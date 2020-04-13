@@ -4,6 +4,7 @@ use rand_chacha::ChaChaRng;
 use rand_core::{RngCore, SeedableRng};
 
 use crate::{
+    group::{Element, Encodable, Point},
     curve::zexe::PairingCurve as Bls12_377,
     sig::{
         blind::{BG1Scheme, Token},
@@ -16,6 +17,7 @@ type BlindThresholdSigs = G1Scheme<Bls12_377>;
 type BlindSigs = BG1Scheme<Bls12_377>;
 type PublicKey = <BlindThresholdSigs as Scheme>::Public;
 type PrivateKey = <BlindThresholdSigs as Scheme>::Private;
+type Signature = <BlindThresholdSigs as Scheme>::Signature;
 type Result<T> = std::result::Result<T, JsValue>;
 
 /// Signatures for BLS12-377 are 197 bytes long
@@ -62,7 +64,11 @@ pub fn unblind_signature(
 pub fn verify_sign(public_key: *const PublicKey, msg: Vec<u8>, signature: Vec<u8>) -> Result<bool> {
     let key = unsafe { &*public_key };
 
-    BlindThresholdSigs::verify(&key, &msg, &signature)
+    let mut msg_hash = Signature::new();
+    msg_hash.map(&msg).unwrap();
+    let msg_hash = msg_hash.marshal();
+
+    BlindThresholdSigs::verify(&key, &msg_hash, &signature)
         .map_err(|err| JsValue::from_str(&format!("signature verification failed: {}", err)))?;
     Ok(true)
 }

@@ -78,7 +78,7 @@ targetting, you'll need to use a different build flag. In order to see this in p
 under [`examples/blind.js`](./examples/blind.js). You can run it yourself by executing the following commands.
 
 ```
-$ wasm-pack build --target nodejs
+$ wasm-pack build --target nodejs -- --features=wasm
 $ node examples/blind.js
 $ node examples/tblind.js
 ```

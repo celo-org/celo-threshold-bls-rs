@@ -27,24 +27,23 @@ for (let i = 0 ; i < keys.num_shares(); i++ ) {
 }
 
 // The combiner will verify all the individual partial signatures... 
-// let count = 0;
-// for (const sig of sigs) {
-//     if (threshold.verify_partial_blind_signature(polynomial, blind_msg, sig)) {
-//         count++
-//     }
-//     console.log("verified", count)
-// 
-//     // t-of-n is enough!
-//     if (count == t) {
-//         break
-//     }
-// }
-// 
-// // ...and if they were at least `t`, he will combine them
-// if count < t {
-//     console.log("INVALID THRESHOLD")
-//     return
-// }
+let count = 0;
+for (const sig of sigs) {
+    if (threshold.verify_partial_blind_signature(polynomial, blind_msg, sig)) {
+        count++
+    }
+
+    // t-of-n is enough!
+    if (count == t) {
+        break
+    }
+}
+
+// ...and if they were at least `t`, he will combine them
+if (count < t) {
+    console.log("INVALID THRESHOLD")
+    return
+}
 
 const blind_sig = threshold.combine(t, flattenSigsArray(sigs))
 
