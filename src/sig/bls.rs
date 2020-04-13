@@ -150,6 +150,7 @@ impl Error for BLSError {
 mod tests {
     use super::*;
     use crate::curve::bls12381::{PairingCurve as PCurve, Scalar, G1, G2};
+    use crate::group::{Point, Encodable};
     use rand::prelude::*;
 
     // TODO: make it one like in tbls
@@ -173,15 +174,21 @@ mod tests {
     fn nbls_g2() {
         let (private, public) = g2_pair();
         let msg = vec![1, 9, 6, 9];
-        let sig = G2Scheme::<PCurve>::sign(&private, &msg).unwrap();
-        G2Scheme::<PCurve>::verify(&public, &msg, &sig).expect("that should not happen");
+        let mut msg_point = <G2Scheme::<PCurve> as Scheme>::Signature::new();
+        msg_point.map(&msg).unwrap();
+        let msg_point_bytes = msg_point.marshal();
+        let sig = G2Scheme::<PCurve>::sign(&private, &msg_point_bytes).unwrap();
+        G2Scheme::<PCurve>::verify(&public, &msg_point_bytes, &sig).expect("that should not happen");
     }
 
     #[test]
     fn nbls_g1() {
         let (private, public) = g1_pair();
         let msg = vec![1, 9, 6, 9];
-        let sig = G1Scheme::<PCurve>::sign(&private, &msg).unwrap();
-        G1Scheme::<PCurve>::verify(&public, &msg, &sig).expect("that should not happen");
+        let mut msg_point = <G1Scheme::<PCurve> as Scheme>::Signature::new();
+        msg_point.map(&msg).unwrap();
+        let msg_point_bytes = msg_point.marshal();
+        let sig = G1Scheme::<PCurve>::sign(&private, &msg_point_bytes).unwrap();
+        G1Scheme::<PCurve>::verify(&public, &msg_point_bytes, &sig).expect("that should not happen");
     }
 }
