@@ -4,8 +4,8 @@ use rand_chacha::ChaChaRng;
 use rand_core::{RngCore, SeedableRng};
 
 use crate::{
-    group::{Element, Encodable, Point},
     curve::zexe::PairingCurve as Bls12_377,
+    group::{Element, Encodable, Point},
     sig::{
         blind::{BG1Scheme, Token},
         tblind::G1Scheme,

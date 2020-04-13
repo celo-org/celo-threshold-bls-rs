@@ -121,7 +121,7 @@ fn inject_index(index: Index, sig: &mut Vec<u8>) -> Vec<u8> {
     let mut full_vector = Vec::with_capacity(idx_slice.len() + sig.len());
     full_vector.append(&mut idx_slice);
     full_vector.append(sig);
-    return full_vector.to_vec();
+    full_vector
 }
 
 fn extract_index(sig: &[u8]) -> Result<(Index, Vec<u8>), TBLSError> {

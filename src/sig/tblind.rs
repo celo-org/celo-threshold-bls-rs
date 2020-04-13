@@ -88,7 +88,10 @@ mod tests {
     use crate::curve::zexe::PairingCurve as Zexe;
     use rand::thread_rng;
 
-    use crate::{Index, group::{Element, Encodable, Point}};
+    use crate::{
+        group::{Element, Encodable, Point},
+        Index,
+    };
     fn shares<B: BlindThreshold>(
         n: usize,
         t: usize,
