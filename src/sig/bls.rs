@@ -17,8 +17,8 @@ mod common {
             // sig = H(m)^x
             let mut h = Self::Signature::new();
             h.map(msg)?;
-            //println!("sign: message {:?}", h);
             h.mul(private);
+
             Ok(h.marshal())
         }
 
@@ -30,6 +30,7 @@ mod common {
             if let Err(_) = sigp.unmarshal(sig) {
                 return Err(Box::new(BLSError::InvalidPoint));
             }
+
             // H(m)
             let mut h = Self::Signature::new();
             h.map(msg)?;
@@ -38,6 +39,7 @@ mod common {
 
         fn final_exp(p: &Self::Public, sig: &Self::Signature, hm: &Self::Signature) -> bool;
     }
+
     impl<T> SignatureScheme for T
     where
         T: BLSScheme,
@@ -45,16 +47,13 @@ mod common {
         fn sign(private: &Self::Private, msg: &[u8]) -> Result<Vec<u8>, Box<dyn Error>> {
             T::internal_sign(private, msg)
         }
+
         fn verify(public: &Self::Public, msg: &[u8], sig: &[u8]) -> Result<(), Box<dyn Error>> {
-            match T::internal_verify(msg, sig) {
-                Ok((sig, hm)) => {
-                    if T::final_exp(public, &sig, &hm) {
-                        Ok(())
-                    } else {
-                        Err(Box::new(BLSError::InvalidSig))
-                    }
-                }
-                Err(e) => Err(e),
+            let (sig, hm) = T::internal_verify(msg, sig)?;
+            if T::final_exp(public, &sig, &hm) {
+                Ok(())
+            } else {
+                Err(Box::new(BLSError::InvalidSig))
             }
         }
     }

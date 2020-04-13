@@ -63,7 +63,7 @@ pub trait SignatureScheme: Scheme {
 /// threshold scheme.
 pub trait Blinder {
     type Token: Encodable;
-    fn blind(msg: &[u8]) -> (Self::Token, Vec<u8>);
+    fn blind<R: RngCore>(msg: &[u8], rng: &mut R) -> (Self::Token, Vec<u8>);
     fn unblind(t: &Self::Token, sig: &[u8]) -> Result<Vec<u8>, Box<dyn Error>>;
 }
 

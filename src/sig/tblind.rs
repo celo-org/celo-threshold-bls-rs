@@ -5,6 +5,7 @@ use crate::sig::{BlindThreshold, Blinder, Partial, Scheme as SScheme, ThresholdS
 use crate::Share;
 use std::error::Error;
 use std::marker::PhantomData;
+use rand::RngCore;
 
 pub struct Scheme<T: ThresholdScheme + Serializer, B: Blinder> {
     m: PhantomData<T>,
@@ -56,10 +57,10 @@ where
     B: Blinder,
 {
     type Token = B::Token;
-    fn blind(msg: &[u8]) -> (B::Token, Vec<u8>) {
-        B::blind(msg)
+    fn blind<R: RngCore>(msg: &[u8], rng: &mut R) -> (Self::Token, Vec<u8>) {
+        B::blind(msg, rng)
     }
-    fn unblind(t: &B::Token, blind_sig: &[u8]) -> Result<Vec<u8>, Box<dyn Error>> {
+    fn unblind(t: &Self::Token, blind_sig: &[u8]) -> Result<Vec<u8>, Box<dyn Error>> {
         B::unblind(&t, &blind_sig)
     }
 }
@@ -85,6 +86,7 @@ mod tests {
     use crate::curve::bls12381::PairingCurve as PCurve;
     #[cfg(feature = "bls12_377")]
     use crate::curve::zexe::PairingCurve as Zexe;
+    use rand::thread_rng;
 
     use crate::Index;
     fn shares<B: BlindThreshold>(
@@ -134,7 +136,7 @@ mod tests {
         let thr = 4;
         let (shares, public) = shares::<B>(n, thr);
         let msg = vec![1, 9, 6, 9];
-        let (token, blinded) = B::blind(&msg);
+        let (token, blinded) = B::blind(&msg, &mut thread_rng());
         let partials: Vec<_> = shares
             .iter()
             .map(|share| B::partial_sign(share, &blinded).unwrap())
@@ -153,7 +155,8 @@ mod tests {
         let thr = 4;
         let (shares, public) = shares::<B>(n, thr);
         let msg = vec![1, 9, 6, 9];
-        let (token, blinded) = B::blind(&msg);
+
+        let (token, blinded) = B::blind(&msg, &mut thread_rng());
         let partials: Vec<_> = shares
             .iter()
             .map(|share| B::partial_sign(share, &blinded).unwrap())
