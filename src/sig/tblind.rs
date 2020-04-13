@@ -86,7 +86,7 @@ mod tests {
     #[cfg(feature = "bls12_377")]
     use crate::curve::zexe::PairingCurve as Zexe;
 
-    use crate::Index;
+    use crate::{Index, group::{Element, Encodable, Point}};
     fn shares<B: BlindThreshold>(
         n: usize,
         t: usize,
@@ -134,16 +134,25 @@ mod tests {
         let thr = 4;
         let (shares, public) = shares::<B>(n, thr);
         let msg = vec![1, 9, 6, 9];
+        let mut msg_point = B::Signature::new();
+        msg_point.map(&msg).unwrap();
+        let msg_point_bytes = msg_point.marshal();
         let (token, blinded) = B::blind(&msg);
         let partials: Vec<_> = shares
             .iter()
             .map(|share| B::partial_sign(share, &blinded).unwrap())
             .collect();
+        assert_eq!(
+            false,
+            partials
+                .iter()
+                .any(|p| B::partial_verify(&public, &blinded, &p).is_err())
+        );
 
         let blinded_sig = B::aggregate(thr, &partials).unwrap();
         let unblinded = B::unblind(&token, &blinded_sig).unwrap();
 
-        B::verify(&public.public_key(), &msg, &unblinded).unwrap();
+        B::verify(&public.public_key(), &msg_point_bytes, &unblinded).unwrap();
     }
     fn unblind_then_aggregate_test<B>()
     where
@@ -154,6 +163,9 @@ mod tests {
         let (shares, public) = shares::<B>(n, thr);
         let msg = vec![1, 9, 6, 9];
         let (token, blinded) = B::blind(&msg);
+        let mut msg_point = B::Signature::new();
+        msg_point.map(&msg).unwrap();
+        let msg_point_bytes = msg_point.marshal();
         let partials: Vec<_> = shares
             .iter()
             .map(|share| B::partial_sign(share, &blinded).unwrap())
@@ -165,6 +177,6 @@ mod tests {
             .collect();
         let final_sig = B::aggregate(thr, &unblindeds).unwrap();
 
-        B::verify(&public.public_key(), &msg, &final_sig).unwrap();
+        B::verify(&public.public_key(), &msg_point_bytes, &final_sig).unwrap();
     }
 }

@@ -1,15 +1,15 @@
 use crate::group::{Curve, CurveFrom, Element, Encodable, PairingCurve as PC, Point, Scalar as Sc};
-use algebra::bls12_377 as zexe;
-use algebra::bls12_377::Parameters as Bls12_377Parameters;
-use algebra::bytes::{FromBytes, ToBytes};
-use algebra::curves::{AffineCurve, PairingEngine, ProjectiveCurve};
-use algebra::fields::Field;
-use algebra::prelude::{One, UniformRand, Zero};
+use algebra::{
+    bls12_377 as zexe,
+    bytes::{FromBytes, ToBytes},
+    curves::{AffineCurve, PairingEngine, ProjectiveCurve},
+    fields::Field,
+    prelude::{One, UniformRand, Zero},
+};
 use bls_crypto::{
-    bls::keys as bls,
-    curve::hash::try_and_increment::TryAndIncrement,
-    curve::hash::{HashToG1, HashToG2},
-    hash::direct::DirectHasher,
+    hash_to_curve::{try_and_increment::TryAndIncrement, HashToCurve},
+    hashers::DirectHasher,
+    SIG_DOMAIN,
 };
 use rand_core::RngCore;
 use std::error::Error;
@@ -18,12 +18,16 @@ use std::ops::{AddAssign, MulAssign, Neg, SubAssign};
 
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub struct Scalar(<zexe::Bls12_377 as PairingEngine>::Fr);
+
 type ZG1 = <zexe::Bls12_377 as PairingEngine>::G1Projective;
 type ZG1A = <zexe::Bls12_377 as PairingEngine>::G1Affine;
+
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub struct G1(ZG1);
+
 type ZG2 = <zexe::Bls12_377 as PairingEngine>::G2Projective;
 type ZG2A = <zexe::Bls12_377 as PairingEngine>::G2Affine;
+
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub struct G2(ZG2);
 
@@ -142,15 +146,12 @@ impl Encodable for G1 {
 /// Implementation of Point using G1 from BLS12-377
 impl Point<Scalar> for G1 {
     fn map(&mut self, data: &[u8]) -> Result<(), Box<dyn Error>> {
-        let direct_hasher = DirectHasher::new().unwrap();
-        let hasher = TryAndIncrement::new(&direct_hasher);
-        //Bls12_377G1Parameters>(
-        *self = Self(HashToG1::hash::<Bls12_377Parameters>(
-            &hasher,
-            bls::SIG_DOMAIN,
-            data,
-            &vec![],
-        )?);
+        let hasher = TryAndIncrement::new(&DirectHasher);
+
+        let hash = hasher.hash(SIG_DOMAIN, data, &vec![])?;
+
+        *self = Self(hash);
+
         Ok(())
     }
 }
@@ -208,14 +209,11 @@ impl Encodable for G2 {
 /// Implementation of Point using G2 from BLS12-377
 impl Point<Scalar> for G2 {
     fn map(&mut self, data: &[u8]) -> Result<(), Box<dyn Error>> {
-        let direct_hasher = DirectHasher::new().unwrap();
-        let hasher = TryAndIncrement::new(&direct_hasher);
-        *self = Self(HashToG2::hash::<Bls12_377Parameters>(
-            &hasher,
-            bls::SIG_DOMAIN,
-            data,
-            &vec![],
-        )?);
+        let hasher = TryAndIncrement::new(&DirectHasher);
+
+        let hash = hasher.hash(SIG_DOMAIN, data, &vec![])?;
+        *self = Self(hash);
+
         Ok(())
     }
 }
