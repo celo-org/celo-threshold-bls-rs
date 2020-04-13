@@ -5,9 +5,7 @@ authors = ["nikkolasg"]
 edition = "2018"
 
 [lib]
-crate-type = ["cdylib"]
-# [lib]
-# crate-type = ["lib", "staticlib"]
+crate-type = ["lib", "cdylib"]
 
 
 [dependencies]
