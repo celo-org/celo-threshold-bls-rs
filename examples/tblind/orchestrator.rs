@@ -3,9 +3,9 @@ use crate::curve::{KeyCurve, PrivateKey, PublicKey, Scheme};
 use crate::node::Node;
 use rand::prelude::*;
 use std::error::Error;
-use threshold::dkg;
-use threshold::sig::*;
-use threshold::*;
+use blind_threshold_bls::dkg;
+use blind_threshold_bls::sig::*;
+use blind_threshold_bls::*;
 
 pub struct Orchestrator {
     thr: usize,

@@ -1,5 +1,3 @@
-extern crate threshold;
-
 mod board;
 mod curve;
 mod node;

@@ -1,6 +1,6 @@
 use crate::curve::{KeyCurve, PublicKey};
-use threshold::dkg;
-use threshold::*;
+use blind_threshold_bls::dkg;
+use blind_threshold_bls::*;
 
 pub struct Board {
     group: dkg::Group<KeyCurve>,
