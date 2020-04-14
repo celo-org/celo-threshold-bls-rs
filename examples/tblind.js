@@ -16,13 +16,13 @@ const blindedMessage = blinded.message
 const t = 3;
 const n = 4;
 const keys = threshold.thresholdKeygen(n, t, crypto.randomBytes(32))
-const shares = keys.sharesPtr
-const polynomial = keys.polynomialPtr
+const shares = keys.shares
+const polynomial = keys.polynomial
 
 // each of these shares proceed to sign teh blinded sig
 let sigs = []
 for (let i = 0 ; i < keys.numShares(); i++ ) {
-    const sig = threshold.partialSign(keys.getSharePtr(i), blindedMessage)
+    const sig = threshold.partialSign(keys.getShare(i), blindedMessage)
     sigs.push(sig)
 }
 
@@ -34,10 +34,10 @@ for (const sig of sigs) {
 const blindSig = threshold.combine(t, flattenSigsArray(sigs))
 
 // User unblinds the combined threshold signature with his scalar
-const sig = threshold.unblind(blindSig, blinded.blindingFactorPtr)
+const sig = threshold.unblind(blindSig, blinded.blindingFactor)
 
 // User verifies the unblinded signautre on his unblinded message
-threshold.verify(keys.thresholdPublicKeyPtr, msg, sig)
+threshold.verify(keys.thresholdPublicKey, msg, sig)
 console.log("Verification successful")
 
 function flattenSigsArray(sigs) {
