@@ -58,7 +58,7 @@ pub fn blind(message: Vec<u8>, seed: &[u8]) -> BlindedMessage {
 }
 
 #[wasm_bindgen]
-/// Given a blinded message and a pointer to the blinding_factor used for blinding, it returns the message
+/// Given a blinded message and a blinding_factor used for blinding, it returns the message
 /// unblinded
 ///
 /// * blinded_message: A message which has been blinded or a blind signature
@@ -67,16 +67,13 @@ pub fn blind(message: Vec<u8>, seed: &[u8]) -> BlindedMessage {
 /// # Throws
 ///
 /// - If unblinding fails.
-///
-/// # Safety
-///
-/// - The `blinding_factor` is a pointer. If an invalid pointer value is given, this will panic.
-pub fn unblind(
-    blinded_signature: &[u8],
-    blinding_factor: *const Token<PrivateKey>,
-) -> Result<Vec<u8>> {
-    // SAFETY: Must be given a valid pointer to the blinding_factor.
-    let blinding_factor = unsafe { &*blinding_factor };
+pub fn unblind(blinded_signature: &[u8], blinding_factor_buf: &[u8]) -> Result<Vec<u8>> {
+    let mut blinding_factor = Token::<PrivateKey>::new();
+    blinding_factor
+        .unmarshal(blinding_factor_buf)
+        .map_err(|err| {
+            JsValue::from_str(&format!("could not unmarshal blinding factor {}", err))
+        })?;
 
     BlindThresholdSigs::unblind(&blinding_factor, blinded_signature)
         .map_err(|err| JsValue::from_str(&format!("could not unblind signature {}", err)))
@@ -93,13 +90,11 @@ pub fn unblind(
 /// # Throws
 ///
 /// - If verification fails
-///
-/// # Safety
-///
-/// - The `public_key` is a pointer. If an invalid pointer value is given, this will panic.
-pub fn verify(public_key: *const PublicKey, message: &[u8], signature: &[u8]) -> Result<()> {
-    // SAFETY: Must be given a valid pointer to the public key.
-    let key = unsafe { &*public_key };
+pub fn verify(public_key_buf: &[u8], message: &[u8], signature: &[u8]) -> Result<()> {
+    let mut public_key = PublicKey::new();
+    public_key
+        .unmarshal(&public_key_buf)
+        .map_err(|err| JsValue::from_str(&format!("could not unmarshal public key {}", err)))?;
 
     // hashes the message
     let mut msg_hash = Signature::new();
@@ -107,7 +102,7 @@ pub fn verify(public_key: *const PublicKey, message: &[u8], signature: &[u8]) ->
     let msg_hash = msg_hash.marshal();
 
     // checks the signature on the message hash
-    BlindThresholdSigs::verify(&key, &msg_hash, &signature)
+    BlindThresholdSigs::verify(&public_key, &msg_hash, &signature)
         .map_err(|err| JsValue::from_str(&format!("signature verification failed: {}", err)))
 }
 
@@ -121,15 +116,13 @@ pub fn verify(public_key: *const PublicKey, message: &[u8], signature: &[u8]) ->
 /// # Throws
 ///
 /// - If signing fails
-///
-/// # Safety
-///
-/// - The `private_key` is a pointer. If an invalid pointer value is given, this will panic.
-pub fn sign(private_key: *const PrivateKey, message: &[u8]) -> Result<Vec<u8>> {
-    // SAFETY: Must be given a valid pointer to the private key
-    let key = unsafe { &*private_key };
+pub fn sign(private_key_buf: &[u8], message: &[u8]) -> Result<Vec<u8>> {
+    let mut private_key = PrivateKey::new();
+    private_key
+        .unmarshal(&private_key_buf)
+        .map_err(|err| JsValue::from_str(&format!("could not unmarshal private key {}", err)))?;
 
-    BlindSigs::sign(&key, &message)
+    BlindSigs::sign(&private_key, &message)
         .map_err(|err| JsValue::from_str(&format!("could not sign message: {}", err)))
 }
 
@@ -143,12 +136,11 @@ pub fn sign(private_key: *const PrivateKey, message: &[u8]) -> Result<Vec<u8>> {
 ///
 /// NOTE: This method must NOT be called with a PrivateKey which is not generated via a
 /// secret sharing scheme.
-///
-/// # Safety
-/// - The `private_key` is a pointer. If an invalid pointer value is given, this will panic.
-pub fn partial_sign(share: *const Share<PrivateKey>, message: &[u8]) -> Result<Vec<u8>> {
-    // SAFETY: Must be given a valid pointer to the share
-    let share = unsafe { &*share };
+pub fn partial_sign(share_buf: &[u8], message: &[u8]) -> Result<Vec<u8>> {
+    let mut share = Share::<PrivateKey>::new(0, PrivateKey::new());
+    share.unmarshal(&share_buf).map_err(|err| {
+        JsValue::from_str(&format!("could not unmarshal private key share {}", err))
+    })?;
 
     BlindThresholdSigs::partial_sign(&share, &message)
         .map_err(|err| JsValue::from_str(&format!("could not partially sign message: {}", err)))
@@ -165,18 +157,13 @@ pub fn partial_sign(share: *const Share<PrivateKey>, message: &[u8]) -> Result<V
 /// # Throws
 ///
 /// - If verification fails
-///
-/// # Safety
-/// - The `polynomial` is a pointer. If an invalid pointer value is given, this will panic.
-pub fn partial_verify(
-    polynomial: *const Poly<PrivateKey, PublicKey>,
-    blinded_message: &[u8],
-    sig: &[u8],
-) -> Result<()> {
-    // SAFETY: Must be given a valid pointer to the polynomial
-    let polynomial = unsafe { &*polynomial };
+pub fn partial_verify(polynomial_buf: &[u8], blinded_message: &[u8], sig: &[u8]) -> Result<()> {
+    let mut polynomial = Poly::<PrivateKey, PublicKey>::from_vec(vec![]);
+    polynomial
+        .unmarshal(&polynomial_buf)
+        .map_err(|err| JsValue::from_str(&format!("could not unmarshal polynomial {}", err)))?;
 
-    BlindThresholdSigs::partial_verify(polynomial, blinded_message, sig)
+    BlindThresholdSigs::partial_verify(&polynomial, blinded_message, sig)
         .map_err(|err| JsValue::from_str(&format!("could not partially verify message: {}", err)))
 }
 
@@ -239,11 +226,9 @@ pub fn threshold_keygen(n: usize, t: usize, seed: &[u8]) -> Keys {
         })
         .collect();
     let polynomial = private.commit();
-    let threshold_public_key = polynomial.public_key();
     Keys {
         shares,
         polynomial,
-        threshold_public_key,
         t,
         n,
     }
@@ -267,9 +252,9 @@ impl BlindedMessage {
         self.message.clone()
     }
 
-    #[wasm_bindgen(getter, js_name = blindingFactorPtr)]
-    pub fn blinding_factor_ptr(&self) -> *const Token<PrivateKey> {
-        &self.blinding_factor as *const Token<PrivateKey>
+    #[wasm_bindgen(getter, js_name = blindingFactor)]
+    pub fn blinding_factor(&self) -> Vec<u8> {
+        self.blinding_factor.marshal()
     }
 }
 
@@ -287,14 +272,14 @@ pub struct Keypair {
 // and expose it https://rustwasm.github.io/wasm-bindgen/reference/attributes/on-rust-exports/getter-and-setter.html
 #[wasm_bindgen]
 impl Keypair {
-    #[wasm_bindgen(getter, js_name = privateKeyPtr)]
-    pub fn private_key_ptr(&self) -> *const PrivateKey {
-        &self.private as *const PrivateKey
+    #[wasm_bindgen(getter, js_name = privateKey)]
+    pub fn private_key(&self) -> Vec<u8> {
+        self.private.marshal()
     }
 
-    #[wasm_bindgen(getter, js_name = publicKeyPtr)]
-    pub fn public_key_ptr(&self) -> *const PublicKey {
-        &self.public as *const PublicKey
+    #[wasm_bindgen(getter, js_name = publicKey)]
+    pub fn public_key(&self) -> Vec<u8> {
+        self.public.marshal()
     }
 }
 
@@ -314,21 +299,15 @@ pub fn keygen(seed: Vec<u8>) -> Keypair {
 pub struct Keys {
     shares: Vec<Share<PrivateKey>>,
     polynomial: Poly<PrivateKey, PublicKey>,
-    threshold_public_key: PublicKey,
     pub t: usize,
     pub n: usize,
 }
 
 #[wasm_bindgen]
 impl Keys {
-    #[wasm_bindgen(getter, js_name = sharesPtr)]
-    pub fn shares(&self) -> *const Vec<Share<PrivateKey>> {
-        &self.shares as *const Vec<Share<PrivateKey>>
-    }
-
-    #[wasm_bindgen(js_name = getSharePtr)]
-    pub fn get_share_ptr(&self, index: usize) -> *const Share<PrivateKey> {
-        &self.shares[index] as *const Share<PrivateKey>
+    #[wasm_bindgen(js_name = getShare)]
+    pub fn get_share(&self, index: usize) -> Vec<u8> {
+        self.shares[index].marshal()
     }
 
     #[wasm_bindgen(js_name = numShares)]
@@ -336,14 +315,14 @@ impl Keys {
         self.shares.len()
     }
 
-    #[wasm_bindgen(getter, js_name = polynomialPtr)]
-    pub fn polynomial_ptr(&self) -> *const Poly<PrivateKey, PublicKey> {
-        &self.polynomial as *const Poly<PrivateKey, PublicKey>
+    #[wasm_bindgen(getter, js_name = polynomial)]
+    pub fn polynomial(&self) -> Vec<u8> {
+        self.polynomial.marshal()
     }
 
-    #[wasm_bindgen(getter, js_name = thresholdPublicKeyPtr)]
-    pub fn threshold_public_key_ptr(&self) -> *const PublicKey {
-        &self.threshold_public_key as *const PublicKey
+    #[wasm_bindgen(getter, js_name = thresholdPublicKey)]
+    pub fn threshold_public_key(&self) -> Vec<u8> {
+        self.polynomial.public_key().marshal()
     }
 }
 
@@ -373,19 +352,19 @@ mod tests {
         let blinded_message = blind(msg.clone(), &key[..]);
         let blinded_msg = blinded_message.message.clone();
 
-        let sig1 = partial_sign(keys.get_share_ptr(0), &blinded_msg).unwrap();
-        let sig2 = partial_sign(keys.get_share_ptr(1), &blinded_msg).unwrap();
-        let sig3 = partial_sign(keys.get_share_ptr(2), &blinded_msg).unwrap();
+        let sig1 = partial_sign(&keys.get_share(0), &blinded_msg).unwrap();
+        let sig2 = partial_sign(&keys.get_share(1), &blinded_msg).unwrap();
+        let sig3 = partial_sign(&keys.get_share(2), &blinded_msg).unwrap();
 
-        partial_verify(keys.polynomial_ptr(), &blinded_msg, &sig1).unwrap();
-        partial_verify(keys.polynomial_ptr(), &blinded_msg, &sig2).unwrap();
-        partial_verify(keys.polynomial_ptr(), &blinded_msg, &sig3).unwrap();
+        partial_verify(&keys.polynomial(), &blinded_msg, &sig1).unwrap();
+        partial_verify(&keys.polynomial(), &blinded_msg, &sig2).unwrap();
+        partial_verify(&keys.polynomial(), &blinded_msg, &sig3).unwrap();
 
         let concatenated = [sig1, sig2, sig3].concat();
         let asig = combine(3, concatenated).unwrap();
 
-        let unblinded = unblind(&asig, blinded_message.blinding_factor_ptr()).unwrap();
+        let unblinded = unblind(&asig, &blinded_message.blinding_factor()).unwrap();
 
-        verify(keys.threshold_public_key_ptr(), &msg, &unblinded).unwrap();
+        verify(&keys.threshold_public_key(), &msg, &unblinded).unwrap();
     }
 }

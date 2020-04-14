@@ -1,9 +1,9 @@
 use crate::board::Board;
 use crate::curve::{KeyCurve, PrivateKey, PublicKey, Scheme};
-use std::error::Error;
 use blind_threshold_bls::dkg;
 use blind_threshold_bls::sig::ThresholdScheme;
 use blind_threshold_bls::*;
+use std::error::Error;
 /// Node holds the logic of a participants, for the different phases of the
 /// example.
 pub struct Node {
