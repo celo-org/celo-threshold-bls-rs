@@ -1,6 +1,4 @@
 //! # BLS12-377 WASM Bindings for Blind Threshold Signatures.
-//!
-//! TODO: This module should be abstracted so that it works with more than BLS12-377.
 use wasm_bindgen::prelude::*;
 
 use rand_chacha::ChaChaRng;
