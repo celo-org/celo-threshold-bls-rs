@@ -148,6 +148,25 @@ dependencies = [
 ]
 
 [[package]]
+name = "blind-threshold-bls"
+version = "0.1.0"
+dependencies = [
+ "algebra",
+ "bls-crypto",
+ "chacha20poly1305",
+ "fff",
+ "groupy",
+ "hkdf",
+ "paired",
+ "rand",
+ "rand_chacha",
+ "rand_core",
+ "sha2",
+ "smallbitvec",
+ "wasm-bindgen",
+]
+
+[[package]]
 name = "block-buffer"
 version = "0.7.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1089,25 +1108,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d40c6d1b69745a6ec6fb1ca717914848da4b44ae29d9b3080cbee91d72a69b14"
 dependencies = [
  "lazy_static",
-]
-
-[[package]]
-name = "threshold"
-version = "0.1.0"
-dependencies = [
- "algebra",
- "bls-crypto",
- "chacha20poly1305",
- "fff",
- "groupy",
- "hkdf",
- "paired",
- "rand",
- "rand_chacha",
- "rand_core",
- "sha2",
- "smallbitvec",
- "wasm-bindgen",
 ]
 
 [[package]]

@@ -1,7 +1,7 @@
 // Simple Example of blinding, signing, unblinding and verifying.
 
 // Import the library
-const threshold = require("../pkg/threshold")
+const threshold = require("../pkg/blind_threshold_bls")
 const crypto = require('crypto')
 
 // Get a message and a secret for the user
@@ -15,19 +15,16 @@ const blind_msg = blinded_msg.message
 // Generate a keypair for the service
 const service_seed = crypto.randomBytes(32)
 const keypair = threshold.keygen(service_seed)
-const private_key = keypair.private
-const public_key = keypair.public
+const private_key = keypair.privateKeyPtr
+const public_key = keypair.publicKeyPtr
 
 // Sign the user's blinded message with the service's private key
 const blind_sig = threshold.sign(private_key, blind_msg)
 
 // User unblinds the signature with this scalar
-const unblinded_sig = threshold.unblind_signature(blind_sig, blinded_msg.scalar)
+const unblinded_sig = threshold.unblind(blind_sig, blinded_msg.blindingFactorPtr)
 
-// User verifies the unblinded signautre on his unblinded message
-const verified = threshold.verify_sign(public_key, msg, unblinded_sig)
-if (verified === true) {
-    console.log("Verification successful")
-} else {
-    console.log("Verification failed")
-}
+// User verifies the unblinded signature on his unblinded message
+// (this throws on error)
+threshold.verify(public_key, msg, unblinded_sig)
+console.log("Verification successful")

@@ -38,7 +38,7 @@ where
     fn partial_verify(
         public: &Poly<T::Private, T::Public>,
         msg: &[u8],
-        partial: &Partial,
+        partial: &[u8],
     ) -> Result<(), Box<dyn Error>> {
         T::partial_verify(public, msg, partial)
     }

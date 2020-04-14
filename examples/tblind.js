@@ -1,62 +1,44 @@
 // Example of how threshold signing is expected to be consumed from the JS side
 
 // Import the library
-const threshold = require("../pkg/threshold")
+const threshold = require("../pkg/blind_threshold_bls")
 const crypto = require('crypto')
 
 // Get a message and a secret for the user
 const msg = Buffer.from("hello world")
-const user_seed = crypto.randomBytes(32)
+const userSeed = crypto.randomBytes(32)
 
 // Blind the message
-const blinded_msg = threshold.blind(msg, user_seed)
-const blind_msg = blinded_msg.message
+const blinded = threshold.blind(msg, userSeed)
+const blindedMessage = blinded.message
 
 // Generate the secret shares for a 3-of-4 threshold scheme
 const t = 3;
 const n = 4;
-const keys = threshold.threshold_keygen(n, t, crypto.randomBytes(32))
-const shares = keys.shares
-const polynomial = keys.polynomial
+const keys = threshold.thresholdKeygen(n, t, crypto.randomBytes(32))
+const shares = keys.sharesPtr
+const polynomial = keys.polynomialPtr
 
 // each of these shares proceed to sign teh blinded sig
 let sigs = []
-for (let i = 0 ; i < keys.num_shares(); i++ ) {
-    const sig = threshold.partial_sign(keys.get_share(i), blind_msg)
+for (let i = 0 ; i < keys.numShares(); i++ ) {
+    const sig = threshold.partialSign(keys.getSharePtr(i), blindedMessage)
     sigs.push(sig)
 }
 
-// The combiner will verify all the individual partial signatures... 
-let count = 0;
+// The combiner will verify all the individual partial signatures
 for (const sig of sigs) {
-    if (threshold.verify_partial_blind_signature(polynomial, blind_msg, sig)) {
-        count++
-    }
-
-    // t-of-n is enough!
-    if (count == t) {
-        break
-    }
+    threshold.partialVerify(polynomial, blindedMessage, sig)
 }
 
-// ...and if they were at least `t`, he will combine them
-if (count < t) {
-    console.log("INVALID THRESHOLD")
-    return
-}
-
-const blind_sig = threshold.combine(t, flattenSigsArray(sigs))
+const blindSig = threshold.combine(t, flattenSigsArray(sigs))
 
 // User unblinds the combined threshold signature with his scalar
-const unblinded_sig = threshold.unblind_signature(blind_sig, blinded_msg.scalar)
+const sig = threshold.unblind(blindSig, blinded.blindingFactorPtr)
 
 // User verifies the unblinded signautre on his unblinded message
-const verified = threshold.verify_sign(keys.threshold_public_key, msg, unblinded_sig)
-if (verified === true) {
-    console.log("Verification successful")
-} else {
-    console.log("Verification failed")
-}
+threshold.verify(keys.thresholdPublicKeyPtr, msg, sig)
+console.log("Verification successful")
 
 function flattenSigsArray(sigs) {
     return Uint8Array.from(sigs.reduce(function(a, b){

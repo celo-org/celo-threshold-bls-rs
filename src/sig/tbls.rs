@@ -45,7 +45,7 @@ where
     fn partial_verify(
         public: &Poly<Self::Private, Self::Public>,
         msg: &[u8],
-        partial: &Partial,
+        partial: &[u8],
     ) -> Result<(), Box<dyn Error>> {
         match extract_index(partial) {
             Ok((idx, bls_sig)) => {

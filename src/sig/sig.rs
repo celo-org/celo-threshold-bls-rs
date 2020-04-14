@@ -90,7 +90,7 @@ pub trait ThresholdScheme: Scheme {
     fn partial_verify(
         public: &Poly<Self::Private, Self::Public>,
         msg: &[u8],
-        partial: &Partial,
+        partial: &[u8],
     ) -> Result<(), Box<dyn Error>>;
     /// Aggregates all partials signature together. Note that this method does
     /// not verify if the partial signatures are correct or not; it only
