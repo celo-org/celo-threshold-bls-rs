@@ -2,7 +2,7 @@
 //! by changing the exported type `Curve`.
 //! For example, to use `bls12-381` instead, one can import
 //! ```
-//! pub use threshold::curve::bls12381::PairingCurve;
+//! pub use blind_threshold_bls::curve::bls12381::PairingCurve;
 //! ```
 pub use blind_threshold_bls::curve::zexe::{G2Curve, PairingCurve as Pairing};
 use blind_threshold_bls::group::Curve;
