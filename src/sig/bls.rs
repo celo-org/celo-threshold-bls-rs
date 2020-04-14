@@ -17,8 +17,8 @@ mod common {
             // sig = H(m)^x
             let mut h = Self::Signature::new();
             h.unmarshal(msg)?;
-            //println!("sign: message {:?}", h);
             h.mul(private);
+
             Ok(h.marshal())
         }
 
@@ -30,7 +30,8 @@ mod common {
             if let Err(_) = sigp.unmarshal(sig) {
                 return Err(Box::new(BLSError::InvalidPoint));
             }
-            // H(m)
+
+            // m
             let mut h = Self::Signature::new();
             h.unmarshal(msg)?;
             return Ok((sigp, h));
@@ -38,6 +39,7 @@ mod common {
 
         fn final_exp(p: &Self::Public, sig: &Self::Signature, hm: &Self::Signature) -> bool;
     }
+
     impl<T> SignatureScheme for T
     where
         T: BLSScheme,
@@ -45,16 +47,13 @@ mod common {
         fn sign(private: &Self::Private, msg: &[u8]) -> Result<Vec<u8>, Box<dyn Error>> {
             T::internal_sign(private, msg)
         }
+
         fn verify(public: &Self::Public, msg: &[u8], sig: &[u8]) -> Result<(), Box<dyn Error>> {
-            match T::internal_verify(msg, sig) {
-                Ok((sig, hm)) => {
-                    if T::final_exp(public, &sig, &hm) {
-                        Ok(())
-                    } else {
-                        Err(Box::new(BLSError::InvalidSig))
-                    }
-                }
-                Err(e) => Err(e),
+            let (sig, hm) = T::internal_verify(msg, sig)?;
+            if T::final_exp(public, &sig, &hm) {
+                Ok(())
+            } else {
+                Err(Box::new(BLSError::InvalidSig))
             }
         }
     }
@@ -150,7 +149,7 @@ impl Error for BLSError {
 mod tests {
     use super::*;
     use crate::curve::bls12381::{PairingCurve as PCurve, Scalar, G1, G2};
-    use crate::group::{Point, Encodable};
+    use crate::group::{Encodable, Point};
     use rand::prelude::*;
 
     // TODO: make it one like in tbls
@@ -174,21 +173,23 @@ mod tests {
     fn nbls_g2() {
         let (private, public) = g2_pair();
         let msg = vec![1, 9, 6, 9];
-        let mut msg_point = <G2Scheme::<PCurve> as Scheme>::Signature::new();
+        let mut msg_point = <G2Scheme<PCurve> as Scheme>::Signature::new();
         msg_point.map(&msg).unwrap();
         let msg_point_bytes = msg_point.marshal();
         let sig = G2Scheme::<PCurve>::sign(&private, &msg_point_bytes).unwrap();
-        G2Scheme::<PCurve>::verify(&public, &msg_point_bytes, &sig).expect("that should not happen");
+        G2Scheme::<PCurve>::verify(&public, &msg_point_bytes, &sig)
+            .expect("that should not happen");
     }
 
     #[test]
     fn nbls_g1() {
         let (private, public) = g1_pair();
         let msg = vec![1, 9, 6, 9];
-        let mut msg_point = <G1Scheme::<PCurve> as Scheme>::Signature::new();
+        let mut msg_point = <G1Scheme<PCurve> as Scheme>::Signature::new();
         msg_point.map(&msg).unwrap();
         let msg_point_bytes = msg_point.marshal();
         let sig = G1Scheme::<PCurve>::sign(&private, &msg_point_bytes).unwrap();
-        G1Scheme::<PCurve>::verify(&public, &msg_point_bytes, &sig).expect("that should not happen");
+        G1Scheme::<PCurve>::verify(&public, &msg_point_bytes, &sig)
+            .expect("that should not happen");
     }
 }

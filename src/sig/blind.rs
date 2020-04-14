@@ -1,7 +1,7 @@
 use crate::group::{Element, Encodable, Point, Scalar};
 use crate::sig::bls::{self, BLSError};
 use crate::sig::{BlindScheme, Blinder, Scheme as SScheme, SignatureScheme};
-use rand::prelude::thread_rng;
+use rand::RngCore;
 use std::error::Error;
 use std::fmt;
 use std::marker::PhantomData;
@@ -67,16 +67,20 @@ where
     I: SignatureScheme,
 {
     type Token = Token<I::Private>;
-    fn blind(msg: &[u8]) -> (Self::Token, Vec<u8>) {
+
+    fn blind<R: RngCore>(msg: &[u8], rng: &mut R) -> (Self::Token, Vec<u8>) {
         let mut r = I::Private::new();
-        r.pick(&mut thread_rng());
+        r.pick(rng);
+
         let mut h = I::Signature::new();
+
         // r * H(m)
         // XXX result from zexe API but it shouldn't
         h.map(msg).unwrap();
         h.mul(&r);
         (Token(r), h.marshal())
     }
+
     fn unblind(t: &Self::Token, sigbuff: &[u8]) -> Result<Vec<u8>, Box<dyn Error>> {
         let mut sig = I::Signature::new();
         if let Err(_) = sig.unmarshal(sigbuff) {
@@ -139,6 +143,7 @@ mod tests {
     use super::*;
     #[cfg(feature = "bls12_381")]
     use crate::curve::bls12381::PairingCurve as PCurve;
+    use rand::thread_rng;
 
     fn pair<B: SignatureScheme>() -> (B::Private, B::Public) {
         let mut private = B::Private::new();
@@ -166,7 +171,7 @@ mod tests {
     {
         let (private, public) = pair::<B>();
         let msg = vec![1, 9, 6, 9];
-        let (token, blinded) = B::blind(&msg);
+        let (token, blinded) = B::blind(&msg, &mut thread_rng());
         let blinded_sig = B::sign(&private, &blinded).unwrap();
         let clear_sig = B::unblind(&token, &blinded_sig).expect("unblind should go well");
         let mut msg_point = B::Signature::new();

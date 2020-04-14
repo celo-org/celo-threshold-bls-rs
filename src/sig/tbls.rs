@@ -41,10 +41,11 @@ where
         let ret = inject_index(private.index, &mut sig);
         Ok(ret)
     }
+
     fn partial_verify(
         public: &Poly<Self::Private, Self::Public>,
         msg: &[u8],
-        partial: &Partial,
+        partial: &[u8],
     ) -> Result<(), Box<dyn Error>> {
         match extract_index(partial) {
             Ok((idx, bls_sig)) => {
@@ -54,6 +55,7 @@ where
             Err(e) => Err(Box::new(e)),
         }
     }
+
     fn aggregate(threshold: usize, partials: &[Partial]) -> Result<Vec<u8>, Box<dyn Error>> {
         if threshold > partials.len() {
             return Err(Box::new(TBLSError::NotEnoughPartialSignatures));
@@ -119,7 +121,7 @@ fn inject_index(index: Index, sig: &mut Vec<u8>) -> Vec<u8> {
     let mut full_vector = Vec::with_capacity(idx_slice.len() + sig.len());
     full_vector.append(&mut idx_slice);
     full_vector.append(sig);
-    return full_vector.to_vec();
+    full_vector
 }
 
 fn extract_index(sig: &[u8]) -> Result<(Index, Vec<u8>), TBLSError> {

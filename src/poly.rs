@@ -32,7 +32,7 @@ where
 //  TODO Annoying to have an unused type warning here for Var: it is used in the
 //  constraint but not in the struct directly.-> phantomdata ?
 //  TODO: make it implement Element trait ;) ?
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub struct Poly<Var: Scalar, Coeff: Element<Var>> {
     c: Vec<Coeff>,
     phantom: PhantomData<Var>,

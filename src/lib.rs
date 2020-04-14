@@ -6,21 +6,15 @@ pub mod poly;
 pub mod sig;
 pub use group::*;
 
+#[cfg(feature = "wasm")]
+pub mod wasm;
+
 pub type Index = poly::Idx;
 
-//
 pub type DistPublic<C> = poly::PublicPoly<C>;
 
-#[derive(Clone)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct Share<S: group::Scalar> {
     index: Index,
     private: S,
-}
-
-#[cfg(test)]
-mod tests {
-    #[test]
-    fn it_works() {
-        assert_eq!(2 + 2, 4);
-    }
 }
