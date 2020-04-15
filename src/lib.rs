@@ -11,11 +11,14 @@ pub use group::*;
 #[cfg(feature = "wasm")]
 pub mod wasm;
 
+use serde::{Deserialize, Serialize};
+
 pub type Index = poly::Idx;
 
 pub type DistPublic<C> = poly::PublicPoly<C>;
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(bound = "S: Serialize + serde::de::DeserializeOwned")]
 pub struct Share<S: group::Scalar> {
     index: Index,
     private: S,

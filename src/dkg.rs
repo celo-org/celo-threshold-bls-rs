@@ -2,8 +2,9 @@ use crate::ecies::{self, EciesCipher};
 use crate::group::{Curve, Element, Encodable};
 use crate::poly::{Idx, Poly, PrivatePoly, PublicPoly};
 use crate::{DistPublic, Share};
+use bitvec::{prelude::*, vec::BitVec};
 use rand_core::RngCore;
-use smallbitvec::SmallBitVec;
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::error::Error;
 use std::fmt;
@@ -12,6 +13,7 @@ use std::fmt;
 /// participant must be identified both by an index and a public key. At the end
 /// of the protocol, if sucessful, the index is used to verify the validity of
 /// the share this node holds.
+#[derive(Clone, Serialize, Deserialize)]
 pub struct Node<C: Curve>(ID, C::Point);
 
 impl<C> Node<C>
@@ -28,22 +30,24 @@ where
 /// new group that contains members that succesfully ran the protocol. When
 /// creating a new group using the `from()` or `from_list()`method, the module
 /// sets the threshold to the output of `default_threshold()`.
+#[derive(Clone, Serialize, Deserialize)]
 pub struct Group<C: Curve> {
+    #[serde(bound = "C::Point: Serialize + serde::de::DeserializeOwned")]
     pub nodes: Vec<Node<C>>,
     pub threshold: usize,
 }
 
 type ID = Idx;
 // type alias for readability.
-type Bitset = SmallBitVec;
-#[derive(Debug)]
+type Bitset = BitVec;
+#[derive(Clone, Debug, Serialize, Deserialize)]
 struct StatusMatrix(Vec<Bitset>);
 
 impl StatusMatrix {
     pub fn new(dealers: usize, share_holders: usize, def: Status) -> StatusMatrix {
         let m = (0..dealers)
             .map(|i| {
-                let mut bs = Bitset::from_elem(share_holders, def.to_bool());
+                let mut bs = bitvec![def.to_bool() as u8; share_holders];
                 bs.set(i, Status::Success.to_bool());
                 bs
             })
@@ -57,15 +61,15 @@ impl StatusMatrix {
 
     // return a bitset whose indices are the dealer indexes
     pub fn get_for_share(&self, share: ID) -> Bitset {
-        let mut bs = Bitset::from_elem(self.0.len(), false);
+        let mut bs = bitvec![0; self.0.len()];
         for (dealer_idx, shares) in self.0.iter().enumerate() {
-            bs.set(dealer_idx, shares.get(share as usize).unwrap());
+            bs.set(dealer_idx, *shares.get(share as usize).unwrap());
         }
         bs
     }
 
     pub fn all_true(&self, dealer: ID) -> bool {
-        self.0[dealer as usize].all_true()
+        self.0[dealer as usize].all()
     }
 
     pub fn get_for_dealer(&self, dealer: ID) -> Bitset {
@@ -85,12 +89,6 @@ impl fmt::Display for StatusMatrix {
     }
 }
 
-impl Clone for StatusMatrix {
-    fn clone(&self) -> Self {
-        Self(self.0.iter().map(|bs| bs.clone()).collect())
-    }
-}
-
 // TODO
 // - check VSS-forgery article
 // - zeroise
@@ -104,15 +102,6 @@ where
     }
 }
 
-impl<C> Clone for Node<C>
-where
-    C: Curve,
-{
-    fn clone(&self) -> Self {
-        Node(self.0, self.1.clone())
-    }
-}
-
 impl<C> Node<C>
 where
     C: Curve,
@@ -122,19 +111,6 @@ where
     }
     pub fn key(&self) -> &C::Point {
         &self.1
-    }
-}
-
-impl<C> Clone for Group<C>
-where
-    C: Curve,
-{
-    // because of https://stackoverflow.com/questions/37765586/why-does-cloning-my-custom-type-result-in-t-instead-of-t
-    fn clone(&self) -> Self {
-        Group {
-            nodes: self.nodes.clone(),
-            threshold: self.threshold,
-        }
     }
 }
 
@@ -201,11 +177,18 @@ where
     }
 }
 
+#[derive(Clone, Debug, Serialize, Deserialize)]
 struct DKGInfo<C: Curve> {
+    #[serde(bound = "C::Scalar: Serialize + serde::de::DeserializeOwned")]
     private_key: C::Scalar,
     index: ID,
+    #[serde(bound = "C::Point: Serialize + serde::de::DeserializeOwned")]
     group: Group<C>,
+    #[serde(bound = "C::Scalar: Serialize + serde::de::DeserializeOwned")]
     secret: Poly<C::Scalar, C::Scalar>,
+    #[serde(
+        bound = "C::Scalar: Serialize + serde::de::DeserializeOwned, C::Point: Serialize + serde::de::DeserializeOwned"
+    )]
     public: Poly<C::Scalar, C::Point>,
 }
 
@@ -228,7 +211,11 @@ where
 /// described in the module documentation. Each transition to a new phase is
 /// consuming the DKG state (struct) to produce a new state that only accepts to
 /// transition to the next phase.
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct DKG<C: Curve> {
+    #[serde(
+        bound = "C::Point: Serialize + serde::de::DeserializeOwned, C::Scalar: Serialize + serde::de::DeserializeOwned"
+    )]
     info: DKGInfo<C>,
 }
 
@@ -236,54 +223,42 @@ pub struct DKG<C: Curve> {
 /// `share_idx`-th participant. When receiving the share, if the participant has
 /// the same specified index, the corresponding dkg state decrypts the share using
 /// the participant's private key.
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct EncryptedShare<C: Curve> {
     share_idx: ID,
+    #[serde(bound = "C::Point: Serialize + serde::de::DeserializeOwned")]
     secret: EciesCipher<C>,
-}
-
-impl<C> Clone for EncryptedShare<C>
-where
-    C: Curve,
-{
-    fn clone(&self) -> Self {
-        EncryptedShare {
-            share_idx: self.share_idx,
-            secret: self.secret.clone(),
-        }
-    }
 }
 
 /// BundledShares holds all encrypted shares a dealer creates during the first
 /// phase of the protocol.
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct BundledShares<C: Curve> {
     pub dealer_idx: ID,
+    #[serde(bound = "C::Point: Serialize + serde::de::DeserializeOwned")]
     pub shares: Vec<EncryptedShare<C>>,
     /// public is the commitment of the secret polynomial
     /// created by the dealer. In the context of using a blockchain as a
     /// broadcast channel, it can be posted only once.
+    #[serde(
+        bound = "C::Point: Serialize + serde::de::DeserializeOwned, C::Scalar: Serialize + serde::de::DeserializeOwned"
+    )]
     pub public: PublicPoly<C>,
-}
-
-impl<C> Clone for BundledShares<C>
-where
-    C: Curve,
-{
-    fn clone(&self) -> Self {
-        BundledShares {
-            dealer_idx: self.dealer_idx,
-            shares: self.shares.clone(),
-            public: self.public.clone(),
-        }
-    }
 }
 
 /// DKGOutput is the final output of the DKG protocol in case it runs
 /// successfully. It contains the QUALified group (the list of nodes that
 /// sucessfully ran the protocol until the end), the distributed public key and
 /// the private share corresponding to the participant's index.
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct DKGOutput<C: Curve> {
+    #[serde(bound = "C::Point: Serialize + serde::de::DeserializeOwned")]
     pub qual: Group<C>,
+    #[serde(
+        bound = "C::Point: Serialize + serde::de::DeserializeOwned, C::Scalar: Serialize + serde::de::DeserializeOwned"
+    )]
     pub public: DistPublic<C>,
+    #[serde(bound = "C::Scalar: Serialize + serde::de::DeserializeOwned")]
     pub share: Share<C::Scalar>,
 }
 
@@ -294,7 +269,7 @@ pub struct DKGOutput<C: Curve> {
 /// is specified using a synchronous network with a broadcast channel. In
 /// practice, that means any `Response` seen during the second phase is a
 /// `Complaint` from a participant about one of its received share.
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
 pub enum Status {
     Success,
     Complaint,
@@ -323,7 +298,7 @@ impl Status {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Response {
     pub dealer_idx: ID,
     pub status: Status,
@@ -334,7 +309,7 @@ pub struct Response {
 /// are `Complaint`). The bundles contains the index of the recipient of the
 /// shares, the one that created the response.  Each `Response` contains the
 /// index of the participant that created the share (a *dealer*),
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct BundledResponses {
     /// share_idx is the index of the node that received the shares
     pub share_idx: ID,
@@ -343,40 +318,22 @@ pub struct BundledResponses {
 
 /// A `Justification` contains the share of the share holder that issued a
 /// complaint, in plaintext.
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Justification<C: Curve> {
     share_idx: ID,
+    #[serde(bound = "C::Scalar: Serialize + serde::de::DeserializeOwned")]
     share: C::Scalar,
 }
 
-impl<C> Clone for Justification<C>
-where
-    C: Curve,
-{
-    fn clone(&self) -> Self {
-        Justification {
-            share_idx: self.share_idx,
-            share: self.share.clone(),
-        }
-    }
-}
-
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct BundledJustification<C: Curve> {
     pub dealer_idx: ID,
+    #[serde(bound = "C::Scalar: Serialize + serde::de::DeserializeOwned")]
     pub justifications: Vec<Justification<C>>,
+    #[serde(
+        bound = "C::Point: Serialize + serde::de::DeserializeOwned, C::Scalar: Serialize + serde::de::DeserializeOwned"
+    )]
     pub public: PublicPoly<C>,
-}
-
-impl<C> Clone for BundledJustification<C>
-where
-    C: Curve,
-{
-    fn clone(&self) -> Self {
-        BundledJustification {
-            dealer_idx: self.dealer_idx,
-            public: self.public.clone(),
-            justifications: self.justifications.clone(),
-        }
-    }
 }
 
 impl<C> DKG<C>
@@ -441,6 +398,7 @@ where
     }
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DKGWaitingShare<C: Curve> {
     info: DKGInfo<C>,
 }
@@ -581,7 +539,7 @@ where
             .enumerate()
             .map(|(i, b)| Response {
                 dealer_idx: i as ID,
-                status: Status::from(b),
+                status: Status::from(*b),
             })
             .collect();
         let bundle = BundledResponses {
@@ -640,6 +598,7 @@ where
     }
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DKGWaitingResponse<C: Curve> {
     info: DKGInfo<C>,
     dist_share: C::Scalar,
@@ -702,7 +661,7 @@ where
             let my_row = statuses.get_for_dealer(my_idx);
             let mut justifs = Vec::with_capacity(my_row.len());
             for (i, success) in my_row.iter().enumerate() {
-                if success {
+                if *success {
                     continue;
                 }
                 let id = i as ID;
@@ -754,6 +713,7 @@ where
     }
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DKGWaitingJustification<C: Curve> {
     // TODO: transform that into one info variable that gets default value for
     // missing parts depending in the round of the protocol.
@@ -954,6 +914,18 @@ pub mod tests {
     use crate::poly::{Eval, InvalidRecovery};
 
     use rand::prelude::*;
+
+    use serde::{de::DeserializeOwned, Serialize};
+    use static_assertions::assert_impl_all;
+
+    assert_impl_all!(Node<BCurve>: Serialize, DeserializeOwned, Clone, std::fmt::Debug);
+    assert_impl_all!(Group<BCurve>: Serialize, DeserializeOwned, Clone, std::fmt::Debug);
+    assert_impl_all!(DKGInfo<BCurve>: Serialize, DeserializeOwned, Clone, std::fmt::Debug);
+    assert_impl_all!(DKG<BCurve>: Serialize, DeserializeOwned, Clone, std::fmt::Debug);
+    assert_impl_all!(EncryptedShare<BCurve>: Serialize, DeserializeOwned, Clone, std::fmt::Debug);
+    assert_impl_all!(BundledShares<BCurve>: Serialize, DeserializeOwned, Clone, std::fmt::Debug);
+    assert_impl_all!(DKGOutput<BCurve>: Serialize, DeserializeOwned, Clone, std::fmt::Debug);
+    assert_impl_all!(BundledJustification<BCurve>: Serialize, DeserializeOwned, Clone, std::fmt::Debug);
 
     fn setup_group(n: usize) -> (Vec<Scalar>, Group<BCurve>) {
         let privs: Vec<Scalar> = (0..n)

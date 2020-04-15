@@ -7,28 +7,18 @@ use chacha20poly1305::{
 use hkdf::Hkdf;
 use rand::prelude::thread_rng;
 use rand_core::RngCore;
+use serde::{Deserialize, Serialize};
 use sha2::Sha256;
 use std::fmt;
 
 const NONCE_LEN: usize = 12;
 const KEY_LEN: usize = 32;
 
-#[derive(Debug)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct EciesCipher<C: Curve> {
     aead: Vec<u8>,
+    #[serde(bound = "C::Point: Serialize + serde::de::DeserializeOwned")]
     ephemereal: C::Point,
-}
-
-impl<C> Clone for EciesCipher<C>
-where
-    C: Curve,
-{
-    fn clone(&self) -> Self {
-        EciesCipher {
-            aead: self.aead.clone(),
-            ephemereal: self.ephemereal.clone(),
-        }
-    }
 }
 
 #[derive(Debug)]

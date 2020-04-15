@@ -1,4 +1,5 @@
 use rand_core::RngCore;
+use serde::{de::DeserializeOwned, Serialize};
 use std::error::Error;
 use std::fmt;
 use std::marker::PhantomData;
@@ -38,7 +39,7 @@ pub trait Point<A: Scalar>: Element<A> + Encodable {
 
 /// A group holds functionalities to create scalar and points related; it is
 /// similar to the Engine definition, just much more simpler.
-pub trait Curve {
+pub trait Curve: Clone + std::fmt::Debug {
     type Scalar: Scalar;
     type Point: Point<Self::Scalar>;
 
@@ -62,6 +63,7 @@ pub trait PairingCurve {
     fn pair(a: &Self::G1, b: &Self::G2) -> Self::GT;
 }
 
+#[derive(Debug, Clone)]
 pub struct CurveFrom<S: Scalar, P: Point<S>> {
     m: PhantomData<S>,
     mm: PhantomData<P>,
@@ -79,7 +81,7 @@ where
 pub type G1Curve<C> = CurveFrom<<C as PairingCurve>::Scalar, <C as PairingCurve>::G1>;
 pub type G2Curve<C> = CurveFrom<<C as PairingCurve>::Scalar, <C as PairingCurve>::G2>;
 
-pub trait Encodable {
+pub trait Encodable: Serialize + DeserializeOwned {
     fn marshal_len() -> usize;
     fn marshal(&self) -> Vec<u8>;
     fn unmarshal(&mut self, data: &[u8]) -> Result<(), Box<dyn Error>>;

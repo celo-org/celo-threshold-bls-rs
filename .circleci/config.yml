@@ -13,10 +13,23 @@ jobs:
     steps:
       - checkout
       - run: cargo test --all
+  wasm:
+    docker:
+      - image: circleci/rust:latest
+    steps:
+    - checkout
+    - run:
+        name: Install wasm-pack
+        command: curl https://rustwasm.github.io/wasm-pack/installer/init.sh -sSf | sh
+    - run:
+        name: Build wasm
+        command: wasm-pack build
+
 workflows:
   version: 2
   build_and_test:
     jobs:
       - build
       - test
+      - wasm
 

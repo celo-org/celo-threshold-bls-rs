@@ -1,6 +1,7 @@
 use crate::group::{Curve, Element, Point, Scalar};
 use crate::Encodable;
 use rand_core::RngCore;
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::convert::TryInto;
 use std::error::Error;
@@ -34,7 +35,7 @@ where
 //  TODO Annoying to have an unused type warning here for Var: it is used in the
 //  constraint but not in the struct directly.-> phantomdata ?
 //  TODO: make it implement Element trait ;) ?
-#[derive(Debug, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Poly<Var: Scalar, Coeff: Element<Var>> {
     c: Vec<Coeff>,
     phantom: PhantomData<Var>,
@@ -87,14 +88,14 @@ where
     /// sampled at random from the given RNG.
     /// In the context of secret sharing, the threshold is the degree + 1.
     pub fn new_from<R: RngCore>(degree: usize, rng: &mut R) -> Self {
-        let coeffs = (0..=degree)
+        let coeffs: Vec<C> = (0..=degree)
             .map(|_| {
                 let mut coeff = C::new();
                 coeff.pick(rng);
                 coeff
             })
             .collect();
-        Self::from_vec(coeffs)
+        Self::from(coeffs)
     }
 
     pub fn new(degree: usize) -> Self {
@@ -197,7 +198,7 @@ where
             m
         });
         assert!(xs.len() == t);
-        let mut acc = Self::from_vec(vec![C::new()]);
+        let mut acc: Self = vec![C::new()].into();
         // iterate over all indices and for each multiply the lagrange basis
         // with the value of the share
         for (i, sh) in &xs {
@@ -214,7 +215,7 @@ where
                     s
                 })
                 .collect::<Vec<C>>();
-            let linear_poly = Self::from_vec(lin);
+            let linear_poly: Poly<X, C> = Self::from(lin);
             acc.add(&linear_poly);
         }
         Ok(acc)
@@ -223,7 +224,7 @@ where
     /// Computes the lagrange basis polynomial of index i
     // TODO: move that to poly<X,X>
     fn lagrange_basis(i: Idx, xs: &HashMap<Idx, (X, &C)>) -> Poly<X, X> {
-        let mut basis = Poly::<X, X>::from_vec(vec![X::one()]);
+        let mut basis = Poly::<X, X>::from(vec![X::one()]);
         // accumulator of the denominator values
         let mut acc = X::one();
         // TODO remove that cloning due to borrowing issue with the map
@@ -246,7 +247,7 @@ where
             acc.mul(&den);
         }
         // multiply all coefficients by the denominator
-        basis.mul(&Poly::<X, X>::from_vec(vec![acc]));
+        basis.mul(&Poly::<X, X>::from(vec![acc]));
         basis
     }
 
@@ -254,21 +255,14 @@ where
     fn new_neg_constant(x: &X) -> Poly<X, X> {
         let mut neg = x.clone();
         neg.negate();
-        Poly::<X, X>::from_vec(vec![neg, X::one()])
+        Poly::<X, X>::from(vec![neg, X::one()])
     }
     /// Returns a polynomial from the given list of coefficients
     // TODO: implement the From<> trait
-    pub fn from_vec(coeffs: Vec<C>) -> Self {
-        return Poly {
-            c: coeffs,
-            phantom: PhantomData,
-        };
-    }
-
     // TODO fix semantics of zero:
     // it should be G1::zero() as only element
     pub fn zero() -> Self {
-        Self::from_vec(vec![C::zero()])
+        Self::from(vec![C::zero()])
     }
 
     pub fn free_coeff(&self) -> C {
@@ -277,6 +271,29 @@ where
 
     pub fn public_key(&self) -> C {
         self.free_coeff()
+    }
+}
+
+impl<X, C> From<Vec<C>> for Poly<X, C>
+where
+    X: Scalar,
+    C: Element<X>,
+{
+    fn from(c: Vec<C>) -> Self {
+        Self {
+            c,
+            phantom: Default::default(),
+        }
+    }
+}
+
+impl<X, C> From<Poly<X, C>> for Vec<C>
+where
+    X: Scalar,
+    C: Element<X>,
+{
+    fn from(poly: Poly<X, C>) -> Self {
+        poly.c
     }
 }
 
@@ -313,20 +330,10 @@ impl<X: Scalar> Poly<X, X> {
                 commitment
             })
             .collect::<Vec<P>>();
-        Poly::<X, P>::from_vec(commits)
+        Poly::<X, P>::from(commits)
     }
 }
 
-impl<X, C> Clone for Poly<X, C>
-where
-    X: Scalar,
-    C: Element<X>,
-{
-    fn clone(&self) -> Self {
-        let cc = self.c.clone();
-        Self::from_vec(cc)
-    }
-}
 impl<X, Y> fmt::Display for Poly<X, Y>
 where
     X: Scalar,

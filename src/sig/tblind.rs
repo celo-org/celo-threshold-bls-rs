@@ -158,6 +158,7 @@ mod tests {
 
         B::verify(&public.public_key(), &msg_point_bytes, &unblinded).unwrap();
     }
+
     fn unblind_then_aggregate_test<B>()
     where
         B: BlindThreshold,

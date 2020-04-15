@@ -5,6 +5,7 @@ use algebra::{
     curves::{AffineCurve, PairingEngine, ProjectiveCurve},
     fields::Field,
     prelude::{One, UniformRand, Zero},
+    CanonicalDeserialize, CanonicalSerialize,
 };
 use bls_crypto::{
     hash_to_curve::{try_and_increment::TryAndIncrement, HashToCurve},
@@ -12,27 +13,48 @@ use bls_crypto::{
     SIG_DOMAIN,
 };
 use rand_core::RngCore;
+use serde::Serialize;
+use serde::{
+    de::Error as DeserializeError, ser::Error as SerializationError, Deserialize, Deserializer,
+    Serializer,
+};
 use std::error::Error;
 use std::fmt;
 use std::ops::{AddAssign, MulAssign, Neg, SubAssign};
 
-#[derive(Debug, Clone, Eq, PartialEq)]
-pub struct Scalar(<zexe::Bls12_377 as PairingEngine>::Fr);
+#[derive(Debug, Clone, Eq, PartialEq, Deserialize, Serialize)]
+pub struct Scalar(
+    #[serde(deserialize_with = "deserialize_field")]
+    #[serde(serialize_with = "serialize_field")]
+    <zexe::Bls12_377 as PairingEngine>::Fr,
+);
 
 type ZG1 = <zexe::Bls12_377 as PairingEngine>::G1Projective;
 type ZG1A = <zexe::Bls12_377 as PairingEngine>::G1Affine;
 
-#[derive(Debug, Clone, Eq, PartialEq)]
-pub struct G1(ZG1);
+#[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
+pub struct G1(
+    #[serde(deserialize_with = "deserialize_group")]
+    #[serde(serialize_with = "serialize_group")]
+    ZG1,
+);
 
 type ZG2 = <zexe::Bls12_377 as PairingEngine>::G2Projective;
 type ZG2A = <zexe::Bls12_377 as PairingEngine>::G2Affine;
 
-#[derive(Debug, Clone, Eq, PartialEq)]
-pub struct G2(ZG2);
+#[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
+pub struct G2(
+    #[serde(deserialize_with = "deserialize_group")]
+    #[serde(serialize_with = "serialize_group")]
+    ZG2,
+);
 
-#[derive(Debug, Clone, Eq, PartialEq)]
-pub struct GT(<zexe::Bls12_377 as PairingEngine>::Fqk);
+#[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
+pub struct GT(
+    #[serde(deserialize_with = "deserialize_field")]
+    #[serde(serialize_with = "serialize_field")]
+    <zexe::Bls12_377 as PairingEngine>::Fqk,
+);
 
 impl Element<Scalar> for Scalar {
     fn new() -> Self {
@@ -250,7 +272,9 @@ impl fmt::Display for GT {
 
 pub type G1Curve = CurveFrom<Scalar, G1>;
 //pub type G2Curve = CurveFrom<Scalar, G2>;
+#[derive(Clone, Debug)]
 pub struct G2Curve {}
+
 impl Curve for G2Curve {
     type Scalar = Scalar;
     type Point = G2;
@@ -268,9 +292,63 @@ impl PC for PairingCurve {
     }
 }
 
+// Serde implementations
+
+fn deserialize_field<'de, D, C>(deserializer: D) -> Result<C, D::Error>
+where
+    D: Deserializer<'de>,
+    C: CanonicalDeserialize,
+{
+    let bytes = Vec::<u8>::deserialize(deserializer)?;
+    C::deserialize(&mut &bytes[..]).map_err(|err| DeserializeError::custom(err))
+}
+
+fn serialize_field<S, C>(c: &C, s: S) -> Result<S::Ok, S::Error>
+where
+    S: Serializer,
+    C: CanonicalSerialize,
+{
+    let mut bytes = Vec::new();
+    c.serialize(&mut &mut bytes[..])
+        .map_err(|err| SerializationError::custom(err))?;
+    s.serialize_bytes(&bytes)
+}
+
+fn deserialize_group<'de, D, C>(deserializer: D) -> Result<C, D::Error>
+where
+    D: Deserializer<'de>,
+    C: ProjectiveCurve,
+    C::Affine: CanonicalDeserialize,
+{
+    let bytes = Vec::<u8>::deserialize(deserializer)?;
+    let affine =
+        C::Affine::deserialize(&mut &bytes[..]).map_err(|err| DeserializeError::custom(err))?;
+    Ok(affine.into_projective())
+}
+
+fn serialize_group<S, C>(c: &C, s: S) -> Result<S::Ok, S::Error>
+where
+    S: Serializer,
+    C: ProjectiveCurve,
+    C::Affine: CanonicalSerialize,
+{
+    let mut bytes = Vec::new();
+    c.into_affine()
+        .serialize(&mut &mut bytes[..])
+        .map_err(|err| SerializationError::custom(err))?;
+    s.serialize_bytes(&bytes)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+    use serde::{de::DeserializeOwned, Serialize};
+    use static_assertions::assert_impl_all;
+
+    assert_impl_all!(G1: Serialize, DeserializeOwned, Clone);
+    assert_impl_all!(G2: Serialize, DeserializeOwned, Clone);
+    assert_impl_all!(GT: Serialize, DeserializeOwned, Clone);
+    assert_impl_all!(Scalar: Serialize, DeserializeOwned, Clone);
 
     #[test]
     fn size377() {

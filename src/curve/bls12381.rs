@@ -210,6 +210,7 @@ impl Element for GT {
 // TODO rename to G1
 pub type Curve = CF<Scalar, G1>;
 pub type G2Curve = CF<Scalar, G2>;
+#[derive(Debug, Clone)]
 pub struct TrialCurve {}
 impl C for TrialCurve {
     type Scalar = Scalar;
@@ -233,6 +234,14 @@ mod tests {
     use super::*;
     //use rand::{SeedableRng, XorShiftRng};
     use rand::prelude::*;
+
+    use serde::{de::DeserializeOwned, Serialize};
+    use static_assertions::assert_impl_all;
+
+    assert_impl_all!(G1: Serialize, DeserializeOwned, Clone);
+    assert_impl_all!(G2: Serialize, DeserializeOwned, Clone);
+    assert_impl_all!(GT: Serialize, DeserializeOwned, Clone);
+    assert_impl_all!(Scalar: Serialize, DeserializeOwned, Clone);
 
     // test if the element trait is usable
     fn add_two<T: Element>(e1: &mut T, e2: &T) {
