@@ -37,16 +37,20 @@ pub trait Scheme {
 ///  # #[cfg(feature = "bls12_381")]
 ///  # {
 ///  use rand::prelude::*;
-///  use threshold::sig::{SignatureScheme,Scheme};
-///  use threshold::curve::bls12381::PairingCurve as PC;
+///  use blind_threshold_bls::{sig::{SignatureScheme,Scheme}, Element, Encodable, Point};
+///  use blind_threshold_bls::curve::bls12381::PairingCurve as PC;
 ///  // import BLS signatures with public keys over G2
-///  use threshold::sig::bls::G2Scheme;
+///  use blind_threshold_bls::sig::bls::G2Scheme;
 ///
 ///
-///  let message = vec![1,9,6,9];
+///  let msg = vec![1,9,6,9];
+///  let mut msg_point = <G2Scheme::<PC> as Scheme>::Signature::new();
+///  msg_point.map(&msg).unwrap();
+///  let msg_point_bytes = msg_point.marshal();
+///
 ///  let (private,public) = G2Scheme::<PC>::keypair(&mut thread_rng());
-///  let signature = G2Scheme::<PC>::sign(&private,&message).unwrap();
-///  match G2Scheme::<PC>::verify(&public,&message,&signature) {
+///  let signature = G2Scheme::<PC>::sign(&private,&msg_point_bytes).unwrap();
+///  match G2Scheme::<PC>::verify(&public,&msg_point_bytes,&signature) {
 ///     Ok(_) => println!("signature is correct!"),
 ///     Err(e) => println!("signature is invalid: {}",e),
 ///  };
@@ -63,7 +67,7 @@ pub trait SignatureScheme: Scheme {
 /// threshold scheme.
 pub trait Blinder {
     type Token: Encodable;
-    fn blind(msg: &[u8]) -> (Self::Token, Vec<u8>);
+    fn blind<R: RngCore>(msg: &[u8], rng: &mut R) -> (Self::Token, Vec<u8>);
     fn unblind(t: &Self::Token, sig: &[u8]) -> Result<Vec<u8>, Box<dyn Error>>;
 }
 
@@ -86,7 +90,7 @@ pub trait ThresholdScheme: Scheme {
     fn partial_verify(
         public: &Poly<Self::Private, Self::Public>,
         msg: &[u8],
-        partial: &Partial,
+        partial: &[u8],
     ) -> Result<(), Box<dyn Error>>;
     /// Aggregates all partials signature together. Note that this method does
     /// not verify if the partial signatures are correct or not; it only

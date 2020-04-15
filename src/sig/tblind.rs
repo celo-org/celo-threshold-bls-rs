@@ -3,6 +3,7 @@ use crate::sig::blind::{BG1Scheme, BG2Scheme};
 use crate::sig::tbls::{Serializer, TScheme};
 use crate::sig::{BlindThreshold, Blinder, Partial, Scheme as SScheme, ThresholdScheme};
 use crate::Share;
+use rand::RngCore;
 use std::error::Error;
 use std::marker::PhantomData;
 
@@ -37,7 +38,7 @@ where
     fn partial_verify(
         public: &Poly<T::Private, T::Public>,
         msg: &[u8],
-        partial: &Partial,
+        partial: &[u8],
     ) -> Result<(), Box<dyn Error>> {
         T::partial_verify(public, msg, partial)
     }
@@ -56,10 +57,10 @@ where
     B: Blinder,
 {
     type Token = B::Token;
-    fn blind(msg: &[u8]) -> (B::Token, Vec<u8>) {
-        B::blind(msg)
+    fn blind<R: RngCore>(msg: &[u8], rng: &mut R) -> (Self::Token, Vec<u8>) {
+        B::blind(msg, rng)
     }
-    fn unblind(t: &B::Token, blind_sig: &[u8]) -> Result<Vec<u8>, Box<dyn Error>> {
+    fn unblind(t: &Self::Token, blind_sig: &[u8]) -> Result<Vec<u8>, Box<dyn Error>> {
         B::unblind(&t, &blind_sig)
     }
 }
@@ -85,8 +86,12 @@ mod tests {
     use crate::curve::bls12381::PairingCurve as PCurve;
     #[cfg(feature = "bls12_377")]
     use crate::curve::zexe::PairingCurve as Zexe;
+    use rand::thread_rng;
 
-    use crate::Index;
+    use crate::{
+        group::{Element, Encodable, Point},
+        Index,
+    };
     fn shares<B: BlindThreshold>(
         n: usize,
         t: usize,
@@ -134,17 +139,26 @@ mod tests {
         let thr = 4;
         let (shares, public) = shares::<B>(n, thr);
         let msg = vec![1, 9, 6, 9];
-        let (token, blinded) = B::blind(&msg);
+        let mut msg_point = B::Signature::new();
+        msg_point.map(&msg).unwrap();
+        let msg_point_bytes = msg_point.marshal();
+        let (token, blinded) = B::blind(&msg, &mut thread_rng());
         let partials: Vec<_> = shares
             .iter()
             .map(|share| B::partial_sign(share, &blinded).unwrap())
             .collect();
-
+        assert_eq!(
+            false,
+            partials
+                .iter()
+                .any(|p| B::partial_verify(&public, &blinded, &p).is_err())
+        );
         let blinded_sig = B::aggregate(thr, &partials).unwrap();
         let unblinded = B::unblind(&token, &blinded_sig).unwrap();
 
-        B::verify(&public.public_key(), &msg, &unblinded).unwrap();
+        B::verify(&public.public_key(), &msg_point_bytes, &unblinded).unwrap();
     }
+
     fn unblind_then_aggregate_test<B>()
     where
         B: BlindThreshold,
@@ -153,7 +167,10 @@ mod tests {
         let thr = 4;
         let (shares, public) = shares::<B>(n, thr);
         let msg = vec![1, 9, 6, 9];
-        let (token, blinded) = B::blind(&msg);
+        let (token, blinded) = B::blind(&msg, &mut thread_rng());
+        let mut msg_point = B::Signature::new();
+        msg_point.map(&msg).unwrap();
+        let msg_point_bytes = msg_point.marshal();
         let partials: Vec<_> = shares
             .iter()
             .map(|share| B::partial_sign(share, &blinded).unwrap())
@@ -165,6 +182,6 @@ mod tests {
             .collect();
         let final_sig = B::aggregate(thr, &unblindeds).unwrap();
 
-        B::verify(&public.public_key(), &msg, &final_sig).unwrap();
+        B::verify(&public.public_key(), &msg_point_bytes, &final_sig).unwrap();
     }
 }

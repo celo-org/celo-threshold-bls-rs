@@ -1,7 +1,9 @@
 use crate::group::{Curve, Element, Point, Scalar};
+use crate::Encodable;
 use rand_core::RngCore;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+use std::convert::TryInto;
 use std::error::Error;
 use std::fmt;
 use std::marker::PhantomData;
@@ -37,6 +39,44 @@ where
 pub struct Poly<Var: Scalar, Coeff: Element<Var>> {
     c: Vec<Coeff>,
     phantom: PhantomData<Var>,
+}
+
+impl<Var, Coeff> Encodable for Poly<Var, Coeff>
+where
+    Var: Scalar,
+    Coeff: Element<Var> + Encodable,
+{
+    // This cannot be known as the Poly is a variable length data structure.
+    fn marshal_len() -> usize {
+        unreachable!()
+    }
+
+    fn marshal(&self) -> Vec<u8> {
+        let mut bytes = self.c.len().to_le_bytes().to_vec();
+        for coeff in &self.c {
+            let coeff_bytes = coeff.marshal();
+            bytes.extend_from_slice(&coeff_bytes);
+        }
+        bytes
+    }
+
+    fn unmarshal(&mut self, data: &[u8]) -> Result<(), Box<dyn std::error::Error>> {
+        let (int_bytes, rest) = data.split_at(std::mem::size_of::<usize>());
+        let num_coeffs = usize::from_le_bytes(int_bytes.try_into()?);
+
+        let mut coeffs = Vec::new();
+
+        let size = Coeff::marshal_len();
+        for i in 0..num_coeffs {
+            let mut coeff = Coeff::new();
+            coeff.unmarshal(&rest[i * size..(i + 1) * size])?;
+            coeffs.push(coeff);
+        }
+
+        self.c = coeffs;
+
+        Ok(())
+    }
 }
 
 impl<X, C> Poly<X, C>
@@ -348,6 +388,18 @@ pub mod tests {
     }
 
     #[test]
+    fn serialization() {
+        let p = Poly::<Sc, Sc>::new(10);
+
+        let ser = p.marshal();
+
+        let mut de = Poly::<Sc, Sc>::new(0);
+        de.unmarshal(&ser).unwrap();
+
+        assert_eq!(p, de);
+    }
+
+    #[test]
     fn full_interpolation() {
         let degree = 4;
         let threshold = degree + 1;
@@ -429,7 +481,6 @@ pub mod tests {
         exp.add(&p2.c[0]);
         assert_eq!(exp, p3.c[0]);
     }
-
     #[test]
     fn mul() {
         let d = 1;

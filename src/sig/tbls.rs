@@ -41,10 +41,11 @@ where
         let ret = inject_index(private.index, &mut sig);
         Ok(ret)
     }
+
     fn partial_verify(
         public: &Poly<Self::Private, Self::Public>,
         msg: &[u8],
-        partial: &Partial,
+        partial: &[u8],
     ) -> Result<(), Box<dyn Error>> {
         match extract_index(partial) {
             Ok((idx, bls_sig)) => {
@@ -54,6 +55,7 @@ where
             Err(e) => Err(Box::new(e)),
         }
     }
+
     fn aggregate(threshold: usize, partials: &[Partial]) -> Result<Vec<u8>, Box<dyn Error>> {
         if threshold > partials.len() {
             return Err(Box::new(TBLSError::NotEnoughPartialSignatures));
@@ -119,7 +121,7 @@ fn inject_index(index: Index, sig: &mut Vec<u8>) -> Vec<u8> {
     let mut full_vector = Vec::with_capacity(idx_slice.len() + sig.len());
     full_vector.append(&mut idx_slice);
     full_vector.append(sig);
-    return full_vector.to_vec();
+    full_vector
 }
 
 fn extract_index(sig: &[u8]) -> Result<(Index, Vec<u8>), TBLSError> {
@@ -140,6 +142,7 @@ pub type TG2Scheme<C> = TScheme<bls::G2Scheme<C>>;
 mod tests {
     use super::*;
     use crate::curve::bls12381::PairingCurve as PCurve;
+    use crate::group::{Encodable, Point};
 
     type ShareCreator<T> = fn(
         usize,
@@ -181,18 +184,21 @@ mod tests {
         let threshold = 4;
         let (shares, public) = creator(5, threshold);
         let msg = vec![1, 9, 6, 9];
+        let mut msg_point = T::Signature::new();
+        msg_point.map(&msg).unwrap();
+        let msg_point_bytes = msg_point.marshal();
         let partials: Vec<_> = shares
             .iter()
-            .map(|s| T::partial_sign(s, &msg).unwrap())
+            .map(|s| T::partial_sign(s, &msg_point_bytes).unwrap())
             .collect();
         assert_eq!(
             false,
             partials
                 .iter()
-                .any(|p| T::partial_verify(&public, &msg, &p).is_err())
+                .any(|p| T::partial_verify(&public, &msg_point_bytes, &p).is_err())
         );
         let final_sig = T::aggregate(threshold, &partials).unwrap();
-        T::verify(&public.free_coeff(), &msg, &final_sig).unwrap();
+        T::verify(&public.free_coeff(), &msg_point_bytes, &final_sig).unwrap();
     }
 
     #[test]
