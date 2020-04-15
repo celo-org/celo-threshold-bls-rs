@@ -24,14 +24,6 @@ pub struct Share<S: group::Scalar> {
     private: S,
 }
 
-#[cfg(test)]
-mod tests {
-    #[test]
-    fn it_works() {
-        assert_eq!(2 + 2, 4);
-    }
-}
-
 impl<S: group::Scalar> Share<S> {
     pub fn new(index: Index, private: S) -> Self {
         Self { index, private }
