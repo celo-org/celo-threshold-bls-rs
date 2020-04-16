@@ -239,7 +239,7 @@ pub extern "C" fn combine(threshold: usize, signatures: *const Buffer, asig: *mu
 // Serialization
 ///////////////////////////////////////////////////////////////////////////
 
-#[no_mangle]
+// #[no_mangle]
 pub extern "C" fn deserialize_public_key(
     pubkey_buf: *const u8,
     pubkey: *mut *mut PublicKey,
@@ -248,7 +248,7 @@ pub extern "C" fn deserialize_public_key(
     deserialize(pubkey_buf, pubkey, obj)
 }
 
-#[no_mangle]
+// #[no_mangle]
 pub extern "C" fn deserialize_private_key(
     privkey_buf: *const u8,
     privkey: *mut *mut PrivateKey,
@@ -257,12 +257,12 @@ pub extern "C" fn deserialize_private_key(
     deserialize(privkey_buf, privkey, obj)
 }
 
-#[no_mangle]
+// #[no_mangle]
 pub extern "C" fn serialize_public_key(pubkey: *const PublicKey, pubkey_buf: *mut *mut u8) {
     serialize(pubkey, pubkey_buf)
 }
 
-#[no_mangle]
+// #[no_mangle]
 pub extern "C" fn serialize_private_key(privkey: *const PrivateKey, privkey_buf: *mut *mut u8) {
     serialize(privkey, privkey_buf)
 }
