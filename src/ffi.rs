@@ -236,6 +236,60 @@ pub extern "C" fn combine(threshold: usize, signatures: *const Buffer, asig: *mu
 }
 
 ///////////////////////////////////////////////////////////////////////////
+// Serialization
+///////////////////////////////////////////////////////////////////////////
+
+#[no_mangle]
+pub extern "C" fn deserialize_public_key(
+    pubkey_buf: *const u8,
+    pubkey: *mut *mut PublicKey,
+) -> bool {
+    let obj = PublicKey::new();
+    deserialize(pubkey_buf, pubkey, obj)
+}
+
+#[no_mangle]
+pub extern "C" fn deserialize_private_key(
+    privkey_buf: *const u8,
+    privkey: *mut *mut PrivateKey,
+) -> bool {
+    let obj = PrivateKey::new();
+    deserialize(privkey_buf, privkey, obj)
+}
+
+#[no_mangle]
+pub extern "C" fn serialize_public_key(pubkey: *const PublicKey, pubkey_buf: *mut *mut u8) {
+    serialize(pubkey, pubkey_buf)
+}
+
+#[no_mangle]
+pub extern "C" fn serialize_private_key(privkey: *const PrivateKey, privkey_buf: *mut *mut u8) {
+    serialize(privkey, privkey_buf)
+}
+
+fn deserialize<T: Encodable>(in_buf: *const u8, out: *mut *mut T, mut obj: T) -> bool {
+    let buf = unsafe { std::slice::from_raw_parts(in_buf, T::marshal_len()) };
+
+    if let Err(_) = obj.unmarshal(&buf) {
+        return false;
+    }
+
+    unsafe { *out = Box::into_raw(Box::new(obj)) };
+
+    true
+}
+
+fn serialize<T: Encodable>(in_obj: *const T, out_bytes: *mut *mut u8) {
+    let obj = unsafe { &*in_obj };
+    let mut marshalled = obj.marshal();
+
+    unsafe {
+        *out_bytes = marshalled.as_mut_ptr();
+    };
+    std::mem::forget(marshalled);
+}
+
+///////////////////////////////////////////////////////////////////////////
 // Helpers
 //
 // These should be exposed behind a helper module and should not be made part
@@ -481,5 +535,71 @@ mod tests {
             &unblinded,
         );
         assert!(ret);
+    }
+
+    #[test]
+    fn private_key_serialization() {
+        let seed = b"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+
+        let mut keypair = MaybeUninit::<Keypair>::uninit();
+        keygen(&Buffer::from(&seed[..]), keypair.as_mut_ptr());
+        let keypair = unsafe { keypair.assume_init() };
+
+        let private_key_ptr = private_key_ptr(&keypair);
+        let private_key = unsafe { &*private_key_ptr };
+        let marshalled = private_key.marshal();
+
+        let mut privkey_buf = MaybeUninit::<*mut u8>::uninit();
+
+        serialize_private_key(private_key_ptr, privkey_buf.as_mut_ptr());
+
+        let message = unsafe {
+            std::slice::from_raw_parts(privkey_buf.assume_init(), PrivateKey::marshal_len())
+        };
+        assert_eq!(marshalled, message);
+
+        let mut unmarshalled = PrivateKey::new();
+        unmarshalled.unmarshal(&message).unwrap();
+        assert_eq!(&unmarshalled, private_key);
+
+        let mut de = MaybeUninit::<*mut PrivateKey>::uninit();
+        deserialize_private_key(&message[0] as *const u8, de.as_mut_ptr());
+        let de = unsafe { &*de.assume_init() };
+
+        assert_eq!(private_key, de);
+    }
+
+    #[test]
+    fn public_key_serialization() {
+        let seed = b"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+
+        let mut keypair = MaybeUninit::<Keypair>::uninit();
+        keygen(&Buffer::from(&seed[..]), keypair.as_mut_ptr());
+        let keypair = unsafe { keypair.assume_init() };
+
+        let public_key_ptr = public_key_ptr(&keypair);
+        let public_key = unsafe { &*public_key_ptr };
+
+        let marshalled = public_key.marshal();
+
+        let mut pubkey_buf = MaybeUninit::<*mut u8>::uninit();
+
+        serialize_public_key(public_key_ptr, pubkey_buf.as_mut_ptr());
+
+        // the serialized result
+        let message = unsafe {
+            std::slice::from_raw_parts(pubkey_buf.assume_init(), PublicKey::marshal_len())
+        };
+        assert_eq!(marshalled, message);
+
+        let mut unmarshalled = PublicKey::new();
+        unmarshalled.unmarshal(&message).unwrap();
+        assert_eq!(&unmarshalled, public_key);
+
+        let mut de = MaybeUninit::<*mut PublicKey>::uninit();
+        deserialize_public_key(&message[0] as *const u8, de.as_mut_ptr());
+        let de = unsafe { &*de.assume_init() };
+
+        assert_eq!(public_key, de);
     }
 }
