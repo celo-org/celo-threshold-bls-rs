@@ -67,8 +67,8 @@ workflows:
   build_and_test:
     jobs:
       - build
-      - cross-ios
       - test
       - wasm
       - cross-android
+      - cross-ios
 
