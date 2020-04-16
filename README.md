@@ -86,6 +86,10 @@ $ node examples/tblind.js
 The bundled wasm package will be under the `pkg/` directory. You can then either pack and publish it 
 with `wasm-pack`'s `pack` and `publish` commands, or manually import it in your application.
 
+## Android and iOS
+
+The library compiles to Android and iOS. To compile to Android, download Android NDK r21, unzip it, set NDK\_HOME to the extracted directory and run `make android`. To compile to iOS, run `make ios`.
+
 ## TODO:
 
 - [ ] doc for DKG

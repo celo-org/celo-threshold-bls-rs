@@ -7,6 +7,25 @@ jobs:
     steps:
       - checkout
       - run: cargo build --all
+
+  cross-ios:
+    macos:
+      xcode: 11.4.0
+    steps:
+    - checkout
+    - run:
+        name: Install rustup
+        command: curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
+    - run:
+        name: Install Rust 1.41
+        command: rustup install 1.41.0 && rustup default 1.41.0
+    - run:
+        name: Install iOS targets
+        command: rustup target add {armv7-apple-ios,armv7s-apple-ios,aarch64-apple-ios}
+    - run:
+        name: Build iOS
+        command: cd cross && make ios
+
   test:
     docker:
       - image: circleci/rust:latest
@@ -25,6 +44,24 @@ jobs:
         name: Build wasm
         command: wasm-pack build
 
+  cross-android:
+    docker:
+      - image: circleci/rust:latest
+    steps:
+    - checkout
+    - run:
+        name: Download NDK
+        command: wget https://dl.google.com/android/repository/android-ndk-r21-linux-x86_64.zip && unzip android-ndk-r21-linux-x86_64.zip
+    - run:
+        name: Install Android targets
+        command: rustup target add {aarch64-linux-android,armv7-linux-androideabi,arm-linux-androideabi,i686-linux-android,x86_64-linux-android}
+    - run:
+        name: Create standalone toolchain
+        command: cd cross && NDK_HOME=$PWD/../android-ndk-r21 ./create-ndk-standalone.sh
+    - run:
+        name: Build Android
+        command: cd cross && make android
+
 workflows:
   version: 2
   build_and_test:
@@ -32,4 +69,6 @@ workflows:
       - build
       - test
       - wasm
+      - cross-android
+      - cross-ios
 

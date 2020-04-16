@@ -13,3 +13,7 @@ pkg/
 
 /target
 #Cargo.lock
+
+NDK
+.cargo
+react-native
