@@ -11,6 +11,8 @@ pub use group::*;
 #[cfg(feature = "wasm")]
 pub mod wasm;
 
+pub mod ffi;
+
 use serde::{Deserialize, Serialize};
 
 pub type Index = poly::Idx;
