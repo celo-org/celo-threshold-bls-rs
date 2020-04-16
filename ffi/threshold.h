@@ -28,6 +28,20 @@ typedef struct Share_PrivateKey Share_PrivateKey;
 typedef struct Token_PrivateKey Token_PrivateKey;
 
 /**
+ * Data structure which is used to store buffers of varying length
+ */
+typedef struct {
+  /**
+   * Pointer to the message
+   */
+  const uint8_t *ptr;
+  /**
+   * The length of the buffer
+   */
+  int len;
+} Buffer;
+
+/**
  * A blinded message along with the blinding_factor used to produce it
  */
 typedef struct {
