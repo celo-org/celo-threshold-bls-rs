@@ -11,18 +11,7 @@ if [ -d NDK ]; then
 fi
 
 MAKER="$NDK_HOME/build/tools/make_standalone_toolchain.py"
-
-if [ -x "$MAKER" ]; then
-    MAKER="$NDK_HOME/build/tools/make_standalone_toolchain.py"
-fi
-
-if [ -x "$MAKER" ]; then
-    echo 'Creating standalone NDK...'
-else
-    printf '\e[91;1mPlease install `android-ndk`!\e[0m\n\n'
-    printf '$ brew install android-ndk\n'
-    exit 1
-fi
+echo 'Creating standalone NDK...'
 
 mkdir NDK
 cd NDK
@@ -37,3 +26,4 @@ echo 'Updating .cargo/config.toml...'
 cd ..
 mkdir -p .cargo
 sed 's|$PWD|'"${PWD}"'|g' cargo-config.toml.template > .cargo/config
+mv .cargo ..

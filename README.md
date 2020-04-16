@@ -88,7 +88,19 @@ with `wasm-pack`'s `pack` and `publish` commands, or manually import it in your 
 
 ## Android and iOS
 
-The library compiles to Android and iOS. To compile to Android, download Android NDK r21, unzip it, set NDK\_HOME to the extracted directory and run `make android`. To compile to iOS, run `make ios`.
+The library compiles to Android and iOS. This has been tested with Rust v1.41.0.
+
+To compile to Android:
+
+1. Download Android NDK r21 and unzip it
+2. Set the `NDK_HOME` env var to the extracted directory
+3. `cd cross`
+4. `./create-ndk-standalone`
+5. `make android`
+
+To compile to ios:
+3. `cd cross`
+4. `make ios`
 
 ## TODO:
 
