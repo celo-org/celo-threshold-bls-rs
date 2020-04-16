@@ -15,7 +15,7 @@ jobs:
     - checkout
     - run:
         name: Install rustup
-        command: curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+        command: curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
     - run:
         name: Install Rust 1.41
         command: rustup install 1.41.0 && rustup default 1.41.0
