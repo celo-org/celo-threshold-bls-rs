@@ -12,16 +12,16 @@ CARGO_PARAMS = --no-default-features --features bls12_377
 
 all: android ios
 
-android: $(ARCHS_ANDROID)
+android-build: $(ARCHS_ANDROID)
 
 ios: $(LIB)
 
 clean:
 	rm -R $(IOS_DEST)
 	rm -R $(ANDROID_DEST)
-	rm -R target
+	rm -R ../target
 
-install-android: android
+android: android-build
 	mkdir -p $(ANDROID_DEST)
 	mkdir -p $(ANDROID_DEST)/x86
 	mkdir -p $(ANDROID_DEST)/x86_64
@@ -29,16 +29,11 @@ install-android: android
 	mkdir -p $(ANDROID_DEST)/armeabi
 	mkdir -p $(ANDROID_DEST)/armeabi-v7a
 
-	cp ./target/i686-linux-android/release/$(SO) ${ANDROID_DEST}/x86/$(SO)
-	cp ./target/x86_64-linux-android/release/$(SO) ${ANDROID_DEST}/x86_64/$(SO)
-	cp ./target/aarch64-linux-android/release/$(SO) ${ANDROID_DEST}/arm64-v8a/$(SO)
-	cp ./target/arm-linux-androideabi/release/$(SO) ${ANDROID_DEST}/armeabi/$(SO)
-	cp ./target/armv7-linux-androideabi/release/$(SO) ${ANDROID_DEST}/armeabi-v7a/$(SO)
-
-install-ios: ios
-	mkdir -p $(IOS_DEST)
-
-	cp ./target/universal/release/$(LIB) ${IOS_DEST}
+	cp ../target/i686-linux-android/release/$(SO) ${ANDROID_DEST}/x86/$(SO)
+	cp ../target/x86_64-linux-android/release/$(SO) ${ANDROID_DEST}/x86_64/$(SO)
+	cp ../target/aarch64-linux-android/release/$(SO) ${ANDROID_DEST}/arm64-v8a/$(SO)
+	cp ../target/arm-linux-androideabi/release/$(SO) ${ANDROID_DEST}/armeabi/$(SO)
+	cp ../target/armv7-linux-androideabi/release/$(SO) ${ANDROID_DEST}/armeabi-v7a/$(SO)
 
 aarch64-linux-android:
 	PATH=$(PATH):$(NDK_STANDALONE)/arm64/bin \
@@ -76,4 +71,4 @@ $(ARCHS_IOS): %:
 
 $(LIB): $(ARCHS_IOS)
 	mkdir -p $(IOS_DEST)
-	lipo -create -output $(IOS_DEST)/$@ $(foreach arch,$(ARCHS_IOS),$(wildcard target/$(arch)/release/$(LIB)))
+	lipo -create -output $(IOS_DEST)/$@ $(foreach arch,$(ARCHS_IOS),$(wildcard ../target/$(arch)/release/$(LIB)))
