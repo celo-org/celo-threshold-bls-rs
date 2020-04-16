@@ -250,7 +250,8 @@ pub extern "C" fn combine(threshold: usize, signatures: *const Buffer, asig: *mu
 /// in production, unless you trust the person that generated the keys.
 ///
 /// The seed MUST be at least 32 bytes long
-pub fn threshold_keygen(n: usize, t: usize, seed: &[u8]) -> Keys {
+#[no_mangle]
+pub extern "C" fn threshold_keygen(n: usize, t: usize, seed: &[u8], keys: *mut Keys) {
     let mut rng = get_rng(seed);
     let private = Poly::<PrivateKey, PrivateKey>::new_from(t - 1, &mut rng);
     let shares = (0..n)
@@ -262,13 +263,64 @@ pub fn threshold_keygen(n: usize, t: usize, seed: &[u8]) -> Keys {
         .collect();
     let polynomial = private.commit();
     let threshold_public_key = polynomial.public_key();
-    Keys {
+
+    let keys_local = Keys {
         shares,
         polynomial,
         threshold_public_key,
         t,
         n,
-    }
+    };
+
+    unsafe { *keys = keys_local };
+}
+
+/// Generates a single private key from the provided seed.
+///
+/// # Safety
+///
+/// The seed MUST be at least 32 bytes long
+#[no_mangle]
+pub extern "C" fn keygen(seed: Vec<u8>, keypair: *mut Keypair) {
+    let mut rng = get_rng(&seed);
+    let (private, public) = BlindThresholdSigs::keypair(&mut rng);
+    let keypair_local = Keypair { private, public };
+    unsafe { *keypair = keypair_local };
+}
+
+/// Gets the `index`'th share corresponding to the provided `Keys` pointer
+#[no_mangle]
+pub extern "C" fn get_share_ptr(keys: *const Keys, index: usize) -> *const Share<PrivateKey> {
+    &unsafe { &*keys }.shares[index] as *const Share<PrivateKey>
+}
+
+/// Gets the number of shares corresponding to the provided `Keys` pointer
+#[no_mangle]
+pub extern "C" fn num_shares(keys: *const Keys) -> usize {
+    unsafe { &*keys }.shares.len()
+}
+
+/// Gets a pointer to the polynomial corresponding to the provided `Keys` pointer
+#[no_mangle]
+pub extern "C" fn polynomial_ptr(keys: *const Keys) -> *const Poly<PrivateKey, PublicKey> {
+    &unsafe { &*keys }.polynomial as *const Poly<PrivateKey, PublicKey>
+}
+
+/// Gets a pointer to the threshold public key corresponding to the provided `Keys` pointer
+#[no_mangle]
+pub extern "C" fn threshold_public_key_ptr(keys: *const Keys) -> *const PublicKey {
+    &unsafe { &*keys }.threshold_public_key as *const PublicKey
+}
+
+
+/// T-of-n threshold key parameters
+#[derive(Debug, Clone)]
+pub struct Keys {
+    shares: Vec<Share<PrivateKey>>,
+    polynomial: Poly<PrivateKey, PublicKey>,
+    threshold_public_key: PublicKey,
+    pub t: usize,
+    pub n: usize,
 }
 
 #[derive(Clone)]
@@ -278,54 +330,6 @@ pub struct Keypair {
     private: PrivateKey,
     /// The public key
     public: PublicKey,
-}
-
-// Need to implement custom getters if we want to return more than one value
-impl Keypair {
-    pub fn private_key(&self) -> Vec<u8> {
-        self.private.marshal()
-    }
-
-    pub fn public_key(&self) -> Vec<u8> {
-        self.public.marshal()
-    }
-}
-
-/// Generates a single private key from the provided seed.
-///
-/// # Safety
-///
-/// The seed MUST be at least 32 bytes long
-pub fn keygen(seed: Vec<u8>) -> Keypair {
-    let mut rng = get_rng(&seed);
-    let (private, public) = BlindThresholdSigs::keypair(&mut rng);
-    Keypair { private, public }
-}
-
-pub struct Keys {
-    shares: Vec<Share<PrivateKey>>,
-    polynomial: Poly<PrivateKey, PublicKey>,
-    threshold_public_key: PublicKey,
-    pub t: usize,
-    pub n: usize,
-}
-
-impl Keys {
-    pub fn get_share_ptr(&self, index: usize) -> *const Share<PrivateKey> {
-        &self.shares[index] as *const Share<PrivateKey>
-    }
-
-    pub fn num_shares(&self) -> usize {
-        self.shares.len()
-    }
-
-    pub fn polynomial_ptr(&self) -> *const Poly<PrivateKey, PublicKey> {
-        &self.polynomial as *const Poly<PrivateKey, PublicKey>
-    }
-
-    pub fn threshold_public_key_ptr(&self) -> *const PublicKey {
-        &self.threshold_public_key as *const PublicKey
-    }
 }
 
 fn get_rng(digest: &[u8]) -> impl RngCore {
@@ -340,22 +344,25 @@ fn from_slice(bytes: &[u8]) -> [u8; 32] {
     array
 }
 
+// The general pattern in these FFI tests is:
+// 1. create a MaybeUninit pointer
+// 2. pass it to the function
+// 3. assert that the function call was successful
+// 4. assume the pointer is now initialized
 #[cfg(test)]
 mod tests {
     use super::*;
     use std::mem::MaybeUninit;
 
-    // The general pattern in these FFI tests is:
-    // 1. create a MaybeUninit pointer
-    // 2. pass it to the function
-    // 3. assert that the function call was successful
-    // 4. assume the pointer is now initialized
     #[test]
     fn blinded_threshold_ffi() {
         let seed = b"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
-        let keys = threshold_keygen(5, 3, &seed[..]);
         let msg = vec![1u8, 2, 3, 4, 6];
         let user_seed = &b"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"[..];
+
+        let mut keys = MaybeUninit::<Keys>::uninit();
+        threshold_keygen(5, 3, &seed[..], keys.as_mut_ptr());
+        let keys = unsafe { keys.assume_init() };
 
         // 1. blind the message
         let mut blinded_message = MaybeUninit::<BlindedMessage>::uninit();
@@ -371,7 +378,7 @@ mod tests {
         for i in 0..3 {
             let mut partial_sig = MaybeUninit::<Buffer>::uninit();
             let ret = partial_sign(
-                keys.get_share_ptr(i),
+                get_share_ptr(&keys, i),
                 &blinded_message.message,
                 partial_sig.as_mut_ptr(),
             );
@@ -382,7 +389,7 @@ mod tests {
         }
 
         // 3. verify the partial signatures & concatenate them
-        let public_key = keys.polynomial_ptr();
+        let public_key = polynomial_ptr(&keys);
         let mut concatenated = Vec::new();
         for sig in &sigs {
             concatenated.extend_from_slice(<&[u8]>::from(sig));
@@ -409,7 +416,7 @@ mod tests {
 
         // 6. verify the threshold signature against the public key
         let ret = verify(
-            keys.threshold_public_key_ptr(),
+            threshold_public_key_ptr(&keys),
             &Buffer::from(&msg[..]),
             &unblinded,
         );
