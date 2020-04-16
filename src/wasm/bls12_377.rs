@@ -158,7 +158,7 @@ pub fn partial_sign(share_buf: &[u8], message: &[u8]) -> Result<Vec<u8>> {
 ///
 /// - If verification fails
 pub fn partial_verify(polynomial_buf: &[u8], blinded_message: &[u8], sig: &[u8]) -> Result<()> {
-    let mut polynomial = Poly::<PrivateKey, PublicKey>::from_vec(vec![]);
+    let mut polynomial = Poly::<PrivateKey, PublicKey>::from(vec![]);
     polynomial
         .unmarshal(&polynomial_buf)
         .map_err(|err| JsValue::from_str(&format!("could not unmarshal polynomial {}", err)))?;

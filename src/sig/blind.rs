@@ -11,7 +11,7 @@ use std::marker::PhantomData;
 /// private blinding factor that is called a Token. To unblind the signature
 /// afterwards, one needs the same token as what the blinding method returned.
 /// In this blind signature scheme, the token is simply a field element.
-#[derive(Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(bound = "S: Serialize + serde::de::DeserializeOwned")]
 pub struct Token<S: Scalar>(S);
 

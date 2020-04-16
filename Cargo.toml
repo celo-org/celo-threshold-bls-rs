@@ -19,7 +19,7 @@ sha2 = "0.8"
 bitvec = { version = "0.17.4", default-features = false, features = ["std", "alloc", "serde"] }
 
 wasm-bindgen = { version = "0.2.60", optional = true }
-rand_chacha = { version = "0.2.2", default-features = false, optional = true }
+rand_chacha = { version = "0.2.2", default-features = false }
 
 # bls12_381
 paired = { version = "0.18.0", features = ["serde"], optional = true }
@@ -37,7 +37,7 @@ serde_bytes = "0.11.3"
 default = ["bls12_381", "bls12_377"]
 bls12_377 = ["algebra", "bls-crypto"]
 bls12_381 = ["paired", "groupy", "ff"]
-wasm = ["wasm-bindgen", "rand_chacha", "bls12_377"]
+wasm = ["wasm-bindgen", "bls12_377"]
 
 [[example]]
 name = "tblind"
