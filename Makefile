@@ -1,4 +1,4 @@
-# Makefile
+# Makefile - based on https://github.com/Terrahop/react-native-rust-demo
 
 NAME = libblind_threshold_bls
 LIB = $(NAME).a

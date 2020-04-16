@@ -1,6 +1,6 @@
 #! /bin/bash
 
-# based on https://github.com/kennytm/rust-ios-android
+# based on https://github.com/Terrahop/react-native-rust-demo
 
 set -euo pipefail
 
