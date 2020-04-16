@@ -61,6 +61,8 @@ typedef Private PrivateKey;
 
 typedef Public PublicKey;
 
+typedef Signature Signature;
+
 /**
  * Given a message and a seed, it will blind it and return the blinded message
  *
@@ -89,6 +91,16 @@ bool combine(uintptr_t threshold, const Buffer *signatures, Buffer *asig);
 bool deserialize_privkey(const uint8_t *privkey_buf, PrivateKey **privkey);
 
 bool deserialize_pubkey(const uint8_t *pubkey_buf, PublicKey **pubkey);
+
+bool deserialize_sig(const uint8_t *sig_buf, Signature **sig);
+
+void destroy_privkey(PrivateKey *private_key);
+
+void destroy_pubkey(PublicKey *public_key);
+
+void destroy_sig(Signature *signature);
+
+void free_vector(uint8_t *bytes, uintptr_t len);
 
 /**
  * Generates a single private key from the provided seed.
@@ -136,6 +148,8 @@ const PublicKey *public_key_ptr(const Keypair *keypair);
 void serialize_privkey(const PrivateKey *privkey, uint8_t **privkey_buf);
 
 void serialize_pubkey(const PublicKey *pubkey, uint8_t **pubkey_buf);
+
+void serialize_sig(const Signature *sig, uint8_t **sig_buf);
 
 /**
  * Gets the `index`'th share corresponding to the provided `Keys` pointer

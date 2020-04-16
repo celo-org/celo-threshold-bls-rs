@@ -255,6 +255,12 @@ pub extern "C" fn deserialize_privkey(
 }
 
 #[no_mangle]
+pub extern "C" fn deserialize_sig(sig_buf: *const u8, sig: *mut *mut Signature) -> bool {
+    let obj = Signature::new();
+    deserialize(sig_buf, sig, obj)
+}
+
+#[no_mangle]
 pub extern "C" fn serialize_pubkey(pubkey: *const PublicKey, pubkey_buf: *mut *mut u8) {
     serialize(pubkey, pubkey_buf)
 }
@@ -262,6 +268,11 @@ pub extern "C" fn serialize_pubkey(pubkey: *const PublicKey, pubkey_buf: *mut *m
 #[no_mangle]
 pub extern "C" fn serialize_privkey(privkey: *const PrivateKey, privkey_buf: *mut *mut u8) {
     serialize(privkey, privkey_buf)
+}
+
+#[no_mangle]
+pub extern "C" fn serialize_sig(sig: *const Signature, sig_buf: *mut *mut u8) {
+    serialize(sig, sig_buf)
 }
 
 fn deserialize<T: Encodable>(in_buf: *const u8, out: *mut *mut T, mut obj: T) -> bool {
@@ -284,6 +295,32 @@ fn serialize<T: Encodable>(in_obj: *const T, out_bytes: *mut *mut u8) {
         *out_bytes = marshalled.as_mut_ptr();
     };
     std::mem::forget(marshalled);
+}
+
+#[no_mangle]
+pub extern "C" fn destroy_privkey(private_key: *mut PrivateKey) {
+    drop(unsafe {
+        Box::from_raw(private_key);
+    })
+}
+
+#[no_mangle]
+pub extern "C" fn free_vector(bytes: *mut u8, len: usize) {
+    drop(unsafe { Vec::from_raw_parts(bytes, len as usize, len as usize) });
+}
+
+#[no_mangle]
+pub extern "C" fn destroy_pubkey(public_key: *mut PublicKey) {
+    drop(unsafe {
+        Box::from_raw(public_key);
+    })
+}
+
+#[no_mangle]
+pub extern "C" fn destroy_sig(signature: *mut Signature) {
+    drop(unsafe {
+        Box::from_raw(signature);
+    })
 }
 
 ///////////////////////////////////////////////////////////////////////////
@@ -550,9 +587,8 @@ mod tests {
 
         serialize_privkey(private_key_ptr, privkey_buf.as_mut_ptr());
 
-        let message = unsafe {
-            std::slice::from_raw_parts(privkey_buf.assume_init(), PrivateKey::marshal_len())
-        };
+        let privkey_buf = unsafe { privkey_buf.assume_init() };
+        let message = unsafe { std::slice::from_raw_parts(privkey_buf, PrivateKey::marshal_len()) };
         assert_eq!(marshalled, message);
 
         let mut unmarshalled = PrivateKey::new();
@@ -561,9 +597,11 @@ mod tests {
 
         let mut de = MaybeUninit::<*mut PrivateKey>::uninit();
         deserialize_privkey(&message[0] as *const u8, de.as_mut_ptr());
-        let de = unsafe { &*de.assume_init() };
+        let de = unsafe { de.assume_init() };
 
-        assert_eq!(private_key, de);
+        assert_eq!(private_key, unsafe { &*de });
+        destroy_privkey(de as *mut PrivateKey);
+        free_vector(privkey_buf as *mut u8, PrivateKey::marshal_len());
     }
 
     #[test]
@@ -583,10 +621,9 @@ mod tests {
 
         serialize_pubkey(public_key_ptr, pubkey_buf.as_mut_ptr());
 
+        let pubkey_buf = unsafe { pubkey_buf.assume_init() };
         // the serialized result
-        let message = unsafe {
-            std::slice::from_raw_parts(pubkey_buf.assume_init(), PublicKey::marshal_len())
-        };
+        let message = unsafe { std::slice::from_raw_parts(pubkey_buf, PublicKey::marshal_len()) };
         assert_eq!(marshalled, message);
 
         let mut unmarshalled = PublicKey::new();
@@ -595,8 +632,10 @@ mod tests {
 
         let mut de = MaybeUninit::<*mut PublicKey>::uninit();
         deserialize_pubkey(&message[0] as *const u8, de.as_mut_ptr());
-        let de = unsafe { &*de.assume_init() };
+        let de = unsafe { de.assume_init() };
 
-        assert_eq!(public_key, de);
+        assert_eq!(public_key, unsafe { &*de });
+        destroy_pubkey(de as *mut PublicKey);
+        free_vector(pubkey_buf as *mut u8, PublicKey::marshal_len());
     }
 }
