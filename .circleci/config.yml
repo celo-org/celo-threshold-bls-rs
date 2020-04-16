@@ -57,7 +57,7 @@ jobs:
         command: rustup target add {aarch64-linux-android,armv7-linux-androideabi,arm-linux-androideabi,i686-linux-android,x86_64-linux-android}
     - run:
         name: Create standalone toolchain
-        command: NDK_HOME=$PWD/android-ndk-r21 ./create-ndk-standalone.sh
+        command: cd cross && NDK_HOME=$PWD/android-ndk-r21 ./create-ndk-standalone.sh
     - run:
         name: Build Android
         command: cd cross && make android
