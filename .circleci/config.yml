@@ -24,7 +24,7 @@ jobs:
         command: rustup target add {armv7-apple-ios,armv7s-apple-ios,aarch64-apple-ios}
     - run:
         name: Build iOS
-        command: make ios
+        command: cd cross && make ios
 
   test:
     docker:
@@ -60,7 +60,7 @@ jobs:
         command: NDK_HOME=$PWD/android-ndk-r21 ./create-ndk-standalone.sh
     - run:
         name: Build Android
-        command: make android
+        command: cd cross && make android
 
 workflows:
   version: 2
