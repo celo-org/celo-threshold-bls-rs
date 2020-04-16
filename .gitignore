@@ -14,6 +14,6 @@ pkg/
 /target
 #Cargo.lock
 
-ndk
+NDK
 .cargo
 react-native
