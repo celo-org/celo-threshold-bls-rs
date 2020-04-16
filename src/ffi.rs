@@ -281,7 +281,8 @@ pub extern "C" fn threshold_keygen(n: usize, t: usize, seed: &[u8], keys: *mut K
 ///
 /// The seed MUST be at least 32 bytes long
 #[no_mangle]
-pub extern "C" fn keygen(seed: Vec<u8>, keypair: *mut Keypair) {
+pub extern "C" fn keygen(seed: *const Buffer, keypair: *mut Keypair) {
+    let seed = <&[u8]>::from(unsafe { &*seed });
     let mut rng = get_rng(&seed);
     let (private, public) = BlindThresholdSigs::keypair(&mut rng);
     let keypair_local = Keypair { private, public };
@@ -290,7 +291,7 @@ pub extern "C" fn keygen(seed: Vec<u8>, keypair: *mut Keypair) {
 
 /// Gets the `index`'th share corresponding to the provided `Keys` pointer
 #[no_mangle]
-pub extern "C" fn get_share_ptr(keys: *const Keys, index: usize) -> *const Share<PrivateKey> {
+pub extern "C" fn share_ptr(keys: *const Keys, index: usize) -> *const Share<PrivateKey> {
     &unsafe { &*keys }.shares[index] as *const Share<PrivateKey>
 }
 
@@ -312,6 +313,17 @@ pub extern "C" fn threshold_public_key_ptr(keys: *const Keys) -> *const PublicKe
     &unsafe { &*keys }.threshold_public_key as *const PublicKey
 }
 
+/// Gets a pointer to the public key corresponding to the provided `KeyPair` pointer
+#[no_mangle]
+pub extern "C" fn public_key_ptr(keypair: *const Keypair) -> *const PublicKey {
+    &unsafe { &*keypair }.public as *const PublicKey
+}
+
+/// Gets a pointer to the private key corresponding to the provided `KeyPair` pointer
+#[no_mangle]
+pub extern "C" fn private_key_ptr(keypair: *const Keypair) -> *const PrivateKey {
+    &unsafe { &*keypair }.private as *const PrivateKey
+}
 
 /// T-of-n threshold key parameters
 #[derive(Debug, Clone)]
@@ -378,7 +390,7 @@ mod tests {
         for i in 0..3 {
             let mut partial_sig = MaybeUninit::<Buffer>::uninit();
             let ret = partial_sign(
-                get_share_ptr(&keys, i),
+                share_ptr(&keys, i),
                 &blinded_message.message,
                 partial_sig.as_mut_ptr(),
             );
@@ -417,6 +429,54 @@ mod tests {
         // 6. verify the threshold signature against the public key
         let ret = verify(
             threshold_public_key_ptr(&keys),
+            &Buffer::from(&msg[..]),
+            &unblinded,
+        );
+        assert!(ret);
+    }
+
+    #[test]
+    fn blinded_ffi() {
+        let seed = b"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+        let msg = vec![1u8, 2, 3, 4, 6];
+        let user_seed = &b"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"[..];
+
+        let mut keypair = MaybeUninit::<Keypair>::uninit();
+        keygen(&Buffer::from(&seed[..]), keypair.as_mut_ptr());
+        let keypair = unsafe { keypair.assume_init() };
+
+        // 1. blind the message
+        let mut blinded_message = MaybeUninit::<BlindedMessage>::uninit();
+        blind(
+            &Buffer::from(msg.as_ref()),
+            &Buffer::from(user_seed),
+            blinded_message.as_mut_ptr(),
+        );
+        let blinded_message = unsafe { blinded_message.assume_init() };
+
+        // 2. sign the blinded message
+        let mut sig = MaybeUninit::<Buffer>::uninit();
+        let ret = sign(
+            private_key_ptr(&keypair),
+            &blinded_message.message,
+            sig.as_mut_ptr(),
+        );
+        assert!(ret);
+        let sig = unsafe { sig.assume_init() };
+
+        // 4. unblind the signature
+        let mut unblinded = MaybeUninit::<Buffer>::uninit();
+        let ret = unblind(
+            &sig,
+            &blinded_message.blinding_factor,
+            unblinded.as_mut_ptr(),
+        );
+        assert!(ret);
+        let unblinded = unsafe { unblinded.assume_init() };
+
+        // 4. verify the signature
+        let ret = verify(
+            public_key_ptr(&keypair),
             &Buffer::from(&msg[..]),
             &unblinded,
         );
