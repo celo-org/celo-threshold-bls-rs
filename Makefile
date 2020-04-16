@@ -1,13 +1,14 @@
 # Makefile
 
-NAME = libbls_threshold
+NAME = libblind_threshold_bls
 LIB = $(NAME).a
 SO = $(NAME).so
 ARCHS_IOS = armv7-apple-ios armv7s-apple-ios aarch64-apple-ios
 ARCHS_ANDROID = aarch64-linux-android armv7-linux-androideabi arm-linux-androideabi i686-linux-android x86_64-linux-android
-NDK_STANDALONE = ./ndk
+NDK_STANDALONE = ./NDK
 ANDROID_DEST = ./react-native/android/app/src/main/jniLibs
 IOS_DEST = ./react-native/ios
+CARGO_PARAMS = --no-default-features --features bls12_377
 
 all: android ios
 
@@ -43,35 +44,35 @@ aarch64-linux-android:
 	PATH=$(PATH):$(NDK_STANDALONE)/arm64/bin \
 	CC=$@-gcc \
 	CXX=$@-g++ \
-	cargo build --target $@ --release --lib
+	cargo build $(CARGO_PARAMS) --target $@ --release --lib
 
 arm-linux-androideabi:
 	PATH=$(PATH):$(NDK_STANDALONE)/arm/bin \
 	CC=$@-gcc \
 	CXX=$@-g++ \
-	cargo build --target $@ --release --lib
+	cargo build $(CARGO_PARAMS) --target $@ --release --lib
 
 armv7-linux-androideabi:
 	PATH=$(PATH):$(NDK_STANDALONE)/arm/bin \
 	CC=arm-linux-androideabi-gcc \
 	CXX=arm-linux-androideabi-g++ \
-	cargo build --target $@ --release --lib
+	cargo build $(CARGO_PARAMS) --target $@ --release --lib
 
 i686-linux-android:
 	PATH=$(PATH):$(NDK_STANDALONE)/x86/bin \
 	CC=$@-gcc \
 	CXX=$@-g++ \
-	cargo build --target $@ --release --lib
+	cargo build $(CARGO_PARAMS) --target $@ --release --lib
 
 x86_64-linux-android:
 	PATH=$(PATH):$(NDK_STANDALONE)/x86_64/bin \
 	CC=$@-gcc \
 	CXX=$@-g++ \
-	cargo build --target $@ --release --lib
+	cargo build $(CARGO_PARAMS) --target $@ --release --lib
 
 .PHONY: $(ARCHS_IOS)
 $(ARCHS_IOS): %:
-	cargo build --target $@ --release --lib
+	cargo build $(CARGO_PARAMS) --target $@ --release --lib
 
 $(LIB): $(ARCHS_IOS)
 	mkdir -p $(IOS_DEST)

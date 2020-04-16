@@ -15,3 +15,5 @@ pkg/
 #Cargo.lock
 
 ndk
+.cargo
+react-native
