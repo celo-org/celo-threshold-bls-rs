@@ -20,7 +20,7 @@ ios: $(LIB)
 clean:
 	rm -R $(IOS_DEST)
 	rm -R $(ANDROID_DEST)
-	rm -R ../target
+	rm -R $(TARGET_DIR)
 
 android: android-build
 	mkdir -p $(ANDROID_DEST)
