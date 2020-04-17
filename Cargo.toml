@@ -39,10 +39,5 @@ bls12_377 = ["algebra", "bls-crypto"]
 bls12_381 = ["paired", "groupy", "ff"]
 wasm = ["wasm-bindgen", "bls12_377"]
 
-[[example]]
-name = "tblind"
-path = "examples/tblind/main.rs"
-required-features = ["bls12_377"]
-
 [dev-dependencies]
 static_assertions = "1.1.0"

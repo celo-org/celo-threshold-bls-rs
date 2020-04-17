@@ -308,7 +308,7 @@ where
     S: Serializer,
     C: CanonicalSerialize,
 {
-    let mut bytes = Vec::new();
+    let mut bytes = vec![0; c.serialized_size()];
     c.serialize(&mut &mut bytes[..])
         .map_err(|err| SerializationError::custom(err))?;
     s.serialize_bytes(&bytes)
@@ -332,8 +332,9 @@ where
     C: ProjectiveCurve,
     C::Affine: CanonicalSerialize,
 {
-    let mut bytes = Vec::new();
-    c.into_affine()
+    let affine = c.into_affine();
+    let mut bytes = vec![0; affine.serialized_size()];
+    affine
         .serialize(&mut &mut bytes[..])
         .map_err(|err| SerializationError::custom(err))?;
     s.serialize_bytes(&bytes)

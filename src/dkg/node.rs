@@ -5,8 +5,7 @@ use super::{
         DKGWaitingResponse, DKGWaitingShare, Group, DKG,
     },
 };
-use crate::{group::Curve, Index};
-
+use crate::group::Curve;
 use thiserror::Error;
 
 #[derive(Debug, Error)]
@@ -20,7 +19,7 @@ pub enum NodeError {
 }
 
 /// A DKG Phase.
-trait DKGPhase<C: Curve, B: BoardPublisher<C>, T> {
+pub trait DKGPhase<C: Curve, B: BoardPublisher<C>, T> {
     /// The next DKG Phase
     type Next;
 
@@ -30,24 +29,24 @@ trait DKGPhase<C: Curve, B: BoardPublisher<C>, T> {
 }
 
 #[derive(Clone, Debug)]
-struct Phase0<C: Curve> {
+pub struct Phase0<C: Curve> {
     inner: DKG<C>,
 }
 
 impl<C: Curve> Phase0<C> {
-    fn new(private_key: C::Scalar, group: Group<C>) -> Result<Self, DKGError> {
+    pub fn new(private_key: C::Scalar, group: Group<C>) -> Result<Self, DKGError> {
         let dkg = DKG::new(private_key, group)?;
         Ok(Self { inner: dkg })
     }
 }
 
 #[derive(Clone, Debug)]
-struct Phase1<C: Curve> {
+pub struct Phase1<C: Curve> {
     inner: DKGWaitingShare<C>,
 }
 
 #[derive(Clone, Debug)]
-struct Phase2<C: Curve> {
+pub struct Phase2<C: Curve> {
     inner: DKGWaitingResponse<C>,
 }
 
@@ -87,13 +86,13 @@ where
                 .map_err(|_| NodeError::PublisherError)?;
         }
 
-        Ok(Phase2 { inner: next, r })
+        Ok(Phase2 { inner: next })
     }
 }
 
 /// Phase2 can either be successful or require going to Phase 3.
 #[derive(Clone, Debug)]
-enum Phase2Result<C: Curve> {
+pub enum Phase2Result<C: Curve> {
     Output(DKGOutput<C>),
     GoToPhase3(DKGWaitingJustification<C>),
 }
@@ -130,30 +129,82 @@ mod tests {
     use super::*;
 
     use crate::{
-        // curve::zexe::PairingCurve,
-        curve::bls12381::PairingCurve,
+        curve::bls12381::{self, PairingCurve as BLS12_381},
+        curve::zexe::{self as bls12_377, PairingCurve as BLS12_377},
         dkg::{
             primitives::{Group, Node},
             test_helpers::InMemoryBoard,
         },
-        group::{PairingCurve as PairingCurveTrait, Point},
-        sig::{tblind::G2Scheme, Scheme},
+        group::{Element, Encodable, Point},
+        sig::{
+            tblind::{G1Scheme, G2Scheme},
+            Blinder, Scheme, ThresholdScheme,
+        },
+        Index,
     };
 
     #[test]
-    fn dkg_e2e() {
-        dkg_e2e_curve::<PairingCurve, G2Scheme<PairingCurve>>(10, 7)
+    fn dkg_sign_e2e() {
+        let (t, n) = (2, 3);
+        // G2 on both curves
+        dkg_sign_e2e_curve::<bls12381::Curve, G1Scheme<BLS12_381>>(n, t);
+        dkg_sign_e2e_curve::<bls12381::G2Curve, G2Scheme<BLS12_381>>(n, t);
+
+        dkg_sign_e2e_curve::<bls12_377::G1Curve, G1Scheme<BLS12_377>>(n, t);
+        dkg_sign_e2e_curve::<bls12_377::G2Curve, G2Scheme<BLS12_377>>(n, t);
     }
 
-    fn dkg_e2e_curve<C, S>(n: usize, t: usize)
+    fn dkg_sign_e2e_curve<C, S>(n: usize, t: usize)
     where
-        C: PairingCurveTrait,
+        C: Curve,
         // The scheme uses Public keys on G2
-        S: Scheme<Public = <C::G2Curve as Curve>::Point, Private = <C::G2Curve as Curve>::Scalar>,
+        S: Scheme<Public = <C as Curve>::Point, Private = <C as Curve>::Scalar>
+            + Blinder
+            + ThresholdScheme,
         // The curve's points are over the same scalar as the scheme's
-        <C::G2Curve as Curve>::Point: Point<S::Private>,
+        <C as Curve>::Point: Point<S::Private>,
         // The signature scheme is a Point over the G2 Curve's scalar
-        <S as Scheme>::Signature: Point<<C::G2Curve as Curve>::Scalar>,
+        <S as Scheme>::Signature: Point<<C as Curve>::Scalar>,
+    {
+        let msg = rand::random::<[u8; 32]>().to_vec();
+
+        // executes the DKG state machine and ensures that the keys are generated correctly
+        let outputs = run_dkg::<C, S>(n, t);
+
+        // blinds the message
+        let (token, blinded_msg) = S::blind(&msg[..], &mut rand::thread_rng());
+
+        // generates a partial sig with each share from the dkg
+        let partial_sigs = outputs
+            .iter()
+            .map(|output| S::partial_sign(&output.share, &blinded_msg[..]).unwrap())
+            .collect::<Vec<_>>();
+
+        // aggregates them
+        let blinded_sig = S::aggregate(t, &partial_sigs).unwrap();
+
+        // the user unblinds it
+        let unblinded_sig = S::unblind(&token, &blinded_sig).unwrap();
+
+        // get the public key (we have already checked that all outputs' pubkeys are the same)
+        let pubkey = outputs[0].public.public_key();
+
+        // verify the threshold signature _against the hash of the message_
+        let mut msg_point = <S as Scheme>::Signature::new();
+        msg_point.map(&msg).unwrap();
+        let msg = msg_point.marshal();
+        S::verify(&pubkey, &msg, &unblinded_sig).unwrap();
+    }
+
+    fn run_dkg<C, S>(n: usize, t: usize) -> Vec<DKGOutput<C>>
+    where
+        C: Curve,
+        // The scheme uses Public keys on G2
+        S: Scheme<Public = <C as Curve>::Point, Private = <C as Curve>::Scalar>,
+        // The curve's points are over the same scalar as the scheme's
+        <C as Curve>::Point: Point<S::Private>,
+        // The signature scheme is a Point over the G2 Curve's scalar
+        <S as Scheme>::Signature: Point<<C as Curve>::Scalar>,
     {
         let rng = &mut rand::thread_rng();
 
@@ -162,7 +213,7 @@ mod tests {
         let nodes = keypairs
             .iter()
             .enumerate()
-            .map(|(i, (_, public))| Node::<C::G2Curve>::new(i as Index, public.clone()))
+            .map(|(i, (_, public))| Node::<C>::new(i as Index, public.clone()))
             .collect::<Vec<_>>();
 
         // This is setup phase during which publickeys and indexes must be exchanged
@@ -176,7 +227,7 @@ mod tests {
             .collect::<Vec<_>>();
 
         // Create the board
-        let mut board = InMemoryBoard::<C::G2Curve>::new();
+        let mut board = InMemoryBoard::<C>::new();
 
         // Phase 1: Publishes shares, all nodes are honest
         let phase1s = phase0s
@@ -201,21 +252,20 @@ mod tests {
             .collect::<Vec<_>>();
 
         // The distributed public key must be the same
-        let dist_pubkeys = results
+        let outputs = results
             .into_iter()
             .map(|res| match res {
-                Phase2Result::Output(out) => return out.public,
+                Phase2Result::Output(out) => out,
                 _ => unreachable!("should not get here"),
             })
             .collect::<Vec<_>>();
-        assert!(is_all_same(&dist_pubkeys));
+        assert!(is_all_same(outputs.iter().map(|output| &output.public)));
+
+        outputs
     }
 
-    fn is_all_same<T: PartialEq>(arr: &[T]) -> bool {
-        if arr.is_empty() {
-            return true;
-        }
-        let first = &arr[0];
-        arr.iter().all(|item| item == first)
+    fn is_all_same<T: PartialEq>(mut arr: impl Iterator<Item = T>) -> bool {
+        let first = arr.next().unwrap();
+        arr.all(|item| item == first)
     }
 }
