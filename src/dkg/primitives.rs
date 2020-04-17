@@ -806,7 +806,7 @@ where
 
 pub type DKGResult<A> = Result<A, DKGError>;
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub enum DKGError {
     /// PublicKeyNotFound is raised when the private key given to the DKG init
     /// function does not yield a public key that is included in the group.

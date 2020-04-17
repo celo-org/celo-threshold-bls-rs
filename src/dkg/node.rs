@@ -18,6 +18,15 @@ pub enum NodeError {
     DKGError(#[from] DKGError),
 }
 
+/// Phase2 can either be successful or require going to Phase 3.
+#[derive(Clone, Debug)]
+pub enum Phase2Result<C: Curve> {
+    Output(DKGOutput<C>),
+    GoToPhase3(DKGWaitingJustification<C>),
+}
+
+type NodeResult<T> = std::result::Result<T, NodeError>;
+
 /// A DKG Phase.
 pub trait DKGPhase<C: Curve, B: BoardPublisher<C>, T> {
     /// The next DKG Phase
@@ -25,7 +34,7 @@ pub trait DKGPhase<C: Curve, B: BoardPublisher<C>, T> {
 
     /// Executes this DKG Phase and publishes the required result to the board.
     /// The `arg` is specific to each phase.
-    fn run(self, board: &mut B, arg: T) -> Self::Next;
+    fn run(self, board: &mut B, arg: T) -> NodeResult<Self::Next>;
 }
 
 #[derive(Clone, Debug)]
@@ -34,7 +43,7 @@ pub struct Phase0<C: Curve> {
 }
 
 impl<C: Curve> Phase0<C> {
-    pub fn new(private_key: C::Scalar, group: Group<C>) -> Result<Self, DKGError> {
+    pub fn new(private_key: C::Scalar, group: Group<C>) -> NodeResult<Self> {
         let dkg = DKG::new(private_key, group)?;
         Ok(Self { inner: dkg })
     }
@@ -55,9 +64,9 @@ where
     C: Curve,
     B: BoardPublisher<C>,
 {
-    type Next = Result<Phase1<C>, NodeError>;
+    type Next = Phase1<C>;
 
-    fn run(self, board: &mut B, be_bad: bool) -> Self::Next {
+    fn run(self, board: &mut B, be_bad: bool) -> NodeResult<Self::Next> {
         let (next, shares) = self.inner.shares();
 
         if !be_bad {
@@ -75,9 +84,9 @@ where
     C: Curve,
     B: BoardPublisher<C>,
 {
-    type Next = Result<Phase2<C>, NodeError>;
+    type Next = Phase2<C>;
 
-    fn run(self, board: &mut B, shares: &[BundledShares<C>]) -> Self::Next {
+    fn run(self, board: &mut B, shares: &[BundledShares<C>]) -> NodeResult<Self::Next> {
         let (next, bundle) = self.inner.process_shares(shares)?;
 
         if let Some(bundle) = bundle {
@@ -90,21 +99,14 @@ where
     }
 }
 
-/// Phase2 can either be successful or require going to Phase 3.
-#[derive(Clone, Debug)]
-pub enum Phase2Result<C: Curve> {
-    Output(DKGOutput<C>),
-    GoToPhase3(DKGWaitingJustification<C>),
-}
-
 impl<C, B> DKGPhase<C, B, &[BundledResponses]> for Phase2<C>
 where
     C: Curve,
     B: BoardPublisher<C>,
 {
-    type Next = Result<Phase2Result<C>, NodeError>;
+    type Next = Phase2Result<C>;
 
-    fn run(self, board: &mut B, responses: &[BundledResponses]) -> Self::Next {
+    fn run(self, board: &mut B, responses: &[BundledResponses]) -> NodeResult<Self::Next> {
         match self.inner.process_responses(responses) {
             Ok(output) => Ok(Phase2Result::Output(output)),
             Err((next, justifications)) => {
