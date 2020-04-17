@@ -1,6 +1,6 @@
 # Makefile - based on https://github.com/Terrahop/react-native-rust-demo
 
-NAME = libthreshold_bls_ffi
+NAME = libblind_threshold_bls
 LIB = $(NAME).a
 SO = $(NAME).so
 ARCHS_IOS = armv7-apple-ios armv7s-apple-ios aarch64-apple-ios

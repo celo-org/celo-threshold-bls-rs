@@ -35,6 +35,8 @@ jobs:
     steps:
       - checkout
       - run: cargo test --all
+      - run: cargo fmt --all -- --check
+
   wasm:
     docker:
       - image: circleci/rust:latest

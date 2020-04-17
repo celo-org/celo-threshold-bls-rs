@@ -6,6 +6,7 @@ edition = "2018"
 
 [lib]
 crate-type = ["lib", "cdylib", "staticlib"]
+name = "blind_threshold_bls"
 
 [dependencies]
 threshold-bls = { path = "../threshold-bls", default-features = false, features = ["bls12_377"] }
