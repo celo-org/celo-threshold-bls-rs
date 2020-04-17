@@ -1,17 +1,11 @@
 use std::convert::TryInto;
 
 pub mod curve;
-pub mod dkg;
 pub mod ecies;
 pub mod group;
 pub mod poly;
 pub mod sig;
 pub use group::*;
-
-#[cfg(feature = "wasm")]
-pub mod wasm;
-
-pub mod ffi;
 
 use serde::{Deserialize, Serialize};
 
