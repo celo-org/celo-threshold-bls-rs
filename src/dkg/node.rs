@@ -8,7 +8,7 @@ use super::{
 use crate::group::Curve;
 use thiserror::Error;
 
-#[derive(Debug, Error)]
+#[derive(Debug, Error, PartialEq)]
 pub enum NodeError {
     /// Node could not publish to the board
     #[error("Could not publish to board")]
@@ -243,6 +243,45 @@ mod tests {
         outputs
     }
 
+    #[test]
+    fn not_enough_validator_shares() {
+        let (t, n) = (6, 10);
+        let bad = t + 1;
+        let honest = n - bad;
+
+        let rng = &mut rand::thread_rng();
+        let (mut board, phase0s) = setup::<bls12_377::G1Curve, G1Scheme<BLS12_377>, _>(n, t, rng);
+
+        let phase1s = phase0s
+            .into_iter()
+            .enumerate()
+            .map(|(i, phase0)| {
+                let be_bad = i < bad;
+                phase0.run(&mut board, be_bad).unwrap()
+            })
+            .collect::<Vec<_>>();
+
+        // Get the shares from the board
+        let shares = board.shares.clone();
+
+        // Phase2 fails (only the good ones try to run it)
+        let errs = phase1s
+            .into_iter()
+            .map(|phase1| phase1.run(&mut board, &shares).unwrap_err())
+            .collect::<Vec<_>>();
+
+        // bad contributors who try to contribute in P2 without contributing in P1
+        // will get `honest`
+        for err in &errs[..bad] {
+            assert_eq!(err, &DKGError::NotEnoughValidShares(honest, t).into());
+        }
+
+        // the honest participants should have received `honest - 1` shares
+        // (which were not enough)
+        for err in &errs[bad..] {
+            assert_eq!(err, &DKGError::NotEnoughValidShares(honest - 1, t).into());
+        }
+    }
 
     #[test]
     fn dkg_phase3() {
@@ -351,5 +390,4 @@ mod tests {
         let first = arr.next().unwrap();
         arr.all(|item| item == first)
     }
-
 }
