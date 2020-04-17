@@ -8,7 +8,7 @@ ARCHS_ANDROID = aarch64-linux-android armv7-linux-androideabi arm-linux-androide
 NDK_STANDALONE = ./NDK
 ANDROID_DEST = ./react-native/android/app/src/main/jniLibs
 IOS_DEST = ./react-native/ios
-CARGO_PARAMS = --no-default-features --features bls12_377
+CARGO_PARAMS = --no-default-features
 
 TARGET_DIR = ../../../target
 
