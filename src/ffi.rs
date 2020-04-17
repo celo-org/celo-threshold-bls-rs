@@ -600,8 +600,6 @@ mod tests {
         let de = unsafe { de.assume_init() };
 
         assert_eq!(private_key, unsafe { &*de });
-        destroy_privkey(de as *mut PrivateKey);
-        free_vector(privkey_buf as *mut u8, PrivateKey::marshal_len());
     }
 
     #[test]
@@ -635,7 +633,5 @@ mod tests {
         let de = unsafe { de.assume_init() };
 
         assert_eq!(public_key, unsafe { &*de });
-        destroy_pubkey(de as *mut PublicKey);
-        free_vector(pubkey_buf as *mut u8, PublicKey::marshal_len());
     }
 }
