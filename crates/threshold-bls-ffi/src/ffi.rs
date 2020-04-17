@@ -354,7 +354,7 @@ pub extern "C" fn threshold_keygen(n: usize, t: usize, seed: &[u8], keys: *mut K
         n,
     };
 
-    unsafe { *keys = keys_local };
+    unsafe { std::ptr::write(keys, keys_local) };
 }
 
 /// Generates a single private key from the provided seed.
