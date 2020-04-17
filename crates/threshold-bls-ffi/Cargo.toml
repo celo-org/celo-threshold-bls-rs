@@ -1,0 +1,20 @@
+[package]
+name = "threshold-bls-ffi"
+version = "0.1.0"
+authors = ["Georgios Konstantopoulos <me@gakonst.com>"]
+edition = "2018"
+
+[lib]
+crate-type = ["lib", "cdylib", "staticlib"]
+
+[dependencies]
+threshold-bls = { path = "../threshold-bls", features = ["bls12_377"] }
+bls-crypto = { git = "https://github.com/celo-org/bls-zexe" }
+
+rand_core = { version = "0.5.1", default-features = false }
+rand_chacha = { version = "0.2.2", default-features = false }
+
+wasm-bindgen = { version = "0.2.60", optional = true }
+
+[features]
+wasm = ["wasm-bindgen"]

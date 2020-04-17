@@ -5,8 +5,9 @@ use super::{
         DKGWaitingResponse, DKGWaitingShare, Group, DKG,
     },
 };
-use crate::group::Curve;
+
 use thiserror::Error;
+use threshold_bls::group::Curve;
 
 #[derive(Debug, Error, PartialEq)]
 pub enum NodeError {
@@ -129,14 +130,14 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
-
     use crate::{
+        primitives::{Group, Node},
+        test_helpers::InMemoryBoard,
+    };
+
+    use threshold_bls::{
         curve::bls12381::{self, PairingCurve as BLS12_381},
         curve::zexe::{self as bls12_377, PairingCurve as BLS12_377},
-        dkg::{
-            primitives::{Group, Node},
-            test_helpers::InMemoryBoard,
-        },
         group::{Element, Encodable, Point},
         sig::{
             tblind::{G1Scheme, G2Scheme},

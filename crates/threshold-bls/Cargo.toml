@@ -1,0 +1,36 @@
+[package]
+name = "threshold-bls"
+version = "0.1.0"
+authors = ["nikkolasg"]
+edition = "2018"
+
+[lib]
+crate-type = ["lib"]
+
+[dependencies]
+rand_core = { version = "0.5.1", default-features = false }
+rand = "0.7"
+serde = {version = "1.0.106", features = ["derive"] }
+
+# for ECIES
+chacha20poly1305 = "0.3"
+hkdf = "0.8"
+sha2 = "0.8"
+
+# bls12_381
+paired = { version = "0.18.0", features = ["serde"], optional = true }
+ff = { version = "0.2", package = "fff", optional = true }
+groupy = {version = "0.3.0", optional = true }
+
+
+# bls12_377
+algebra = { git = "https://github.com/scipr-lab/zexe", features = ["bls12_377", "edwards_sw6"], optional = true }
+bls-crypto = { git = "https://github.com/celo-org/bls-zexe", optional = true }
+
+[features]
+default = ["bls12_381", "bls12_377"]
+bls12_377 = ["algebra", "bls-crypto"]
+bls12_381 = ["paired", "groupy", "ff"]
+
+[dev-dependencies]
+static_assertions = "1.1.0"

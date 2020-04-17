@@ -1,13 +1,15 @@
-use crate::ecies::{self, EciesCipher};
-use crate::group::{Curve, Element, Encodable};
-use crate::poly::{Idx, Poly, PrivatePoly, PublicPoly};
-use crate::{DistPublic, Share};
 use bitvec::{prelude::*, vec::BitVec};
 use rand_core::RngCore;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::error::Error;
 use std::fmt;
+use threshold_bls::{
+    ecies::{self, EciesCipher},
+    group::{Curve, Element, Encodable},
+    poly::{Idx, Poly, PrivatePoly, PublicPoly},
+    DistPublic, Share,
+};
 
 /// Node is a participant in the DKG protocol. In a DKG protocol, each
 /// participant must be identified both by an index and a public key. At the end
