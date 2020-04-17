@@ -425,30 +425,15 @@ dependencies = [
 ]
 
 [[package]]
-name = "dkg-cli"
-version = "0.1.0"
-
-[[package]]
 name = "dkg-core"
 version = "0.1.0"
 dependencies = [
- "algebra",
  "bitvec",
- "bls-crypto",
- "chacha20poly1305",
- "fff",
- "groupy",
- "hkdf",
- "paired",
  "rand",
- "rand_chacha",
  "rand_core",
  "serde",
- "serde_bytes",
- "sha2",
- "static_assertions",
  "thiserror",
- "wasm-bindgen",
+ "threshold-bls",
 ]
 
 [[package]]
@@ -1000,15 +985,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "serde_bytes"
-version = "0.11.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "325a073952621257820e7a3469f55ba4726d8b28657e7e36653d1c36dc2c84ae"
-dependencies = [
- "serde",
-]
-
-[[package]]
 name = "serde_derive"
 version = "1.0.106"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1164,7 +1140,6 @@ name = "threshold-bls"
 version = "0.1.0"
 dependencies = [
  "algebra",
- "bitvec",
  "bls-crypto",
  "chacha20poly1305",
  "fff",

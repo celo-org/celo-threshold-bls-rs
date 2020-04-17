@@ -1,0 +1,7 @@
+[package]
+name = "dkg-cli"
+version = "0.1.0"
+authors = ["Georgios Konstantopoulos <me@gakonst.com>"]
+edition = "2018"
+
+[dependencies]
