@@ -159,29 +159,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "blind-threshold-bls"
-version = "0.1.0"
-dependencies = [
- "algebra",
- "bitvec",
- "bls-crypto",
- "chacha20poly1305",
- "fff",
- "groupy",
- "hkdf",
- "paired",
- "rand",
- "rand_chacha",
- "rand_core",
- "serde",
- "serde_bytes",
- "sha2",
- "static_assertions",
- "thiserror",
- "wasm-bindgen",
-]
-
-[[package]]
 name = "block-buffer"
 version = "0.7.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -448,6 +425,27 @@ dependencies = [
 ]
 
 [[package]]
+name = "dkg-cli"
+version = "0.1.0"
+dependencies = [
+ "dkg-core",
+ "gumdrop",
+ "threshold-bls",
+]
+
+[[package]]
+name = "dkg-core"
+version = "0.1.0"
+dependencies = [
+ "bitvec",
+ "rand",
+ "rand_core",
+ "serde",
+ "thiserror",
+ "threshold-bls",
+]
+
+[[package]]
 name = "either"
 version = "1.5.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -566,6 +564,26 @@ dependencies = [
  "rand",
  "rand_xorshift",
  "thiserror",
+]
+
+[[package]]
+name = "gumdrop"
+version = "0.7.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ee50908bc1beeac1f2902e0b4e0cd0d844e716f5ebdc6f0cfc1163fe5e10bcde"
+dependencies = [
+ "gumdrop_derive",
+]
+
+[[package]]
+name = "gumdrop_derive"
+version = "0.7.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "90454ce4de40b7ca6a8968b5ef367bdab48413962588d0d2b1638d60090c35d7"
+dependencies = [
+ "proc-macro2 1.0.10",
+ "quote 1.0.3",
+ "syn 1.0.17",
 ]
 
 [[package]]
@@ -996,15 +1014,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "serde_bytes"
-version = "0.11.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "325a073952621257820e7a3469f55ba4726d8b28657e7e36653d1c36dc2c84ae"
-dependencies = [
- "serde",
-]
-
-[[package]]
 name = "serde_derive"
 version = "1.0.106"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1153,6 +1162,35 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d40c6d1b69745a6ec6fb1ca717914848da4b44ae29d9b3080cbee91d72a69b14"
 dependencies = [
  "lazy_static",
+]
+
+[[package]]
+name = "threshold-bls"
+version = "0.1.0"
+dependencies = [
+ "algebra",
+ "bls-crypto",
+ "chacha20poly1305",
+ "fff",
+ "groupy",
+ "hkdf",
+ "paired",
+ "rand",
+ "rand_core",
+ "serde",
+ "sha2",
+ "static_assertions",
+]
+
+[[package]]
+name = "threshold-bls-ffi"
+version = "0.1.0"
+dependencies = [
+ "bls-crypto",
+ "rand_chacha",
+ "rand_core",
+ "threshold-bls",
+ "wasm-bindgen",
 ]
 
 [[package]]

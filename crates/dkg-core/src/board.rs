@@ -3,7 +3,7 @@
 /// A board is where DKG participants publish their data for the corresponding DKG
 /// phase.
 use super::primitives::{BundledJustification, BundledResponses, BundledShares};
-use crate::group::Curve;
+use threshold_bls::group::Curve;
 
 /// Trait which must be implemented for writing to the board. This trait assumes
 /// an authenticated channel.
