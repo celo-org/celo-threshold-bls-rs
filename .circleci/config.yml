@@ -45,7 +45,7 @@ jobs:
         command: curl https://rustwasm.github.io/wasm-pack/installer/init.sh -sSf | sh
     - run:
         name: Build wasm
-        command: wasm-pack build
+        command: cd crates/threshold-bls-ffi && wasm-pack build
 
   cross-android:
     docker:
