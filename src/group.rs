@@ -63,7 +63,7 @@ pub trait PairingCurve {
     fn pair(a: &Self::G1, b: &Self::G2) -> Self::GT;
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct CurveFrom<S: Scalar, P: Point<S>> {
     m: PhantomData<S>,
     mm: PhantomData<P>,

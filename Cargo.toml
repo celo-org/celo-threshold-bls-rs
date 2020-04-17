@@ -31,17 +31,13 @@ groupy = {version = "0.3.0", optional = true }
 algebra = { git = "https://github.com/scipr-lab/zexe", features = ["bls12_377", "edwards_sw6"], optional = true }
 bls-crypto = { git = "https://github.com/celo-org/bls-zexe", optional = true }
 serde_bytes = "0.11.3"
+thiserror = "1.0.15"
 
 [features]
 default = ["bls12_381", "bls12_377"]
 bls12_377 = ["algebra", "bls-crypto"]
 bls12_381 = ["paired", "groupy", "ff"]
 wasm = ["wasm-bindgen", "bls12_377"]
-
-[[example]]
-name = "tblind"
-path = "examples/tblind/main.rs"
-required-features = ["bls12_377"]
 
 [dev-dependencies]
 static_assertions = "1.1.0"
