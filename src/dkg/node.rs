@@ -203,26 +203,7 @@ mod tests {
     {
         let rng = &mut rand::thread_rng();
 
-        let keypairs = (0..n).map(|_| S::keypair(rng)).collect::<Vec<_>>();
-
-        let nodes = keypairs
-            .iter()
-            .enumerate()
-            .map(|(i, (_, public))| Node::<C>::new(i as Index, public.clone()))
-            .collect::<Vec<_>>();
-
-        // This is setup phase during which publickeys and indexes must be exchanged
-        // across participants
-        let group = Group::new(nodes, t).unwrap();
-
-        // Create the Phase 0 for each participant
-        let phase0s = keypairs
-            .iter()
-            .map(|(private, _)| Phase0::new(private.clone(), group.clone()).unwrap())
-            .collect::<Vec<_>>();
-
-        // Create the board
-        let mut board = InMemoryBoard::<C>::new();
+        let (mut board, phase0s) = setup::<C, S, _>(n, t, rng);
 
         // Phase 1: Publishes shares, all nodes are honest
         let phase1s = phase0s
@@ -258,6 +239,43 @@ mod tests {
         assert!(is_all_same(outputs.iter().map(|output| &output.public)));
 
         outputs
+    }
+
+    fn setup<C, S, R: rand::RngCore>(
+        n: usize,
+        t: usize,
+        rng: &mut R,
+    ) -> (InMemoryBoard<C>, Vec<Phase0<C>>)
+    where
+        C: Curve,
+        // We need to bind the Curve's Point and Scalars to the Scheme
+        S: Scheme<Public = <C as Curve>::Point, Private = <C as Curve>::Scalar>,
+        <C as Curve>::Point: Point<S::Private>,
+        <S as Scheme>::Signature: Point<<C as Curve>::Scalar>,
+    {
+        // generate a keypair per participant
+        let keypairs = (0..n).map(|_| S::keypair(rng)).collect::<Vec<_>>();
+
+        let nodes = keypairs
+            .iter()
+            .enumerate()
+            .map(|(i, (_, public))| Node::<C>::new(i as Index, public.clone()))
+            .collect::<Vec<_>>();
+
+        // This is setup phase during which publickeys and indexes must be exchanged
+        // across participants
+        let group = Group::new(nodes, t).unwrap();
+
+        // Create the Phase 0 for each participant
+        let phase0s = keypairs
+            .iter()
+            .map(|(private, _)| Phase0::new(private.clone(), group.clone()).unwrap())
+            .collect::<Vec<_>>();
+
+        // Create the board
+        let board = InMemoryBoard::<C>::new();
+
+        (board, phase0s)
     }
 
     fn is_all_same<T: PartialEq>(mut arr: impl Iterator<Item = T>) -> bool {
