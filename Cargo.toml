@@ -4,6 +4,7 @@ members = [
     "crates/dkg-core", 
     "crates/dkg-cli",
     "crates/threshold-bls",
+    "crates/threshold-bls-ffi",
 ]
 
 [profile.release]

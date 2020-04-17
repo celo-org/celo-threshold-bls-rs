@@ -16,8 +16,8 @@ pub type DistPublic<C> = poly::PublicPoly<C>;
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(bound = "S: Serialize + serde::de::DeserializeOwned")]
 pub struct Share<S: group::Scalar> {
-    index: Index,
-    private: S,
+    pub index: Index,
+    pub private: S,
 }
 
 impl<S: group::Scalar> Share<S> {

@@ -159,29 +159,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "blind-threshold-bls"
-version = "0.1.0"
-dependencies = [
- "algebra",
- "bitvec",
- "bls-crypto",
- "chacha20poly1305",
- "fff",
- "groupy",
- "hkdf",
- "paired",
- "rand",
- "rand_chacha",
- "rand_core",
- "serde",
- "serde_bytes",
- "sha2",
- "static_assertions",
- "thiserror",
- "wasm-bindgen",
-]
-
-[[package]]
 name = "block-buffer"
 version = "0.7.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -445,6 +422,33 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f3d0c8c8752312f9713efd397ff63acb9f85585afbf179282e720e7704954dd5"
 dependencies = [
  "generic-array",
+]
+
+[[package]]
+name = "dkg-cli"
+version = "0.1.0"
+
+[[package]]
+name = "dkg-core"
+version = "0.1.0"
+dependencies = [
+ "algebra",
+ "bitvec",
+ "bls-crypto",
+ "chacha20poly1305",
+ "fff",
+ "groupy",
+ "hkdf",
+ "paired",
+ "rand",
+ "rand_chacha",
+ "rand_core",
+ "serde",
+ "serde_bytes",
+ "sha2",
+ "static_assertions",
+ "thiserror",
+ "wasm-bindgen",
 ]
 
 [[package]]
@@ -1153,6 +1157,36 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d40c6d1b69745a6ec6fb1ca717914848da4b44ae29d9b3080cbee91d72a69b14"
 dependencies = [
  "lazy_static",
+]
+
+[[package]]
+name = "threshold-bls"
+version = "0.1.0"
+dependencies = [
+ "algebra",
+ "bitvec",
+ "bls-crypto",
+ "chacha20poly1305",
+ "fff",
+ "groupy",
+ "hkdf",
+ "paired",
+ "rand",
+ "rand_core",
+ "serde",
+ "sha2",
+ "static_assertions",
+]
+
+[[package]]
+name = "threshold-bls-ffi"
+version = "0.1.0"
+dependencies = [
+ "bls-crypto",
+ "rand_chacha",
+ "rand_core",
+ "threshold-bls",
+ "wasm-bindgen",
 ]
 
 [[package]]
