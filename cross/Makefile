@@ -13,12 +13,12 @@ CARGO_PARAMS = --no-default-features --features bls12_377
 all: android ios
 
 android-setup:
-	rustup target add {aarch64-linux-android,armv7-linux-androideabi,arm-linux-androideabi,i686-linux-android,x86_64-linux-android}
+	rustup target add aarch64-linux-android armv7-linux-androideabi arm-linux-androideabi i686-linux-android x86_64-linux-android
 
 android-build: $(ARCHS_ANDROID)
 
 ios-setup: 
-	rustup target add {armv7-apple-ios,armv7s-apple-ios,aarch64-apple-ios}
+	rustup target add armv7-apple-ios armv7s-apple-ios aarch64-apple-ios
 
 ios: ios-setup $(LIB)
 
