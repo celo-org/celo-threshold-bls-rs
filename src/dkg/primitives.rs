@@ -121,7 +121,7 @@ where
     pub fn from_list(nodes: Vec<Node<C>>) -> Group<C> {
         let l = nodes.len();
         Self {
-            nodes: nodes,
+            nodes,
             threshold: default_threshold(l),
         }
     }
@@ -416,14 +416,14 @@ where
     /// (e) Report complaint on invalid share w.r.t. public polynomial
     pub fn process_shares(
         self,
-        bundles: &Vec<BundledShares<C>>,
+        bundles: &[BundledShares<C>],
     ) -> DKGResult<(DKGWaitingResponse<C>, Option<BundledResponses>)> {
         self.process_shares_get_complaint(bundles)
     }
 
     fn process_shares_get_complaint(
         self,
-        bundles: &Vec<BundledShares<C>>,
+        bundles: &[BundledShares<C>],
     ) -> DKGResult<(DKGWaitingResponse<C>, Option<BundledResponses>)> {
         // true means we suppose every missing responses is a success at the end of
         // the period. Hence we only need to get & broadcast the complaints.
@@ -452,7 +452,7 @@ where
     // short-circuit and directly finish.
     fn process_shares_get_all(
         self,
-        bundles: &Vec<BundledShares<C>>,
+        bundles: &[BundledShares<C>],
     ) -> DKGResult<(DKGWaitingResponse<C>, BundledResponses)> {
         use Status::{Complaint, Success};
         let n = self.info.n();
@@ -553,7 +553,7 @@ where
 
     // extract_poly maps the bundles into a map: ID -> public poly for ease of
     // use later on
-    fn extract_poly(bundles: &Vec<BundledShares<C>>) -> HashMap<ID, PublicPoly<C>> {
+    fn extract_poly(bundles: &[BundledShares<C>]) -> HashMap<ID, PublicPoly<C>> {
         // TODO avoid cloning by using lifetime or better gestin in
         // process_shares
         bundles.iter().fold(HashMap::new(), |mut acc, b| {
@@ -631,7 +631,7 @@ where
     /// - no more than
     pub fn process_responses(
         self,
-        responses: &Vec<BundledResponses>,
+        responses: &[BundledResponses],
     ) -> Result<DKGOutput<C>, (DKGWaitingJustification<C>, Option<BundledJustification<C>>)> {
         let n = self.info.n();
         let statuses = self.set_statuses(responses);
@@ -690,7 +690,7 @@ where
     }
 
     /// set_statuses set the status of the given responses on the status matrix.
-    fn set_statuses(&self, responses: &Vec<BundledResponses>) -> StatusMatrix {
+    fn set_statuses(&self, responses: &[BundledResponses]) -> StatusMatrix {
         let mut statuses = self.statuses.clone();
         let my_idx = self.info.index;
         let n = self.info.n();
@@ -737,7 +737,7 @@ where
     /// Return an output if `len(qual) > thr`
     pub fn process_justifications(
         self,
-        justifs: &Vec<BundledJustification<C>>,
+        justifs: &[BundledJustification<C>],
     ) -> Result<DKGOutput<C>, DKGError> {
         use Status::Success;
         // avoid a mutable ref needed, ok for small miner size..
