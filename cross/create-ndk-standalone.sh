@@ -26,4 +26,3 @@ echo 'Updating .cargo/config.toml...'
 cd ..
 mkdir -p .cargo
 sed 's|$PWD|'"${PWD}"'|g' cargo-config.toml.template > .cargo/config
-mv .cargo ..
