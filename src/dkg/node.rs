@@ -146,7 +146,6 @@ mod tests {
     #[test]
     fn dkg_sign_e2e() {
         let (t, n) = (2, 3);
-        // G2 on both curves
         dkg_sign_e2e_curve::<bls12381::Curve, G1Scheme<BLS12_381>>(n, t);
         dkg_sign_e2e_curve::<bls12381::G2Curve, G2Scheme<BLS12_381>>(n, t);
 
@@ -157,13 +156,11 @@ mod tests {
     fn dkg_sign_e2e_curve<C, S>(n: usize, t: usize)
     where
         C: Curve,
-        // The scheme uses Public keys on G2
+        // We need to bind the Curve's Point and Scalars to the Scheme
         S: Scheme<Public = <C as Curve>::Point, Private = <C as Curve>::Scalar>
             + Blinder
             + ThresholdScheme,
-        // The curve's points are over the same scalar as the scheme's
         <C as Curve>::Point: Point<S::Private>,
-        // The signature scheme is a Point over the G2 Curve's scalar
         <S as Scheme>::Signature: Point<<C as Curve>::Scalar>,
     {
         let msg = rand::random::<[u8; 32]>().to_vec();
@@ -199,11 +196,9 @@ mod tests {
     fn run_dkg<C, S>(n: usize, t: usize) -> Vec<DKGOutput<C>>
     where
         C: Curve,
-        // The scheme uses Public keys on G2
+        // We need to bind the Curve's Point and Scalars to the Scheme
         S: Scheme<Public = <C as Curve>::Point, Private = <C as Curve>::Scalar>,
-        // The curve's points are over the same scalar as the scheme's
         <C as Curve>::Point: Point<S::Private>,
-        // The signature scheme is a Point over the G2 Curve's scalar
         <S as Scheme>::Signature: Point<<C as Curve>::Scalar>,
     {
         let rng = &mut rand::thread_rng();
@@ -235,7 +230,7 @@ mod tests {
             .map(|phase0| phase0.run(&mut board, false).unwrap())
             .collect::<Vec<_>>();
 
-        // get the full vector
+        // Get the shares from the board
         let shares = board.shares.clone();
 
         // Phase2:
@@ -244,6 +239,7 @@ mod tests {
             .map(|phase1| phase1.run(&mut board, &shares).unwrap())
             .collect::<Vec<_>>();
 
+        // Get the responses from the board
         let responses = board.responses.clone();
 
         let results = phase2s
