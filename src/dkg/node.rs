@@ -147,7 +147,7 @@ mod tests {
 
     #[test]
     fn dkg_sign_e2e() {
-        let (t, n) = (2, 3);
+        let (t, n) = (3, 5);
         dkg_sign_e2e_curve::<bls12381::Curve, G1Scheme<BLS12_381>>(n, t);
         dkg_sign_e2e_curve::<bls12381::G2Curve, G2Scheme<BLS12_381>>(n, t);
 
@@ -207,7 +207,7 @@ mod tests {
 
         let (mut board, phase0s) = setup::<C, S, _>(n, t, rng);
 
-        // Phase 1: Publishes shares, all nodes are honest
+        // Phase 1: Publishes shares
         let phase1s = phase0s
             .into_iter()
             .map(|phase0| phase0.run(&mut board, false).unwrap())
@@ -216,7 +216,7 @@ mod tests {
         // Get the shares from the board
         let shares = board.shares.clone();
 
-        // Phase2:
+        // Phase2
         let phase2s = phase1s
             .into_iter()
             .map(|phase1| phase1.run(&mut board, &shares).unwrap())
@@ -235,12 +235,79 @@ mod tests {
             .into_iter()
             .map(|res| match res {
                 Phase2Result::Output(out) => out,
-                _ => unreachable!("should not get here"),
+                Phase2Result::GoToPhase3(_) => unreachable!("should not get here"),
             })
             .collect::<Vec<_>>();
         assert!(is_all_same(outputs.iter().map(|output| &output.public)));
 
         outputs
+    }
+
+
+    #[test]
+    fn dkg_phase3() {
+        let (t, n) = (5, 8);
+        let bad = 2; // >0 people not broadcasting in the start force us to go to phase 3
+
+        let rng = &mut rand::thread_rng();
+        let (mut board, phase0s) = setup::<bls12_377::G1Curve, G1Scheme<BLS12_377>, _>(n, t, rng);
+
+        let phase1s = phase0s
+            .into_iter()
+            .enumerate()
+            .map(|(i, phase0)| {
+                // some participants decide not to broadcast their share.
+                // this forces us to go to phase 3
+                let be_bad = i < bad;
+                phase0.run(&mut board, be_bad).unwrap()
+            })
+            .collect::<Vec<_>>();
+
+        // Get the shares from the board
+        let shares = board.shares.clone();
+
+        // Phase2 runs but not enough were published
+        let phase2s = phase1s
+            .into_iter()
+            .map(|phase1| phase1.run(&mut board, &shares).unwrap())
+            .collect::<Vec<_>>();
+
+        // Get the responses from the board
+        let responses = board.responses.clone();
+
+        let results = phase2s
+            .into_iter()
+            .map(|phase2| phase2.run(&mut board, &responses).unwrap())
+            .collect::<Vec<_>>();
+
+        let phase3s = results
+            .into_iter()
+            .map(|res| match res {
+                Phase2Result::GoToPhase3(p3) => p3,
+                _ => unreachable!("should not get here"),
+            })
+            .collect::<Vec<_>>();
+
+        let justifications = board.justifs.clone();
+
+        let outputs = phase3s
+            .into_iter()
+            .map(|phase3| phase3.process_justifications(&justifications).unwrap())
+            .collect::<Vec<_>>();
+
+        // everyone knows who qualified correctly and who did not
+        assert!(is_all_same(outputs.iter().map(|output| &output.qual)));
+
+        // excluding the first people did not publish, the rest are the same
+        assert!(is_all_same(
+            outputs[bad..].iter().map(|output| &output.public)
+        ));
+
+        // the first people must have a different public key from the others
+        let pubkey = &outputs[bad].public;
+        for output in &outputs[..bad] {
+            assert_ne!(&output.public, pubkey);
+        }
     }
 
     fn setup<C, S, R: rand::RngCore>(
@@ -284,4 +351,5 @@ mod tests {
         let first = arr.next().unwrap();
         arr.all(|item| item == first)
     }
+
 }

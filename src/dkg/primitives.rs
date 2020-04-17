@@ -13,7 +13,7 @@ use std::fmt;
 /// participant must be identified both by an index and a public key. At the end
 /// of the protocol, if sucessful, the index is used to verify the validity of
 /// the share this node holds.
-#[derive(Clone, Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize, PartialEq)]
 pub struct Node<C: Curve>(ID, C::Point);
 
 impl<C> Node<C>
@@ -30,7 +30,7 @@ where
 /// new group that contains members that succesfully ran the protocol. When
 /// creating a new group using the `from()` or `from_list()`method, the module
 /// sets the threshold to the output of `default_threshold()`.
-#[derive(Clone, Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize, PartialEq)]
 pub struct Group<C: Curve> {
     #[serde(bound = "C::Point: Serialize + serde::de::DeserializeOwned")]
     pub nodes: Vec<Node<C>>,
