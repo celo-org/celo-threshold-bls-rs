@@ -8,7 +8,9 @@ ARCHS_ANDROID = aarch64-linux-android armv7-linux-androideabi arm-linux-androide
 NDK_STANDALONE = ./NDK
 ANDROID_DEST = ./react-native/android/app/src/main/jniLibs
 IOS_DEST = ./react-native/ios
-CARGO_PARAMS = --no-default-features --features bls12_377
+CARGO_PARAMS = --no-default-features
+
+TARGET_DIR = ../../../target
 
 all: android ios
 
@@ -25,7 +27,7 @@ ios: ios-setup $(LIB)
 clean:
 	rm -rf $(IOS_DEST)
 	rm -rf $(ANDROID_DEST)
-	rm -rf ../target
+	rm -rf $(TARGET_DIR)
 
 android: android-setup android-build
 	mkdir -p $(ANDROID_DEST)
@@ -35,11 +37,11 @@ android: android-setup android-build
 	mkdir -p $(ANDROID_DEST)/armeabi
 	mkdir -p $(ANDROID_DEST)/armeabi-v7a
 
-	cp ../target/i686-linux-android/release/$(SO) ${ANDROID_DEST}/x86/$(SO)
-	cp ../target/x86_64-linux-android/release/$(SO) ${ANDROID_DEST}/x86_64/$(SO)
-	cp ../target/aarch64-linux-android/release/$(SO) ${ANDROID_DEST}/arm64-v8a/$(SO)
-	cp ../target/arm-linux-androideabi/release/$(SO) ${ANDROID_DEST}/armeabi/$(SO)
-	cp ../target/armv7-linux-androideabi/release/$(SO) ${ANDROID_DEST}/armeabi-v7a/$(SO)
+	cp $(TARGET_DIR)/i686-linux-android/release/$(SO) ${ANDROID_DEST}/x86/$(SO)
+	cp $(TARGET_DIR)/x86_64-linux-android/release/$(SO) ${ANDROID_DEST}/x86_64/$(SO)
+	cp $(TARGET_DIR)/aarch64-linux-android/release/$(SO) ${ANDROID_DEST}/arm64-v8a/$(SO)
+	cp $(TARGET_DIR)/arm-linux-androideabi/release/$(SO) ${ANDROID_DEST}/armeabi/$(SO)
+	cp $(TARGET_DIR)/armv7-linux-androideabi/release/$(SO) ${ANDROID_DEST}/armeabi-v7a/$(SO)
 
 aarch64-linux-android:
 	PATH=$(PATH):$(NDK_STANDALONE)/arm64/bin \
@@ -77,4 +79,4 @@ $(ARCHS_IOS): %:
 
 $(LIB): $(ARCHS_IOS)
 	mkdir -p $(IOS_DEST)
-	lipo -create -output $(IOS_DEST)/$@ $(foreach arch,$(ARCHS_IOS),$(wildcard ../target/$(arch)/release/$(LIB)))
+	lipo -create -output $(IOS_DEST)/$@ $(foreach arch,$(ARCHS_IOS),$(wildcard $(TARGET_DIR)/$(arch)/release/$(LIB)))
