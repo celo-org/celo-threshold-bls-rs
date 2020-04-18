@@ -15,6 +15,9 @@ use crate::{
 };
 
 use bls_crypto::ffi::Buffer;
+use std::os::raw::c_char;
+use std::ffi::CStr;
+use std::convert::TryInto;
 
 // TODO(gakonst): Make these bindings more generic. Maybe a macro is needed here since
 type BlindThresholdSigs = G1Scheme<Bls12_377>;
@@ -57,25 +60,36 @@ pub struct BlindedMessage {
 /// Returns true if successful, otherwise false.
 #[no_mangle]
 pub extern "C" fn blind(
-    message: *const Buffer,
-    seed: *const Buffer,
-    blinded_message: *mut BlindedMessage,
+    message: *const c_char,
+    seed: *const c_char,
+    blinded_message: *mut c_char,
+    blinded_message_size: *mut u32,
+    // blinding_factor: *mut c_char,
+    // blinding_factor_size: *mut u32,
 ) {
-    // convert the seed to randomness
-    let seed = <&[u8]>::from(unsafe { &*seed });
-    let mut rng = get_rng(seed);
+    // Retrieve input message
+    let message_c_str = unsafe { CStr::from_ptr(message) }; 
+    let message_bytes = message_c_str.to_bytes();
 
-    // blind the message with this randomness
-    let message = <&[u8]>::from(unsafe { &*message });
-    let (blinding_factor, blinded_message_bytes) = BlindThresholdSigs::blind(&message, &mut rng);
+    // Convert the seed to randomness
+    let seed_c_str = unsafe { CStr::from_ptr(seed) }; 
+    let seed_bytes = seed_c_str.to_bytes();
+    let mut rng = get_rng(&seed_bytes);
 
-    // return the message and the blinding_factor used for blinding
-    let ret = BlindedMessage {
-        message: Buffer::from(&blinded_message_bytes[..]),
-        blinding_factor,
-    };
+    // Blind the message with this randomness
+    let (blinding_factor, blinded_message_bytes) = BlindThresholdSigs::blind(&message_bytes, &mut rng);
+    let blinded_size = blinded_message_bytes.len();
 
-    unsafe { *blinded_message = ret };
+
+    // TODO handle case where the output buffer is too small
+    for (i, byte) in blinded_message_bytes.iter().enumerate() {
+        unsafe { *blinded_message.offset(i.try_into().unwrap()) = *byte as _ };
+    }
+
+    unsafe { *blinded_message_size = blinded_size.try_into().unwrap() };
+
+    // TODO figure out how to return blinding factor
+
     std::mem::forget(blinded_message_bytes);
 }
 

@@ -78,7 +78,9 @@ typedef Signature Signature;
  *
  * Returns true if successful, otherwise false.
  */
-void blind(const Buffer *message, const Buffer *seed, BlindedMessage *blinded_message);
+void blind(char *message, char* seed, 
+            char *blinded_message, int* blinded_message_size );
+            // char *blinding_factor, int blinding_factor_size );
 
 /**
  * Combines a flattened vector of partial signatures to a single threshold signature
