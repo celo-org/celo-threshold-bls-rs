@@ -41,22 +41,6 @@ typedef struct {
   int len;
 } Buffer;
 
-/**
- * A blinded message along with the blinding_factor used to produce it
- */
-typedef struct {
-  /**
-   * The resulting blinded message
-   */
-  Buffer message;
-  /**
-   * The blinding_factor which was used to generate the blinded message. This will be used
-   * to unblind the signature received on the blinded message to a valid signature
-   * on the unblinded message
-   */
-  Token_PrivateKey blinding_factor;
-} BlindedMessage;
-
 typedef Private PrivateKey;
 
 typedef Public PublicKey;
@@ -78,7 +62,10 @@ typedef Signature Signature;
  *
  * Returns true if successful, otherwise false.
  */
-void blind(const Buffer *message, const Buffer *seed, BlindedMessage *blinded_message);
+void blind(const Buffer *message,
+           const Buffer *seed,
+           Buffer *blinded_message_out,
+           Token_PrivateKey **blinding_factor_out);
 
 /**
  * Combines a flattened vector of partial signatures to a single threshold signature
@@ -99,6 +86,8 @@ void destroy_privkey(PrivateKey *private_key);
 void destroy_pubkey(PublicKey *public_key);
 
 void destroy_sig(Signature *signature);
+
+void destroy_token(Token_PrivateKey *token);
 
 void free_vector(uint8_t *bytes, uintptr_t len);
 
