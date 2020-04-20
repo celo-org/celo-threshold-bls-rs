@@ -11,6 +11,7 @@ jobs:
   cross-ios:
     macos:
       xcode: 11.4.0
+    working_directory: ~/work
     steps:
     - checkout
     - run:
@@ -25,6 +26,8 @@ jobs:
     - run:
         name: Build iOS
         command: cd cross && make ios
+    - store_artifacts:
+        path: ~/work/cross/react-native/ios
 
   test:
     docker:
@@ -47,6 +50,7 @@ jobs:
   cross-android:
     docker:
       - image: circleci/rust:latest
+    working_directory: ~/work
     steps:
     - checkout
     - run:
@@ -67,6 +71,8 @@ jobs:
     - run:
         name: Build Android
         command: cd cross && make android
+    - store_artifacts:
+        path: ~/work/cross/react-native/android
 
 workflows:
   version: 2
@@ -77,4 +83,3 @@ workflows:
       - wasm
       - cross-android
       - cross-ios
-
