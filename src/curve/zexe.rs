@@ -1,11 +1,10 @@
 use crate::group::{Curve, CurveFrom, Element, Encodable, PairingCurve as PC, Point, Scalar as Sc};
 use algebra::{
     bls12_377 as zexe,
-    bytes::{FromBytes, ToBytes},
     curves::{AffineCurve, PairingEngine, ProjectiveCurve},
     fields::Field,
     prelude::{One, UniformRand, Zero},
-    CanonicalDeserialize, CanonicalSerialize,
+    CanonicalDeserialize, CanonicalSerialize, ConstantSerializedSize,
 };
 use bls_crypto::{
     hash_to_curve::{try_and_increment::TryAndIncrement, HashToCurve},
@@ -76,24 +75,20 @@ impl Element<Scalar> for Scalar {
 
 impl Encodable for Scalar {
     fn marshal_len() -> usize {
-        32
+        zexe::Fr::SERIALIZED_SIZE
     }
+
     fn marshal(&self) -> Vec<u8> {
-        let mut out = Vec::with_capacity(32);
+        let mut out = Vec::with_capacity(Self::marshal_len());
         self.0
-            .write(&mut out)
+            .serialize(&mut out)
             .expect("writing to buff should not fail");
         out
     }
 
     fn unmarshal(&mut self, data: &[u8]) -> Result<(), Box<dyn Error>> {
-        match zexe::Fr::read(data) {
-            Ok(fr) => {
-                *self = Self(fr);
-                Ok(())
-            }
-            Err(e) => Err(Box::new(e)),
-        }
+        self.0 = zexe::Fr::deserialize(&mut data.as_ref()).map_err(Box::new)?;
+        Ok(())
     }
 }
 
@@ -144,24 +139,23 @@ impl Element<Scalar> for G1 {
 
 impl Encodable for G1 {
     fn marshal_len() -> usize {
-        97
+        ZG1A::SERIALIZED_SIZE
     }
+
     fn marshal(&self) -> Vec<u8> {
-        let mut out = Vec::with_capacity(144);
+        let mut out = Vec::with_capacity(Self::marshal_len());
         self.0
             .into_affine()
-            .write(&mut out)
+            .serialize(&mut out)
             .expect("writing to vector should not fail");
         out
     }
+
     fn unmarshal(&mut self, data: &[u8]) -> Result<(), Box<dyn Error>> {
-        match ZG1A::read(data) {
-            Ok(g) => {
-                self.0 = g.into_projective();
-                Ok(())
-            }
-            Err(e) => Err(Box::new(e)),
-        }
+        self.0 = ZG1A::deserialize(&mut data.as_ref())
+            .map_err(Box::new)?
+            .into_projective();
+        Ok(())
     }
 }
 
@@ -197,9 +191,11 @@ impl Element<Scalar> for G2 {
     fn pick<R: RngCore>(&mut self, mut rng: &mut R) {
         self.0 = ZG2::rand(&mut rng)
     }
+
     fn add(&mut self, s2: &Self) {
         self.0.add_assign(s2.0);
     }
+
     fn mul(&mut self, mul: &Scalar) {
         self.0.mul_assign(mul.0)
     }
@@ -207,24 +203,23 @@ impl Element<Scalar> for G2 {
 
 impl Encodable for G2 {
     fn marshal_len() -> usize {
-        return 193;
+        ZG2A::SERIALIZED_SIZE
     }
+
     fn marshal(&self) -> Vec<u8> {
-        let mut out = Vec::with_capacity(144);
+        let mut out = Vec::with_capacity(Self::marshal_len());
         self.0
             .into_affine()
-            .write(&mut out)
+            .serialize(&mut out)
             .expect("writing to vector should not fail");
         out
     }
+
     fn unmarshal(&mut self, data: &[u8]) -> Result<(), Box<dyn Error>> {
-        match ZG2A::read(data) {
-            Ok(g) => {
-                self.0 = g.into_projective();
-                Ok(())
-            }
-            Err(e) => Err(Box::new(e)),
-        }
+        self.0 = ZG2A::deserialize(&mut data.as_ref())
+            .map_err(Box::new)?
+            .into_projective();
+        Ok(())
     }
 }
 
@@ -308,7 +303,7 @@ where
     S: Serializer,
     C: CanonicalSerialize,
 {
-    let mut bytes = vec![0; c.serialized_size()];
+    let mut bytes = Vec::with_capacity(c.serialized_size());
     c.serialize(&mut &mut bytes[..])
         .map_err(|err| SerializationError::custom(err))?;
     s.serialize_bytes(&bytes)
@@ -333,7 +328,7 @@ where
     C::Affine: CanonicalSerialize,
 {
     let affine = c.into_affine();
-    let mut bytes = vec![0; affine.serialized_size()];
+    let mut bytes = Vec::with_capacity(affine.serialized_size());
     affine
         .serialize(&mut &mut bytes[..])
         .map_err(|err| SerializationError::custom(err))?;
