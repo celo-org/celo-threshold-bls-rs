@@ -340,7 +340,7 @@ pub extern "C" fn destroy_sig(signature: *mut Signature) {
 
 /// Generates a t-of-n polynomial and private key shares
 ///
-/// The return value should be destroy with `destroy_keys`.
+/// The return value should be destroyed with `destroy_keys`.
 ///
 /// # Safety
 ///
@@ -377,7 +377,7 @@ pub extern "C" fn threshold_keygen(n: usize, t: usize, seed: &[u8], keys: *mut *
 
 /// Generates a single private key from the provided seed.
 ///
-/// The return value should be destroy with `destroy_keypair`.
+/// The return value should be destroyed with `destroy_keypair`.
 ///
 /// # Safety
 ///
