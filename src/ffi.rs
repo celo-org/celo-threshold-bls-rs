@@ -26,18 +26,6 @@ type Signature = <BlindThresholdSigs as Scheme>::Signature;
 /// Signatures for BLS12-377 are 197 bytes long
 const SIG_SIZE: usize = 197;
 
-#[derive(Clone, Debug)]
-#[repr(C)]
-/// A blinded message along with the blinding_factor used to produce it
-pub struct BlindedMessage {
-    /// The resulting blinded message
-    message: Buffer,
-    /// The blinding_factor which was used to generate the blinded message. This will be used
-    /// to unblind the signature received on the blinded message to a valid signature
-    /// on the unblinded message
-    blinding_factor: *mut *mut Token<PrivateKey>,
-}
-
 ///////////////////////////////////////////////////////////////////////////
 // User -> Library
 ///////////////////////////////////////////////////////////////////////////
