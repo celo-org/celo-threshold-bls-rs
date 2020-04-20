@@ -8,6 +8,7 @@ use super::{
 
 use thiserror::Error;
 use threshold_bls::group::Curve;
+use serde::{Serialize, Deserialize, de::DeserializeOwned};
 
 #[derive(Debug, Error, PartialEq)]
 pub enum NodeError {
@@ -50,13 +51,15 @@ impl<C: Curve> Phase0<C> {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Phase1<C: Curve> {
+    #[serde(bound = "C::Scalar: Serialize + DeserializeOwned")]
     inner: DKGWaitingShare<C>,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Phase2<C: Curve> {
+    #[serde(bound = "C::Scalar: Serialize + DeserializeOwned")]
     inner: DKGWaitingResponse<C>,
 }
 

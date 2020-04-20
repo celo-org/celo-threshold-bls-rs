@@ -304,10 +304,11 @@ where
     C: CanonicalSerialize,
 {
     let mut bytes = Vec::with_capacity(c.serialized_size());
-    c.serialize(&mut &mut bytes[..])
+    c.serialize(&mut bytes)
         .map_err(|err| SerializationError::custom(err))?;
     s.serialize_bytes(&bytes)
 }
+
 
 fn deserialize_group<'de, D, C>(deserializer: D) -> Result<C, D::Error>
 where
@@ -330,7 +331,7 @@ where
     let affine = c.into_affine();
     let mut bytes = Vec::with_capacity(affine.serialized_size());
     affine
-        .serialize(&mut &mut bytes[..])
+        .serialize(&mut bytes)
         .map_err(|err| SerializationError::custom(err))?;
     s.serialize_bytes(&bytes)
 }

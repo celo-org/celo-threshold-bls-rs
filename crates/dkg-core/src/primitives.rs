@@ -1,6 +1,6 @@
 use bitvec::{prelude::*, vec::BitVec};
 use rand_core::RngCore;
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Serialize, de::DeserializeOwned};
 use std::collections::HashMap;
 use std::error::Error;
 use std::fmt;
@@ -181,15 +181,15 @@ where
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 struct DKGInfo<C: Curve> {
-    #[serde(bound = "C::Scalar: Serialize + serde::de::DeserializeOwned")]
+    #[serde(bound = "C::Scalar: Serialize + DeserializeOwned")]
     private_key: C::Scalar,
     index: ID,
-    #[serde(bound = "C::Point: Serialize + serde::de::DeserializeOwned")]
+    #[serde(bound = "C::Point: Serialize + DeserializeOwned")]
     group: Group<C>,
-    #[serde(bound = "C::Scalar: Serialize + serde::de::DeserializeOwned")]
+    #[serde(bound = "C::Scalar: Serialize + DeserializeOwned")]
     secret: Poly<C::Scalar, C::Scalar>,
     #[serde(
-        bound = "C::Scalar: Serialize + serde::de::DeserializeOwned, C::Point: Serialize + serde::de::DeserializeOwned"
+        bound = "C::Scalar: Serialize + DeserializeOwned, C::Point: Serialize + DeserializeOwned"
     )]
     public: Poly<C::Scalar, C::Point>,
 }
@@ -216,7 +216,7 @@ where
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct DKG<C: Curve> {
     #[serde(
-        bound = "C::Point: Serialize + serde::de::DeserializeOwned, C::Scalar: Serialize + serde::de::DeserializeOwned"
+        bound = "C::Point: Serialize + DeserializeOwned, C::Scalar: Serialize + DeserializeOwned"
     )]
     info: DKGInfo<C>,
 }
@@ -228,7 +228,7 @@ pub struct DKG<C: Curve> {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct EncryptedShare<C: Curve> {
     share_idx: ID,
-    #[serde(bound = "C::Point: Serialize + serde::de::DeserializeOwned")]
+    #[serde(bound = "C::Point: Serialize + DeserializeOwned")]
     secret: EciesCipher<C>,
 }
 
@@ -237,13 +237,13 @@ pub struct EncryptedShare<C: Curve> {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct BundledShares<C: Curve> {
     pub dealer_idx: ID,
-    #[serde(bound = "C::Point: Serialize + serde::de::DeserializeOwned")]
+    #[serde(bound = "C::Point: Serialize + DeserializeOwned")]
     pub shares: Vec<EncryptedShare<C>>,
     /// public is the commitment of the secret polynomial
     /// created by the dealer. In the context of using a blockchain as a
     /// broadcast channel, it can be posted only once.
     #[serde(
-        bound = "C::Point: Serialize + serde::de::DeserializeOwned, C::Scalar: Serialize + serde::de::DeserializeOwned"
+        bound = "C::Point: Serialize + DeserializeOwned, C::Scalar: Serialize + DeserializeOwned"
     )]
     pub public: PublicPoly<C>,
 }
@@ -254,13 +254,13 @@ pub struct BundledShares<C: Curve> {
 /// the private share corresponding to the participant's index.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct DKGOutput<C: Curve> {
-    #[serde(bound = "C::Point: Serialize + serde::de::DeserializeOwned")]
+    #[serde(bound = "C::Point: Serialize + DeserializeOwned")]
     pub qual: Group<C>,
     #[serde(
-        bound = "C::Point: Serialize + serde::de::DeserializeOwned, C::Scalar: Serialize + serde::de::DeserializeOwned"
+        bound = "C::Point: Serialize + DeserializeOwned, C::Scalar: Serialize + DeserializeOwned"
     )]
     pub public: DistPublic<C>,
-    #[serde(bound = "C::Scalar: Serialize + serde::de::DeserializeOwned")]
+    #[serde(bound = "C::Scalar: Serialize + DeserializeOwned")]
     pub share: Share<C::Scalar>,
 }
 
@@ -323,17 +323,17 @@ pub struct BundledResponses {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Justification<C: Curve> {
     share_idx: ID,
-    #[serde(bound = "C::Scalar: Serialize + serde::de::DeserializeOwned")]
+    #[serde(bound = "C::Scalar: Serialize + DeserializeOwned")]
     share: C::Scalar,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct BundledJustification<C: Curve> {
     pub dealer_idx: ID,
-    #[serde(bound = "C::Scalar: Serialize + serde::de::DeserializeOwned")]
+    #[serde(bound = "C::Scalar: Serialize + DeserializeOwned")]
     pub justifications: Vec<Justification<C>>,
     #[serde(
-        bound = "C::Point: Serialize + serde::de::DeserializeOwned, C::Scalar: Serialize + serde::de::DeserializeOwned"
+        bound = "C::Point: Serialize + DeserializeOwned, C::Scalar: Serialize + DeserializeOwned"
     )]
     pub public: PublicPoly<C>,
 }
@@ -402,6 +402,7 @@ where
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DKGWaitingShare<C: Curve> {
+    #[serde(bound = "C::Scalar: Serialize + DeserializeOwned")]
     info: DKGInfo<C>,
 }
 
@@ -602,10 +603,14 @@ where
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DKGWaitingResponse<C: Curve> {
+    #[serde(bound = "C::Scalar: Serialize + DeserializeOwned")]
     info: DKGInfo<C>,
+    #[serde(bound = "C::Scalar: Serialize + DeserializeOwned")]
     dist_share: C::Scalar,
+    #[serde(bound = "C::Scalar: Serialize + DeserializeOwned")]
     dist_pub: PublicPoly<C>,
     statuses: StatusMatrix,
+    #[serde(bound = "C::Scalar: Serialize + DeserializeOwned")]
     publics: HashMap<ID, PublicPoly<C>>,
 }
 
