@@ -23,18 +23,6 @@ type PublicKey = <BlindThresholdSigs as Scheme>::Public;
 type PrivateKey = <BlindThresholdSigs as Scheme>::Private;
 type Signature = <BlindThresholdSigs as Scheme>::Signature;
 
-#[derive(Clone, Debug)]
-#[repr(C)]
-/// A blinded message along with the blinding_factor used to produce it
-pub struct BlindedMessage {
-    /// The resulting blinded message
-    message: Buffer,
-    /// The blinding_factor which was used to generate the blinded message. This will be used
-    /// to unblind the signature received on the blinded message to a valid signature
-    /// on the unblinded message
-    blinding_factor: Token<PrivateKey>,
-}
-
 ///////////////////////////////////////////////////////////////////////////
 // User -> Library
 ///////////////////////////////////////////////////////////////////////////
@@ -43,10 +31,14 @@ pub struct BlindedMessage {
 ///
 /// * message: A cleartext message which you want to blind
 /// * seed: A 32 byte seed for randomness. You can get one securely via `crypto.randomBytes(32)`
-/// * blinded_message: Pointer to the memory where the blinded message will be written to
+/// * blinded_message_out : Pointer to the memory where the blinded message will be written to
+/// * blinding_factor_out : Pointer to the object storing the blinding factor
 ///
-/// The `BlindedMessage.blinding_factor` should be saved for unblinding any
-/// signatures on `BlindedMessage.message`
+/// The `blinding_factor_out` should be saved for unblinding any
+/// signatures on `blinded_message_out`. It lives in-memory.
+///
+/// You should use `free_vec` to free `blinded_message_out` and `destroy_token` to destroy
+/// `blinding_factor_out`.
 ///
 /// # Safety
 /// - If the same seed is used twice, the blinded result WILL be the same
@@ -56,7 +48,8 @@ pub struct BlindedMessage {
 pub extern "C" fn blind(
     message: *const Buffer,
     seed: *const Buffer,
-    blinded_message: *mut BlindedMessage,
+    blinded_message_out: *mut Buffer,
+    blinding_factor_out: *mut *mut Token<PrivateKey>,
 ) {
     // convert the seed to randomness
     let seed = <&[u8]>::from(unsafe { &*seed });
@@ -66,14 +59,9 @@ pub extern "C" fn blind(
     let message = <&[u8]>::from(unsafe { &*message });
     let (blinding_factor, blinded_message_bytes) = BlindThresholdSigs::blind(&message, &mut rng);
 
-    // return the message and the blinding_factor used for blinding
-    let ret = BlindedMessage {
-        message: Buffer::from(&blinded_message_bytes[..]),
-        blinding_factor,
-    };
-
-    unsafe { *blinded_message = ret };
+    unsafe { *blinded_message_out = Buffer::from(&blinded_message_bytes[..]) };
     std::mem::forget(blinded_message_bytes);
+    unsafe { *blinding_factor_out = Box::into_raw(Box::new(blinding_factor)) };
 }
 
 /// Given a blinded signature and a blinding_factor used for blinding, it returns the signature
@@ -297,6 +285,13 @@ fn serialize<T: Encodable>(in_obj: *const T, out_bytes: *mut *mut u8) {
 }
 
 #[no_mangle]
+pub extern "C" fn destroy_token(token: *mut Token<PrivateKey>) {
+    drop(unsafe {
+        Box::from_raw(token);
+    })
+}
+
+#[no_mangle]
 pub extern "C" fn destroy_privkey(private_key: *mut PrivateKey) {
     drop(unsafe {
         Box::from_raw(private_key);
@@ -464,13 +459,16 @@ mod tests {
         let keys = unsafe { keys.assume_init() };
 
         // 1. blind the message
-        let mut blinded_message = MaybeUninit::<BlindedMessage>::uninit();
+        let mut blinded_message = MaybeUninit::<Buffer>::uninit();
+        let mut blinding_factor = MaybeUninit::<*mut Token<PrivateKey>>::uninit();
         blind(
             &Buffer::from(msg.as_ref()),
             &Buffer::from(user_seed),
             blinded_message.as_mut_ptr(),
+            blinding_factor.as_mut_ptr(),
         );
         let blinded_message = unsafe { blinded_message.assume_init() };
+        let blinding_factor = unsafe { blinding_factor.assume_init() };
 
         // 2. partially sign the blinded message
         let mut sigs = Vec::new();
@@ -478,7 +476,7 @@ mod tests {
             let mut partial_sig = MaybeUninit::<Buffer>::uninit();
             let ret = partial_sign(
                 share_ptr(&keys, i),
-                &blinded_message.message,
+                &blinded_message,
                 partial_sig.as_mut_ptr(),
             );
             assert!(ret);
@@ -492,7 +490,7 @@ mod tests {
         let mut concatenated = Vec::new();
         for sig in &sigs {
             concatenated.extend_from_slice(<&[u8]>::from(sig));
-            let ret = partial_verify(public_key, &blinded_message.message, sig);
+            let ret = partial_verify(public_key, &blinded_message, sig);
             assert!(ret);
         }
         let concatenated = Buffer::from(&concatenated[..]);
@@ -505,11 +503,7 @@ mod tests {
 
         // 5. unblind the threshold signature
         let mut unblinded = MaybeUninit::<Buffer>::uninit();
-        let ret = unblind(
-            &asig,
-            &blinded_message.blinding_factor,
-            unblinded.as_mut_ptr(),
-        );
+        let ret = unblind(&asig, blinding_factor, unblinded.as_mut_ptr());
         assert!(ret);
         let unblinded = unsafe { unblinded.assume_init() };
 
@@ -533,19 +527,22 @@ mod tests {
         let keypair = unsafe { keypair.assume_init() };
 
         // 1. blind the message
-        let mut blinded_message = MaybeUninit::<BlindedMessage>::uninit();
+        let mut blinded_message = MaybeUninit::<Buffer>::uninit();
+        let mut blinding_factor = MaybeUninit::<*mut Token<PrivateKey>>::uninit();
         blind(
             &Buffer::from(msg.as_ref()),
             &Buffer::from(user_seed),
             blinded_message.as_mut_ptr(),
+            blinding_factor.as_mut_ptr(),
         );
         let blinded_message = unsafe { blinded_message.assume_init() };
+        let blinding_factor = unsafe { blinding_factor.assume_init() };
 
         // 2. sign the blinded message
         let mut sig = MaybeUninit::<Buffer>::uninit();
         let ret = sign(
             private_key_ptr(&keypair),
-            &blinded_message.message,
+            &blinded_message,
             sig.as_mut_ptr(),
         );
         assert!(ret);
@@ -553,11 +550,7 @@ mod tests {
 
         // 4. unblind the signature
         let mut unblinded = MaybeUninit::<Buffer>::uninit();
-        let ret = unblind(
-            &sig,
-            &blinded_message.blinding_factor,
-            unblinded.as_mut_ptr(),
-        );
+        let ret = unblind(&sig, blinding_factor, unblinded.as_mut_ptr());
         assert!(ret);
         let unblinded = unsafe { unblinded.assume_init() };
 
