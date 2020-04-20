@@ -370,7 +370,9 @@ pub extern "C" fn threshold_keygen(n: usize, t: usize, seed: &[u8], keys: *mut *
         n,
     };
 
-    unsafe { *keys = Box::into_raw(Box::new(keys_local)); };
+    unsafe {
+        *keys = Box::into_raw(Box::new(keys_local));
+    };
 }
 
 /// Generates a single private key from the provided seed.
@@ -558,11 +560,7 @@ mod tests {
 
         // 2. sign the blinded message
         let mut sig = MaybeUninit::<Buffer>::uninit();
-        let ret = sign(
-            private_key_ptr(keypair),
-            &blinded_message,
-            sig.as_mut_ptr(),
-        );
+        let ret = sign(private_key_ptr(keypair), &blinded_message, sig.as_mut_ptr());
         assert!(ret);
         let sig = unsafe { sig.assume_init() };
 
@@ -573,11 +571,7 @@ mod tests {
         let unblinded = unsafe { unblinded.assume_init() };
 
         // 4. verify the signature
-        let ret = verify(
-            public_key_ptr(keypair),
-            &Buffer::from(&msg[..]),
-            &unblinded,
-        );
+        let ret = verify(public_key_ptr(keypair), &Buffer::from(&msg[..]), &unblinded);
         assert!(ret);
     }
 
