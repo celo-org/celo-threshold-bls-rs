@@ -1,6 +1,6 @@
 use bitvec::{prelude::*, vec::BitVec};
 use rand_core::RngCore;
-use serde::{Deserialize, Serialize, de::DeserializeOwned};
+use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use std::collections::HashMap;
 use std::error::Error;
 use std::fmt;
@@ -724,11 +724,15 @@ where
 pub struct DKGWaitingJustification<C: Curve> {
     // TODO: transform that into one info variable that gets default value for
     // missing parts depending in the round of the protocol.
+    #[serde(bound = "C::Scalar: Serialize + DeserializeOwned")]
     info: DKGInfo<C>,
+    #[serde(bound = "C::Scalar: Serialize + DeserializeOwned")]
     dist_share: C::Scalar,
+    #[serde(bound = "C::Scalar: Serialize + DeserializeOwned")]
     dist_pub: PublicPoly<C>,
     // guaranteed to be of the right size (n)
     statuses: StatusMatrix,
+    #[serde(bound = "C::Scalar: Serialize + DeserializeOwned")]
     publics: HashMap<ID, PublicPoly<C>>,
 }
 

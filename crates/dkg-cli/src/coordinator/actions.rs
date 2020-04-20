@@ -47,9 +47,14 @@ pub fn combine<T: DeserializeOwned + Serialize>(opts: CombineOpts) {
     let paths = files.map(|res| res.expect("invalid path"));
 
     let data: Vec<T> = paths
-        .map(|path| {
+        .filter_map(|path| {
             let file = File::open(path).expect("could not open path");
-            bincode::deserialize_from(&file).unwrap()
+            // if there was an error in deserialization, just skip it
+            if let Ok(de) = bincode::deserialize_from(&file) {
+                Some(de)
+            } else {
+                None
+            }
         })
         .collect::<Vec<_>>();
 

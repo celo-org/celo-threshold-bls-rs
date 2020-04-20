@@ -6,9 +6,9 @@ use super::{
     },
 };
 
+use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use thiserror::Error;
 use threshold_bls::group::Curve;
-use serde::{Serialize, Deserialize, de::DeserializeOwned};
 
 #[derive(Debug, Error, PartialEq)]
 pub enum NodeError {

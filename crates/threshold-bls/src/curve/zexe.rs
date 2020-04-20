@@ -309,7 +309,6 @@ where
     s.serialize_bytes(&bytes)
 }
 
-
 fn deserialize_group<'de, D, C>(deserializer: D) -> Result<C, D::Error>
 where
     D: Deserializer<'de>,

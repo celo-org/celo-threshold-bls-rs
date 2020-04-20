@@ -108,6 +108,16 @@ version = "0.1.0"
 source = "git+https://github.com/scipr-lab/zexe#9d267f65733b9684ad6da9af31b945515f1a9474"
 
 [[package]]
+name = "bincode"
+version = "1.2.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5753e2a71534719bf3f4e57006c3a4f0d2c672a4b676eec84161f763eca87dbf"
+dependencies = [
+ "byteorder",
+ "serde",
+]
+
+[[package]]
 name = "bitflags"
 version = "1.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -192,7 +202,7 @@ dependencies = [
  "crypto-primitives",
  "csv",
  "env_logger",
- "hex",
+ "hex 0.3.2",
  "log",
  "lru",
  "once_cell",
@@ -428,8 +438,14 @@ dependencies = [
 name = "dkg-cli"
 version = "0.1.0"
 dependencies = [
+ "bincode",
+ "byteorder",
  "dkg-core",
+ "glob",
  "gumdrop",
+ "hex 0.4.2",
+ "rand",
+ "serde",
  "threshold-bls",
 ]
 
@@ -437,6 +453,7 @@ dependencies = [
 name = "dkg-core"
 version = "0.1.0"
 dependencies = [
+ "bincode",
  "bitvec",
  "rand",
  "rand_core",
@@ -528,6 +545,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "glob"
+version = "0.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9b919933a397b79c37e33b77bb2aa3dc8eb6e165ad809e58ff75bc7db2e34574"
+
+[[package]]
 name = "gm17"
 version = "0.1.0"
 source = "git+https://github.com/scipr-lab/zexe#9d267f65733b9684ad6da9af31b945515f1a9474"
@@ -610,6 +633,12 @@ name = "hex"
 version = "0.3.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "805026a5d0141ffc30abb3be3173848ad46a1b1664fe632428479619a3644d77"
+
+[[package]]
+name = "hex"
+version = "0.4.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "644f9158b2f133fd50f5fb3242878846d9eb792e445c893805ff0e3824006e35"
 
 [[package]]
 name = "hkdf"
