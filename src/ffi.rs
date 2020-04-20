@@ -34,10 +34,14 @@ const SIG_SIZE: usize = 197;
 ///
 /// * message: A cleartext message which you want to blind
 /// * seed: A 32 byte seed for randomness. You can get one securely via `crypto.randomBytes(32)`
-/// * blinded_message: Pointer to the memory where the blinded message will be written to
+/// * blinded_message_out : Pointer to the memory where the blinded message will be written to
+/// * blinding_factor_out : Pointer to the object storing the blinding factor
 ///
-/// The `BlindedMessage.blinding_factor` should be saved for unblinding any
-/// signatures on `BlindedMessage.message`
+/// The `blinding_factor_out` should be saved for unblinding any
+/// signatures on `BlindedMessage.message`. It lives in-memory.
+///
+/// You should use `free_vec` to free `blinded_message_out` and `destroy_token` to destroy
+/// `blinding_factor_out`.
 ///
 /// # Safety
 /// - If the same seed is used twice, the blinded result WILL be the same
@@ -500,11 +504,7 @@ mod tests {
 
         // 5. unblind the threshold signature
         let mut unblinded = MaybeUninit::<Buffer>::uninit();
-        let ret = unblind(
-            &asig,
-            blinding_factor,
-            unblinded.as_mut_ptr(),
-        );
+        let ret = unblind(&asig, blinding_factor, unblinded.as_mut_ptr());
         assert!(ret);
         let unblinded = unsafe { unblinded.assume_init() };
 
@@ -551,11 +551,7 @@ mod tests {
 
         // 4. unblind the signature
         let mut unblinded = MaybeUninit::<Buffer>::uninit();
-        let ret = unblind(
-            &sig,
-            blinding_factor,
-            unblinded.as_mut_ptr(),
-        );
+        let ret = unblind(&sig, blinding_factor, unblinded.as_mut_ptr());
         assert!(ret);
         let unblinded = unsafe { unblinded.assume_init() };
 
