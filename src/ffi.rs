@@ -23,9 +23,6 @@ type PublicKey = <BlindThresholdSigs as Scheme>::Public;
 type PrivateKey = <BlindThresholdSigs as Scheme>::Private;
 type Signature = <BlindThresholdSigs as Scheme>::Signature;
 
-/// Signatures for BLS12-377 are 197 bytes long
-const SIG_SIZE: usize = 197;
-
 ///////////////////////////////////////////////////////////////////////////
 // User -> Library
 ///////////////////////////////////////////////////////////////////////////
@@ -38,7 +35,7 @@ const SIG_SIZE: usize = 197;
 /// * blinding_factor_out : Pointer to the object storing the blinding factor
 ///
 /// The `blinding_factor_out` should be saved for unblinding any
-/// signatures on `BlindedMessage.message`. It lives in-memory.
+/// signatures on `blinded_message_out`. It lives in-memory.
 ///
 /// You should use `free_vec` to free `blinded_message_out` and `destroy_token` to destroy
 /// `blinding_factor_out`.
@@ -207,8 +204,10 @@ pub extern "C" fn partial_verify(
 pub extern "C" fn combine(threshold: usize, signatures: *const Buffer, asig: *mut Buffer) -> bool {
     // split the flattened vector to a Vec<Vec<u8>> where each element is a serialized signature
     let signatures = <&[u8]>::from(unsafe { &*signatures });
+    dbg!(signatures.len());
     let sigs = signatures
-        .chunks(SIG_SIZE)
+        // Each partial sig also includes an index
+        .chunks(Signature::marshal_len() + std::mem::size_of::<Index>())
         .map(|chunk| chunk.to_vec())
         .collect::<Vec<Vec<u8>>>();
 
