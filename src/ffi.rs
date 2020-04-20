@@ -23,9 +23,6 @@ type PublicKey = <BlindThresholdSigs as Scheme>::Public;
 type PrivateKey = <BlindThresholdSigs as Scheme>::Private;
 type Signature = <BlindThresholdSigs as Scheme>::Signature;
 
-/// Signatures for BLS12-377 are 197 bytes long
-const SIG_SIZE: usize = 197;
-
 #[derive(Clone, Debug)]
 #[repr(C)]
 /// A blinded message along with the blinding_factor used to produce it
@@ -219,8 +216,10 @@ pub extern "C" fn partial_verify(
 pub extern "C" fn combine(threshold: usize, signatures: *const Buffer, asig: *mut Buffer) -> bool {
     // split the flattened vector to a Vec<Vec<u8>> where each element is a serialized signature
     let signatures = <&[u8]>::from(unsafe { &*signatures });
+    dbg!(signatures.len());
     let sigs = signatures
-        .chunks(SIG_SIZE)
+        // Each partial sig also includes an index
+        .chunks(Signature::marshal_len() + std::mem::size_of::<Index>())
         .map(|chunk| chunk.to_vec())
         .collect::<Vec<Vec<u8>>>();
 
