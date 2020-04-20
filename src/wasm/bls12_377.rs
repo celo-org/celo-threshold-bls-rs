@@ -9,8 +9,8 @@ use crate::{
     group::{Element, Encodable, Point},
     poly::Poly,
     sig::{
-        blind::{BG1Scheme, Token},
-        tblind::G1Scheme,
+        blind::{BG2Scheme, Token},
+        tblind::G2Scheme,
         Blinder, Scheme, SignatureScheme, ThresholdScheme,
     },
     Index, Share,
@@ -18,15 +18,12 @@ use crate::{
 
 // TODO(gakonst): Make these bindings more generic. Maybe a macro is needed here since
 // wasm-bindgen does not support generics
-type BlindThresholdSigs = G1Scheme<Bls12_377>;
-type BlindSigs = BG1Scheme<Bls12_377>;
+type BlindThresholdSigs = G2Scheme<Bls12_377>;
+type BlindSigs = BG2Scheme<Bls12_377>;
 type PublicKey = <BlindThresholdSigs as Scheme>::Public;
 type PrivateKey = <BlindThresholdSigs as Scheme>::Private;
 type Signature = <BlindThresholdSigs as Scheme>::Signature;
 type Result<T> = std::result::Result<T, JsValue>;
-
-/// Signatures for BLS12-377 are 197 bytes long
-const SIG_SIZE: usize = 197;
 
 ///////////////////////////////////////////////////////////////////////////
 // User -> Library
@@ -194,7 +191,7 @@ pub fn partial_verify(polynomial_buf: &[u8], blinded_message: &[u8], sig: &[u8])
 pub fn combine(threshold: usize, signatures: Vec<u8>) -> Result<Vec<u8>> {
     // break the flattened vector to a Vec<Vec<u8>> where each element is a serialized signature
     let sigs = signatures
-        .chunks(SIG_SIZE)
+        .chunks(Signature::marshal_len() + std::mem::size_of::<Index>())
         .map(|chunk| chunk.to_vec())
         .collect::<Vec<Vec<u8>>>();
 

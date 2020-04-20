@@ -7,8 +7,8 @@ use crate::{
     group::{Element, Encodable, Point},
     poly::Poly,
     sig::{
-        blind::{BG1Scheme, Token},
-        tblind::G1Scheme,
+        blind::{BG2Scheme, Token},
+        tblind::G2Scheme,
         Blinder, Scheme, SignatureScheme, ThresholdScheme,
     },
     Index, Share,
@@ -17,8 +17,8 @@ use crate::{
 use bls_crypto::ffi::Buffer;
 
 // TODO(gakonst): Make these bindings more generic. Maybe a macro is needed here since
-type BlindThresholdSigs = G1Scheme<Bls12_377>;
-type BlindSigs = BG1Scheme<Bls12_377>;
+type BlindThresholdSigs = G2Scheme<Bls12_377>;
+type BlindSigs = BG2Scheme<Bls12_377>;
 type PublicKey = <BlindThresholdSigs as Scheme>::Public;
 type PrivateKey = <BlindThresholdSigs as Scheme>::Private;
 type Signature = <BlindThresholdSigs as Scheme>::Signature;
@@ -292,6 +292,20 @@ pub extern "C" fn destroy_token(token: *mut Token<PrivateKey>) {
 }
 
 #[no_mangle]
+pub extern "C" fn destroy_keys(keys: *mut Keys) {
+    drop(unsafe {
+        Box::from_raw(keys);
+    })
+}
+
+#[no_mangle]
+pub extern "C" fn destroy_keypair(keypair: *mut Keypair) {
+    drop(unsafe {
+        Box::from_raw(keypair);
+    })
+}
+
+#[no_mangle]
 pub extern "C" fn destroy_privkey(private_key: *mut PrivateKey) {
     drop(unsafe {
         Box::from_raw(private_key);
@@ -326,6 +340,8 @@ pub extern "C" fn destroy_sig(signature: *mut Signature) {
 
 /// Generates a t-of-n polynomial and private key shares
 ///
+/// The return value should be destroy with `destroy_keys`.
+///
 /// # Safety
 ///
 /// WARNING: This is a helper function for local testing of the library. Do not use
@@ -333,7 +349,7 @@ pub extern "C" fn destroy_sig(signature: *mut Signature) {
 ///
 /// The seed MUST be at least 32 bytes long
 #[no_mangle]
-pub extern "C" fn threshold_keygen(n: usize, t: usize, seed: &[u8], keys: *mut Keys) {
+pub extern "C" fn threshold_keygen(n: usize, t: usize, seed: &[u8], keys: *mut *mut Keys) {
     let mut rng = get_rng(seed);
     let private = Poly::<PrivateKey, PrivateKey>::new_from(t - 1, &mut rng);
     let shares = (0..n)
@@ -354,21 +370,23 @@ pub extern "C" fn threshold_keygen(n: usize, t: usize, seed: &[u8], keys: *mut K
         n,
     };
 
-    unsafe { *keys = keys_local };
+    unsafe { *keys = Box::into_raw(Box::new(keys_local)); };
 }
 
 /// Generates a single private key from the provided seed.
+///
+/// The return value should be destroy with `destroy_keypair`.
 ///
 /// # Safety
 ///
 /// The seed MUST be at least 32 bytes long
 #[no_mangle]
-pub extern "C" fn keygen(seed: *const Buffer, keypair: *mut Keypair) {
+pub extern "C" fn keygen(seed: *const Buffer, keypair: *mut *mut Keypair) {
     let seed = <&[u8]>::from(unsafe { &*seed });
     let mut rng = get_rng(&seed);
     let (private, public) = BlindThresholdSigs::keypair(&mut rng);
     let keypair_local = Keypair { private, public };
-    unsafe { *keypair = keypair_local };
+    unsafe { *keypair = Box::into_raw(Box::new(keypair_local)) };
 }
 
 /// Gets the `index`'th share corresponding to the provided `Keys` pointer
@@ -454,9 +472,9 @@ mod tests {
         let msg = vec![1u8, 2, 3, 4, 6];
         let user_seed = &b"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"[..];
 
-        let mut keys = MaybeUninit::<Keys>::uninit();
+        let mut keys = MaybeUninit::<*mut Keys>::uninit();
         threshold_keygen(5, 3, &seed[..], keys.as_mut_ptr());
-        let keys = unsafe { keys.assume_init() };
+        let keys = unsafe { &*keys.assume_init() };
 
         // 1. blind the message
         let mut blinded_message = MaybeUninit::<Buffer>::uninit();
@@ -475,7 +493,7 @@ mod tests {
         for i in 0..3 {
             let mut partial_sig = MaybeUninit::<Buffer>::uninit();
             let ret = partial_sign(
-                share_ptr(&keys, i),
+                share_ptr(keys, i),
                 &blinded_message,
                 partial_sig.as_mut_ptr(),
             );
@@ -486,7 +504,7 @@ mod tests {
         }
 
         // 3. verify the partial signatures & concatenate them
-        let public_key = polynomial_ptr(&keys);
+        let public_key = polynomial_ptr(keys);
         let mut concatenated = Vec::new();
         for sig in &sigs {
             concatenated.extend_from_slice(<&[u8]>::from(sig));
@@ -509,7 +527,7 @@ mod tests {
 
         // 6. verify the threshold signature against the public key
         let ret = verify(
-            threshold_public_key_ptr(&keys),
+            threshold_public_key_ptr(keys),
             &Buffer::from(&msg[..]),
             &unblinded,
         );
@@ -522,9 +540,9 @@ mod tests {
         let msg = vec![1u8, 2, 3, 4, 6];
         let user_seed = &b"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"[..];
 
-        let mut keypair = MaybeUninit::<Keypair>::uninit();
+        let mut keypair = MaybeUninit::<*mut Keypair>::uninit();
         keygen(&Buffer::from(&seed[..]), keypair.as_mut_ptr());
-        let keypair = unsafe { keypair.assume_init() };
+        let keypair = unsafe { &*keypair.assume_init() };
 
         // 1. blind the message
         let mut blinded_message = MaybeUninit::<Buffer>::uninit();
@@ -541,7 +559,7 @@ mod tests {
         // 2. sign the blinded message
         let mut sig = MaybeUninit::<Buffer>::uninit();
         let ret = sign(
-            private_key_ptr(&keypair),
+            private_key_ptr(keypair),
             &blinded_message,
             sig.as_mut_ptr(),
         );
@@ -556,7 +574,7 @@ mod tests {
 
         // 4. verify the signature
         let ret = verify(
-            public_key_ptr(&keypair),
+            public_key_ptr(keypair),
             &Buffer::from(&msg[..]),
             &unblinded,
         );
@@ -567,11 +585,11 @@ mod tests {
     fn private_key_serialization() {
         let seed = b"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
 
-        let mut keypair = MaybeUninit::<Keypair>::uninit();
+        let mut keypair = MaybeUninit::<*mut Keypair>::uninit();
         keygen(&Buffer::from(&seed[..]), keypair.as_mut_ptr());
-        let keypair = unsafe { keypair.assume_init() };
+        let keypair = unsafe { &*keypair.assume_init() };
 
-        let private_key_ptr = private_key_ptr(&keypair);
+        let private_key_ptr = private_key_ptr(keypair);
         let private_key = unsafe { &*private_key_ptr };
         let marshalled = private_key.marshal();
 
@@ -598,11 +616,11 @@ mod tests {
     fn public_key_serialization() {
         let seed = b"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
 
-        let mut keypair = MaybeUninit::<Keypair>::uninit();
+        let mut keypair = MaybeUninit::<*mut Keypair>::uninit();
         keygen(&Buffer::from(&seed[..]), keypair.as_mut_ptr());
-        let keypair = unsafe { keypair.assume_init() };
+        let keypair = unsafe { &*keypair.assume_init() };
 
-        let public_key_ptr = public_key_ptr(&keypair);
+        let public_key_ptr = public_key_ptr(keypair);
         let public_key = unsafe { &*public_key_ptr };
 
         let marshalled = public_key.marshal();
