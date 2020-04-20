@@ -218,8 +218,8 @@ pub extern "C" fn combine(threshold: usize, signatures: *const Buffer, asig: *mu
     let signatures = <&[u8]>::from(unsafe { &*signatures });
     dbg!(signatures.len());
     let sigs = signatures
-        // Each partial sig also includes an index, so it's 4 bytes longer
-        .chunks(Signature::marshal_len() + 4)
+        // Each partial sig also includes an index
+        .chunks(Signature::marshal_len() + std::mem::size_of::<Index>())
         .map(|chunk| chunk.to_vec())
         .collect::<Vec<Vec<u8>>>();
 
