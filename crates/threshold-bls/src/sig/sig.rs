@@ -37,10 +37,10 @@ pub trait Scheme {
 ///  # #[cfg(feature = "bls12_381")]
 ///  # {
 ///  use rand::prelude::*;
-///  use blind_threshold_bls::{sig::{SignatureScheme,Scheme}, Element, Encodable, Point};
-///  use blind_threshold_bls::curve::bls12381::PairingCurve as PC;
+///  use threshold_bls::{sig::{SignatureScheme,Scheme}, Element, Encodable, Point};
+///  use threshold_bls::curve::bls12381::PairingCurve as PC;
 ///  // import BLS signatures with public keys over G2
-///  use blind_threshold_bls::sig::bls::G2Scheme;
+///  use threshold_bls::sig::bls::G2Scheme;
 ///
 ///
 ///  let msg = vec![1,9,6,9];

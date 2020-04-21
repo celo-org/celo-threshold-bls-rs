@@ -4,7 +4,7 @@ use wasm_bindgen::prelude::*;
 use rand_chacha::ChaChaRng;
 use rand_core::{RngCore, SeedableRng};
 
-use crate::{
+use threshold_bls::{
     curve::zexe::PairingCurve as Bls12_377,
     group::{Element, Encodable, Point},
     poly::Poly,

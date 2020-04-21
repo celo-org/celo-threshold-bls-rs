@@ -1,0 +1,22 @@
+[package]
+name = "dkg-core"
+version = "0.1.0"
+authors = ["nikkolasg", "Georgios Konstantopoulos <me@gakonst.com>"]
+edition = "2018"
+
+[lib]
+crate-type = ["lib"]
+
+[dependencies]
+threshold-bls = { path = "../threshold-bls", default-features = false }
+
+rand_core = { version = "0.5.1", default-features = false }
+rand = "0.7"
+serde = {version = "1.0.106", features = ["derive"] }
+
+thiserror = "1.0.15"
+bitvec = { version = "0.17.4", default-features = false, features = ["std", "alloc", "serde"] }
+bincode = "1.2.1"
+
+[dev-dependencies]
+threshold-bls = { path = "../threshold-bls", default-features = false, features = ["bls12_381", "bls12_377"] }

@@ -1,0 +1,17 @@
+[package]
+name = "dkg-cli"
+version = "0.1.0"
+authors = ["Georgios Konstantopoulos <me@gakonst.com>"]
+edition = "2018"
+
+[dependencies]
+dkg-core = { path = "../dkg-core" }
+threshold-bls = { path = "../threshold-bls", default-features = false, features = ["bls12_377"] }
+
+gumdrop = "0.7.0"
+rand = "0.7.3"
+bincode = "1.2.1"
+glob = "0.3.0"
+serde = "1.0.106"
+thiserror = "1.0.15"
+

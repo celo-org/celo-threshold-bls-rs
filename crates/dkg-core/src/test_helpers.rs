@@ -1,6 +1,6 @@
 use super::board::BoardPublisher;
 use super::primitives::{BundledJustification, BundledResponses, BundledShares};
-use crate::group::Curve;
+use threshold_bls::group::Curve;
 
 /// An in-memory board used for testing
 pub struct InMemoryBoard<C: Curve> {
