@@ -40,7 +40,7 @@ The `shares` represents the data which will then be uploaded to the coordinator 
 The coordinator gathers the shares from Phase 1 and combines them
 
 ```
-./coordinator combine-shares --input ./shares* --output ./combined_shares
+./coordinator combine-shares --input "./shares*" --output ./combined_shares
 ```
 
 ### 3. Response Generation
@@ -56,22 +56,22 @@ Participants download the Phase 1 shares from the coordinator, and generate thei
 The coordinator gathers the responses from Phase 2 and combines them
 
 ```
-./coordinator combine-responses --input ./responses* --output ./combined_responses
+./coordinator combine-responses --input "./responses*" --output ./combined_responses
 ```
 
 ### 4a. Try to get DKG Result 
 
 ```
-./dkg try-finalize --in-phase phase2_node0 --out-phase node0 --input ./combined_responses --output justifications0
-./dkg try-finalize --in-phase phase2_node1 --out-phase node1 --input ./combined_responses --output justifications1
-./dkg try-finalize --in-phase phase2_node2 --out-phase node2 --input ./combined_responses --output justifications2
+./dkg try-finalize --in-phase phase2_node0 --out-phase out_node0 --input ./combined_responses --output justifications0
+./dkg try-finalize --in-phase phase2_node1 --out-phase out_node1 --input ./combined_responses --output justifications1
+./dkg try-finalize --in-phase phase2_node2 --out-phase out_node2 --input ./combined_responses --output justifications2
 ```
 
 If the command does not prompt you to proceed to Phase 3, then `out-phase` will contain your share and the threshold public key.
 Otherwise, it will contain the information for Phase 3. the `output` must also be sent to the coordinator, who will then execute:
 
 ```
-./coordinator combine-justifications --input ./justifications* --output ./combined_justifications
+./coordinator combine-justifications --input "./justifications*" --output ./combined_justifications
 ```
 
 ### 4b. Justifications 
