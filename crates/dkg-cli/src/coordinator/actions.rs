@@ -1,4 +1,6 @@
 use super::opts::{CombineOpts, SetupOpts};
+use crate::CLIResult;
+use dkg_core::node::NodeError;
 use dkg_core::primitives::{Group, Node};
 use threshold_bls::{
     group::{Curve, Point},
@@ -11,7 +13,7 @@ use serde::{de::DeserializeOwned, Serialize};
 use std::fs::File;
 
 /// Reads the initial pubkey/index pairs per participant, and creates the group
-pub fn setup<C, S>(opts: SetupOpts) -> Result<(), ()>
+pub fn setup<C, S>(opts: SetupOpts) -> CLIResult<()>
 where
     C: Curve,
     // We need to bind the Curve's Point and Scalars to the Scheme
@@ -19,45 +21,40 @@ where
     <C as Curve>::Point: Point<S::Private>,
     <S as Scheme>::Signature: Point<<C as Curve>::Scalar>,
 {
-    let files = glob(&opts.nodes).expect("Failed to read glob pattern");
+    let mut nodes = Vec::new();
 
-    let paths = files.map(|res| res.expect("invalid path"));
+    for path in glob(&opts.nodes).expect("Failed to read glob pattern") {
+        let file = File::open(path?)?;
 
-    let nodes = paths
-        .map(|path| {
-            let file = File::open(path).expect("could not open path");
-            let index: Index = bincode::deserialize_from(&file).unwrap();
-            let pubkey: S::Public = bincode::deserialize_from(&file).unwrap();
-            Node::<C>::new(index, pubkey)
-        })
-        .collect::<Vec<_>>();
+        let index: Index = bincode::deserialize_from(&file)?;
+        let pubkey: S::Public = bincode::deserialize_from(&file)?;
+
+        let node = Node::<C>::new(index, pubkey);
+        nodes.push(node);
+    }
 
     // generate the group
-    let group = Group::new(nodes, opts.threshold).unwrap();
+    let group = Group::new(nodes, opts.threshold).map_err(NodeError::DKGError)?;
     // ...and write it to a file
-    let f = File::create(opts.group).unwrap();
-    bincode::serialize_into(f, &group).unwrap();
+    let f = File::create(opts.group)?;
+    bincode::serialize_into(f, &group)?;
 
     Ok(())
 }
 
 /// Combines the contributions of each participant for the next phase
-pub fn combine<T: DeserializeOwned + Serialize>(opts: CombineOpts) {
-    let files = glob(&opts.input).expect("Failed to read glob pattern");
-    let paths = files.map(|res| res.expect("invalid path"));
+pub fn combine<T: DeserializeOwned + Serialize>(opts: CombineOpts) -> CLIResult<()> {
+    let mut data: Vec<T> = Vec::new();
 
-    let data: Vec<T> = paths
-        .filter_map(|path| {
-            let file = File::open(path).expect("could not open path");
-            // if there was an error in deserialization, just skip it
-            if let Ok(de) = bincode::deserialize_from(&file) {
-                Some(de)
-            } else {
-                None
-            }
-        })
-        .collect::<Vec<_>>();
+    for path in glob(&opts.input).expect("Failed to read glob pattern") {
+        let file = File::open(path?)?;
+        if let Ok(de) = bincode::deserialize_from(&file) {
+            data.push(de);
+        }
+    }
 
-    let file = File::create(opts.output).expect("could not create path");
-    bincode::serialize_into(file, &data).unwrap()
+    let file = File::create(opts.output)?;
+    bincode::serialize_into(file, &data)?;
+
+    Ok(())
 }

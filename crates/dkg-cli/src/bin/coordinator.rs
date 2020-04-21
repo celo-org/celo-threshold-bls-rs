@@ -28,9 +28,10 @@ fn main() {
     });
 
     match command {
-        Command::Setup(opts) => setup::<Curve, Scheme>(opts).expect("group generation"),
+        Command::Setup(opts) => setup::<Curve, Scheme>(opts),
         Command::CombineShares(opts) => combine::<BundledShares<Curve>>(opts),
         Command::CombineResponses(opts) => combine::<BundledResponses>(opts),
         Command::CombineJustifications(opts) => combine::<BundledJustification<Curve>>(opts),
     }
+    .expect("command failed");
 }
