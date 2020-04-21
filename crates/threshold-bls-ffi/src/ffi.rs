@@ -204,7 +204,6 @@ pub extern "C" fn partial_verify(
 pub extern "C" fn combine(threshold: usize, signatures: *const Buffer, asig: *mut Buffer) -> bool {
     // split the flattened vector to a Vec<Vec<u8>> where each element is a serialized signature
     let signatures = <&[u8]>::from(unsafe { &*signatures });
-    dbg!(signatures.len());
     let sigs = signatures
         // Each partial sig also includes an index
         .chunks(Signature::marshal_len() + std::mem::size_of::<Index>())

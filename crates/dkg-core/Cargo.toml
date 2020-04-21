@@ -16,6 +16,7 @@ serde = {version = "1.0.106", features = ["derive"] }
 
 thiserror = "1.0.15"
 bitvec = { version = "0.17.4", default-features = false, features = ["std", "alloc", "serde"] }
+bincode = "1.2.1"
 
 [dev-dependencies]
 threshold-bls = { path = "../threshold-bls", default-features = false, features = ["bls12_381", "bls12_377"] }

@@ -108,6 +108,16 @@ version = "0.1.0"
 source = "git+https://github.com/scipr-lab/zexe#9d267f65733b9684ad6da9af31b945515f1a9474"
 
 [[package]]
+name = "bincode"
+version = "1.2.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5753e2a71534719bf3f4e57006c3a4f0d2c672a4b676eec84161f763eca87dbf"
+dependencies = [
+ "byteorder",
+ "serde",
+]
+
+[[package]]
 name = "bitflags"
 version = "1.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -428,8 +438,13 @@ dependencies = [
 name = "dkg-cli"
 version = "0.1.0"
 dependencies = [
+ "bincode",
  "dkg-core",
+ "glob",
  "gumdrop",
+ "rand",
+ "serde",
+ "thiserror",
  "threshold-bls",
 ]
 
@@ -437,6 +452,7 @@ dependencies = [
 name = "dkg-core"
 version = "0.1.0"
 dependencies = [
+ "bincode",
  "bitvec",
  "rand",
  "rand_core",
@@ -526,6 +542,12 @@ dependencies = [
  "libc",
  "wasi",
 ]
+
+[[package]]
+name = "glob"
+version = "0.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9b919933a397b79c37e33b77bb2aa3dc8eb6e165ad809e58ff75bc7db2e34574"
 
 [[package]]
 name = "gm17"
