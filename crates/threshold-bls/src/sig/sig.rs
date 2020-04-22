@@ -69,8 +69,10 @@ pub trait SignatureScheme: Scheme {
 /// threshold scheme.
 pub trait Blinder {
     type Token: Encodable;
+    type Error: Error;
+
     fn blind<R: RngCore>(msg: &[u8], rng: &mut R) -> (Self::Token, Vec<u8>);
-    fn unblind(t: &Self::Token, sig: &[u8]) -> Result<Vec<u8>, Box<dyn Error>>;
+    fn unblind(t: &Self::Token, sig: &[u8]) -> Result<Vec<u8>, Self::Error>;
 }
 
 /// BlindScheme is a signature scheme where the message can be blinded before
