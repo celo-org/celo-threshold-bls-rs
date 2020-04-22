@@ -4,7 +4,6 @@ use rand_core::RngCore;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::convert::TryInto;
-use std::error::Error;
 use std::fmt;
 use std::marker::PhantomData;
 
@@ -41,11 +40,27 @@ pub struct Poly<Var: Scalar, Coeff: Element<Var>> {
     phantom: PhantomData<Var>,
 }
 
+use thiserror::Error;
+
+#[derive(Debug, Error)]
+pub enum PolyError<E: Encodable + std::fmt::Debug> {
+    #[error("could not deserialize polynomial length: {0}")]
+    LengthError(#[from] std::array::TryFromSliceError),
+
+    #[error("could not deserialize polynomial coefficient: {0}")]
+    CoefficientError(E::Error),
+
+    #[error("Invalid recovery: only has {0}/{1} shares")]
+    InvalidRecovery(usize, usize),
+}
+
 impl<Var, Coeff> Encodable for Poly<Var, Coeff>
 where
     Var: Scalar,
     Coeff: Element<Var> + Encodable,
 {
+    type Error = PolyError<Coeff>;
+
     // This cannot be known as the Poly is a variable length data structure.
     fn marshal_len() -> usize {
         unreachable!()
@@ -60,7 +75,7 @@ where
         bytes
     }
 
-    fn unmarshal(&mut self, data: &[u8]) -> Result<(), Box<dyn std::error::Error>> {
+    fn unmarshal(&mut self, data: &[u8]) -> Result<(), Self::Error> {
         let (int_bytes, rest) = data.split_at(std::mem::size_of::<usize>());
         let num_coeffs = usize::from_le_bytes(int_bytes.try_into()?);
 
@@ -69,7 +84,9 @@ where
         let size = Coeff::marshal_len();
         for i in 0..num_coeffs {
             let mut coeff = Coeff::new();
-            coeff.unmarshal(&rest[i * size..(i + 1) * size])?;
+            coeff
+                .unmarshal(&rest[i * size..(i + 1) * size])
+                .map_err(PolyError::CoefficientError)?;
             coeffs.push(coeff);
         }
 
@@ -82,7 +99,7 @@ where
 impl<X, C> Poly<X, C>
 where
     X: Scalar,
-    C: Element<X>,
+    C: Element<X> + Encodable,
 {
     /// Returns a new polynomial of the given degree where each coefficients is
     /// sampled at random from the given RNG.
@@ -140,9 +157,9 @@ where
         zipped.for_each(|(a, b)| a.add(&b));
     }
 
-    pub fn recover(t: usize, mut shares: Vec<Eval<C>>) -> Result<C, InvalidRecovery> {
+    pub fn recover(t: usize, mut shares: Vec<Eval<C>>) -> Result<C, PolyError<C>> {
         if shares.len() < t {
-            return Err(InvalidRecovery(shares.len(), t));
+            return Err(PolyError::InvalidRecovery(shares.len(), t));
         }
         // first sort the shares as it can happens recovery happens for
         // non-correlated shares so the subset chosen becomes important
@@ -182,9 +199,9 @@ where
         Ok(acc)
     }
 
-    pub fn full_recover(t: usize, mut shares: Vec<Eval<C>>) -> Result<Self, InvalidRecovery> {
+    pub fn full_recover(t: usize, mut shares: Vec<Eval<C>>) -> Result<Self, PolyError<C>> {
         if shares.len() < t {
-            return Err(InvalidRecovery(shares.len(), t));
+            return Err(PolyError::InvalidRecovery(shares.len(), t));
         }
         // first sort the shares as it can happens recovery happens for
         // non-correlated shares so the subset chosen becomes important
@@ -337,7 +354,7 @@ impl<X: Scalar> Poly<X, X> {
 impl<X, Y> fmt::Display for Poly<X, Y>
 where
     X: Scalar,
-    Y: Element<X>,
+    Y: Element<X> + Encodable,
 {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         let s = self
@@ -348,27 +365,6 @@ where
             .collect::<Vec<String>>()
             .join(", ");
         write!(f, "[deg: {}, coeffs: [{}]]", self.degree(), s)
-    }
-}
-
-pub struct InvalidRecovery(usize, usize);
-
-impl fmt::Display for InvalidRecovery {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "Invalid recovery: only has {}/{} shares", self.0, self.1)
-    }
-}
-impl fmt::Debug for InvalidRecovery {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "Invalid recovery: only has {}/{} shares", self.0, self.1)
-    }
-}
-
-impl Error for InvalidRecovery {
-    fn source(&self) -> Option<&(dyn Error + 'static)> {
-        // Generic error, underlying cause isn't tracked.
-        // TODO
-        None
     }
 }
 

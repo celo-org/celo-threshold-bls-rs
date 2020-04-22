@@ -1,8 +1,19 @@
 use crate::group::{Element, Encodable, PairingCurve};
 use crate::sig::{Scheme, SignatureScheme};
-use std::error::Error;
-use std::fmt;
-use std::marker::PhantomData;
+use std::{fmt::Debug, marker::PhantomData};
+use thiserror::Error;
+
+/// BLSError are thrown out when using the BLS signature scheme.
+#[derive(Debug, Error)]
+pub enum BLSError<E: Encodable + Debug> {
+    /// InvalidSig is raised when the validation routine of the BLS algorithm
+    /// does not finish successfully,i.e. it is an invalid signature.
+    #[error("invalid signature")]
+    InvalidSig,
+
+    #[error("could not decode data: {0}")]
+    EncodableError(E::Error),
+}
 
 // private module workaround to avoid leaking a private
 // trait into a public trait
@@ -10,33 +21,23 @@ use std::marker::PhantomData;
 // XXX another way to pull it off without this hack?
 mod common {
     use super::*;
-    // BLSScheme is an internal trait that encompasses the common work between a
-    // BLS signature over G1 or G2.
+
+    /// BLSScheme is an internal trait that encompasses the common work between a
+    /// BLS signature over G1 or G2.
     pub trait BLSScheme: Scheme {
-        fn internal_sign(private: &Self::Private, msg: &[u8]) -> Result<Vec<u8>, Box<dyn Error>> {
-            // sig = H(m)^x
+        /// Returns sig = msg^{private}. The message MUST be hashed before this call.
+        fn internal_sign(
+            private: &Self::Private,
+            msg: &[u8],
+        ) -> Result<Vec<u8>, BLSError<Self::Signature>> {
             let mut h = Self::Signature::new();
-            h.unmarshal(msg)?;
+            h.unmarshal(msg).map_err(BLSError::EncodableError)?;
             h.mul(private);
 
             Ok(h.marshal())
         }
 
-        fn internal_verify(
-            msg: &[u8],
-            sig: &[u8],
-        ) -> Result<(Self::Signature, Self::Signature), Box<dyn Error>> {
-            let mut sigp = Self::Signature::new();
-            if let Err(_) = sigp.unmarshal(sig) {
-                return Err(Box::new(BLSError::InvalidPoint));
-            }
-
-            // m
-            let mut h = Self::Signature::new();
-            h.unmarshal(msg)?;
-            return Ok((sigp, h));
-        }
-
+        /// Performs the final exponentiation for the BLS sig scheme
         fn final_exp(p: &Self::Public, sig: &Self::Signature, hm: &Self::Signature) -> bool;
     }
 
@@ -44,23 +45,37 @@ mod common {
     where
         T: BLSScheme,
     {
-        fn sign(private: &Self::Private, msg: &[u8]) -> Result<Vec<u8>, Box<dyn Error>> {
+        type Error = BLSError<T::Signature>;
+
+        fn sign(private: &Self::Private, msg: &[u8]) -> Result<Vec<u8>, Self::Error> {
             T::internal_sign(private, msg)
         }
 
-        fn verify(public: &Self::Public, msg: &[u8], sig: &[u8]) -> Result<(), Box<dyn Error>> {
-            let (sig, hm) = T::internal_verify(msg, sig)?;
-            if T::final_exp(public, &sig, &hm) {
-                Ok(())
-            } else {
-                Err(Box::new(BLSError::InvalidSig))
+        /// Verifies the signature by the provided public key **on the message's hash**.
+        fn verify(
+            public: &Self::Public,
+            msg_bytes: &[u8],
+            sig_bytes: &[u8],
+        ) -> Result<(), Self::Error> {
+            let mut sig = Self::Signature::new();
+            sig.unmarshal(sig_bytes).map_err(BLSError::EncodableError)?;
+
+            let mut hm = Self::Signature::new();
+            hm.unmarshal(msg_bytes).map_err(BLSError::EncodableError)?;
+
+            let success = T::final_exp(public, &sig, &hm);
+            if !success {
+                return Err(BLSError::InvalidSig);
             }
+
+            Ok(())
         }
     }
 }
 
 /// G1Scheme implements the BLS signature scheme with G1 as private / public
 /// keys and G2 as signature elements over the given pairing curve.
+#[derive(Clone, Debug)]
 pub struct G1Scheme<C: PairingCurve> {
     m: PhantomData<C>,
 }
@@ -89,6 +104,7 @@ where
 
 /// G2Scheme implements the BLS signature scheme with G2 as private / public
 /// keys and G1 as signature elements over the given pairing curve.
+#[derive(Clone, Debug)]
 pub struct G2Scheme<C: PairingCurve> {
     m: PhantomData<C>,
 }
@@ -112,35 +128,6 @@ where
         let left = C::pair(&sig, &Self::Public::one());
         let right = C::pair(&hm, p);
         left == right
-    }
-}
-
-/// BLSError are thrown out when using the BLS signature scheme.
-#[derive(Debug)]
-pub enum BLSError {
-    /// InvalidPoint is raised when signature given to verification is not a
-    /// valid point on the curve.
-    InvalidPoint,
-    /// InvalidSig is raised when the validation routine of the BLS algorithm
-    /// does not finish successfully,i.e. it is an invalid signature.
-    InvalidSig,
-}
-
-impl fmt::Display for BLSError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        use BLSError::*;
-        match self {
-            InvalidPoint => write!(f, "invalid point signature"),
-            InvalidSig => write!(f, "invalid signature"),
-        }
-    }
-}
-
-impl Error for BLSError {
-    fn source(&self) -> Option<&(dyn Error + 'static)> {
-        // Generic error, underlying cause isn't tracked.
-        // TODO
-        None
     }
 }
 

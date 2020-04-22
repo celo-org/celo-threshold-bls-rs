@@ -8,21 +8,14 @@ use threshold_bls::{
     curve::zexe::PairingCurve as Bls12_377,
     group::{Element, Encodable, Point},
     poly::Poly,
-    sig::{
-        blind::{BG2Scheme, Token},
-        tblind::G2Scheme,
-        Blinder, Scheme, SignatureScheme, ThresholdScheme,
-    },
+    sig::{blind::Token, bls::G2Scheme, Blinder, Scheme, SignatureScheme, ThresholdScheme},
     Index, Share,
 };
 
-// TODO(gakonst): Make these bindings more generic. Maybe a macro is needed here since
-// wasm-bindgen does not support generics
-type BlindThresholdSigs = G2Scheme<Bls12_377>;
-type BlindSigs = BG2Scheme<Bls12_377>;
-type PublicKey = <BlindThresholdSigs as Scheme>::Public;
-type PrivateKey = <BlindThresholdSigs as Scheme>::Private;
-type Signature = <BlindThresholdSigs as Scheme>::Signature;
+type SigScheme = G2Scheme<Bls12_377>;
+type PublicKey = <SigScheme as Scheme>::Public;
+type PrivateKey = <SigScheme as Scheme>::Private;
+type Signature = <SigScheme as Scheme>::Signature;
 type Result<T> = std::result::Result<T, JsValue>;
 
 ///////////////////////////////////////////////////////////////////////////
@@ -45,7 +38,7 @@ pub fn blind(message: Vec<u8>, seed: &[u8]) -> BlindedMessage {
     let mut rng = get_rng(&seed);
 
     // blind the message with this randomness
-    let (blinding_factor, blinded_message) = BlindThresholdSigs::blind(&message, &mut rng);
+    let (blinding_factor, blinded_message) = SigScheme::blind(&message, &mut rng);
 
     // return the message and the blinding_factor used for blinding
     BlindedMessage {
@@ -72,7 +65,7 @@ pub fn unblind(blinded_signature: &[u8], blinding_factor_buf: &[u8]) -> Result<V
             JsValue::from_str(&format!("could not unmarshal blinding factor {}", err))
         })?;
 
-    BlindThresholdSigs::unblind(&blinding_factor, blinded_signature)
+    SigScheme::unblind(&blinding_factor, blinded_signature)
         .map_err(|err| JsValue::from_str(&format!("could not unblind signature {}", err)))
 }
 
@@ -99,7 +92,7 @@ pub fn verify(public_key_buf: &[u8], message: &[u8], signature: &[u8]) -> Result
     let msg_hash = msg_hash.marshal();
 
     // checks the signature on the message hash
-    BlindThresholdSigs::verify(&public_key, &msg_hash, &signature)
+    <SigScheme as SignatureScheme>::verify(&public_key, &msg_hash, &signature)
         .map_err(|err| JsValue::from_str(&format!("signature verification failed: {}", err)))
 }
 
@@ -119,7 +112,7 @@ pub fn sign(private_key_buf: &[u8], message: &[u8]) -> Result<Vec<u8>> {
         .unmarshal(&private_key_buf)
         .map_err(|err| JsValue::from_str(&format!("could not unmarshal private key {}", err)))?;
 
-    BlindSigs::sign(&private_key, &message)
+    SigScheme::sign(&private_key, &message)
         .map_err(|err| JsValue::from_str(&format!("could not sign message: {}", err)))
 }
 
@@ -139,7 +132,7 @@ pub fn partial_sign(share_buf: &[u8], message: &[u8]) -> Result<Vec<u8>> {
         JsValue::from_str(&format!("could not unmarshal private key share {}", err))
     })?;
 
-    BlindThresholdSigs::partial_sign(&share, &message)
+    SigScheme::partial_sign(&share, &message)
         .map_err(|err| JsValue::from_str(&format!("could not partially sign message: {}", err)))
 }
 
@@ -160,7 +153,7 @@ pub fn partial_verify(polynomial_buf: &[u8], blinded_message: &[u8], sig: &[u8])
         .unmarshal(&polynomial_buf)
         .map_err(|err| JsValue::from_str(&format!("could not unmarshal polynomial {}", err)))?;
 
-    BlindThresholdSigs::partial_verify(&polynomial, blinded_message, sig)
+    SigScheme::partial_verify(&polynomial, blinded_message, sig)
         .map_err(|err| JsValue::from_str(&format!("could not partially verify message: {}", err)))
 }
 
@@ -195,7 +188,7 @@ pub fn combine(threshold: usize, signatures: Vec<u8>) -> Result<Vec<u8>> {
         .map(|chunk| chunk.to_vec())
         .collect::<Vec<Vec<u8>>>();
 
-    BlindThresholdSigs::aggregate(threshold, &sigs)
+    SigScheme::aggregate(threshold, &sigs)
         .map_err(|err| JsValue::from_str(&format!("could not aggregate sigs: {}", err,)))
 }
 
@@ -288,7 +281,7 @@ impl Keypair {
 #[wasm_bindgen]
 pub fn keygen(seed: Vec<u8>) -> Keypair {
     let mut rng = get_rng(&seed);
-    let (private, public) = BlindThresholdSigs::keypair(&mut rng);
+    let (private, public) = SigScheme::keypair(&mut rng);
     Keypair { private, public }
 }
 

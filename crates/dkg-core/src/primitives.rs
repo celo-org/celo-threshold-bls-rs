@@ -2,8 +2,8 @@ use bitvec::{prelude::*, vec::BitVec};
 use rand_core::RngCore;
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use std::collections::HashMap;
-use std::error::Error;
 use std::fmt;
+use thiserror::Error;
 use threshold_bls::{
     ecies::{self, EciesCipher},
     group::{Curve, Element, Encodable},
@@ -817,25 +817,32 @@ where
 
 pub type DKGResult<A> = Result<A, DKGError>;
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Error)]
 pub enum DKGError {
     /// PublicKeyNotFound is raised when the private key given to the DKG init
     /// function does not yield a public key that is included in the group.
+    #[error("public key not found in list of participants")]
     PublicKeyNotFound,
+
     /// InvalidThreshold is raised when creating a group and specifying an
     /// invalid threshold. Either the threshold is too low, inferior to
     /// what `minimum_threshold()` returns or is too large (i.e. larger than the
     /// number of nodes).
+    #[error("threshold {0} is not in range [{1},{2}]")]
     InvalidThreshold(usize, usize, usize),
 
     /// NotEnoughValidShares is raised when the DKG has not successfully
     /// processed enough shares because they were invalid. In that case, the DKG
     /// can not continue, the protocol MUST be aborted.
+    #[error("only has {0}/{1} valid shares")]
     NotEnoughValidShares(usize, usize),
+
+    #[error("only has {0}/{1} required justifications")]
     NotEnoughJustifications(usize, usize),
 
     /// Rejected is thrown when the participant is rejected from the final
     /// output
+    #[error("this participant is rejected from the qualified set")]
     Rejected,
 }
 
@@ -851,10 +858,7 @@ struct ShareError {
 
 impl ShareError {
     fn from(dealer_idx: ID, error: ShareErrorType) -> Self {
-        Self {
-            dealer_idx,
-            error: error,
-        }
+        Self { dealer_idx, error }
     }
 }
 
@@ -872,33 +876,6 @@ enum ShareErrorType {
     /// The two fields are (1) the degree of the polynomial and (2) the
     /// second is the degree it should be,i.e. `threshold - 1`.
     InvalidPublicPolynomial(usize, usize),
-}
-
-impl fmt::Display for DKGError {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        use DKGError::*;
-        match self {
-            PublicKeyNotFound => write!(f, "public key not found in list of participants"),
-            NotEnoughValidShares(have, must) => {
-                write!(f, "only has {}/{} valid shares", have, must)
-            }
-            NotEnoughJustifications(have, must) => {
-                write!(f, "only has {}/{} required justifications", have, must)
-            }
-            InvalidThreshold(have, min, max) => {
-                write!(f, "threshold {} is not in range [{},{}]", have, min, max)
-            }
-            Rejected => write!(f, " this participant is rejected from the qualified set"),
-        }
-    }
-}
-
-impl Error for DKGError {
-    fn source(&self) -> Option<&(dyn Error + 'static)> {
-        // Generic error, underlying cause isn't tracked.
-        // TODO
-        None
-    }
 }
 
 /// Checks if the commitment to the share corresponds to the public polynomial's

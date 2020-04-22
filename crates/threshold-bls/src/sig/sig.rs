@@ -2,7 +2,7 @@ use crate::group::{Element, Encodable, Point, Scalar};
 use crate::poly::Poly;
 use crate::Share;
 use rand_core::RngCore;
-use std::error::Error;
+use std::{error::Error, fmt::Debug};
 
 /// The `Scheme` trait contains the basic information of the groups over
 /// which the signing operations takes places and a way to create a valid key
@@ -10,7 +10,7 @@ use std::error::Error;
 ///
 /// The Scheme trait is necessary to implement for "simple" signature scheme as
 /// well for threshold based signature scheme.
-pub trait Scheme {
+pub trait Scheme: Debug {
     /// `Private` represents the field over which private keys are represented.
     type Private: Scalar;
     /// `Public` represents the group over which the public keys are
@@ -58,8 +58,10 @@ pub trait Scheme {
 /// ```
 /// Note signature scheme handles the format of the signature itself.
 pub trait SignatureScheme: Scheme {
-    fn sign(private: &Self::Private, msg: &[u8]) -> Result<Vec<u8>, Box<dyn Error>>;
-    fn verify(public: &Self::Public, msg: &[u8], sig: &[u8]) -> Result<(), Box<dyn Error>>;
+    type Error: Error;
+
+    fn sign(private: &Self::Private, msg: &[u8]) -> Result<Vec<u8>, Self::Error>;
+    fn verify(public: &Self::Public, msg: &[u8], sig: &[u8]) -> Result<(), Self::Error>;
 }
 
 /// Blinder holds the functionality of blinding and unblinding a message. It is
@@ -67,8 +69,10 @@ pub trait SignatureScheme: Scheme {
 /// threshold scheme.
 pub trait Blinder {
     type Token: Encodable;
+    type Error: Error;
+
     fn blind<R: RngCore>(msg: &[u8], rng: &mut R) -> (Self::Token, Vec<u8>);
-    fn unblind(t: &Self::Token, sig: &[u8]) -> Result<Vec<u8>, Box<dyn Error>>;
+    fn unblind(t: &Self::Token, sig: &[u8]) -> Result<Vec<u8>, Self::Error>;
 }
 
 /// BlindScheme is a signature scheme where the message can be blinded before
@@ -86,24 +90,33 @@ pub type Partial = Vec<u8>;
 /// The `dkg` module allows participants to create a distributed private/public key
 /// that can be used with implementations `ThresholdScheme`.
 pub trait ThresholdScheme: Scheme {
-    fn partial_sign(private: &Share<Self::Private>, msg: &[u8]) -> Result<Partial, Box<dyn Error>>;
+    type Error: Error;
+
+    fn partial_sign(private: &Share<Self::Private>, msg: &[u8]) -> Result<Partial, Self::Error>;
     fn partial_verify(
         public: &Poly<Self::Private, Self::Public>,
         msg: &[u8],
         partial: &[u8],
-    ) -> Result<(), Box<dyn Error>>;
+    ) -> Result<(), Self::Error>;
+
     /// Aggregates all partials signature together. Note that this method does
     /// not verify if the partial signatures are correct or not; it only
     /// aggregates them.
-    fn aggregate(threshold: usize, partials: &[Partial]) -> Result<Vec<u8>, Box<dyn Error>>;
-    fn verify(public: &Self::Public, msg: &[u8], sig: &[u8]) -> Result<(), Box<dyn Error>>;
+    fn aggregate(threshold: usize, partials: &[Partial]) -> Result<Vec<u8>, Self::Error>;
+
+    fn verify(public: &Self::Public, msg: &[u8], sig: &[u8]) -> Result<(), Self::Error>;
 }
 
-/// BlindThreshold is ThresholdScheme that allows to verifiy a partial blinded
+/// BlindThreshold is ThresholdScheme that allows to verifiy a partially blinded
 /// signature as well blinded message, to aggregate them into one blinded signature
 /// such that it can be unblinded after and verified as a regular signature.
-pub trait BlindThreshold: ThresholdScheme + Blinder {
+pub trait BlindThresholdScheme: ThresholdScheme + Blinder {
+    type Error: Error;
+
     /// unblind_partial takes a blinded partial signatures and removes the blind
     /// component.
-    fn unblind_partial(t: &Self::Token, partial: &Partial) -> Result<Partial, Box<dyn Error>>;
+    fn unblind_partial(
+        t: &Self::Token,
+        partial: &Partial,
+    ) -> Result<Partial, <Self as BlindThresholdScheme>::Error>;
 }

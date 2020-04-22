@@ -1,43 +1,55 @@
+//! Implements Threshold Signatures for all Signature Scheme implementers
 use crate::group::{Element, Encodable};
-use crate::poly::{Eval, Poly};
-use crate::sig::bls;
-use crate::sig::{Partial, Scheme as SScheme, SignatureScheme, ThresholdScheme};
+use crate::poly::{Eval, Poly, PolyError};
+use crate::sig::{Partial, SignatureScheme, ThresholdScheme};
 use crate::{Index, Share};
-use std::convert::TryInto;
-use std::error::Error;
-use std::fmt;
-use std::marker::PhantomData;
+use std::{convert::TryInto, fmt::Debug};
+use thiserror::Error;
 
+#[derive(Debug, Error)]
+pub enum IndexSerializerError {
+    #[error("signature did not contain an index, need at least {1} bytes, got {0}")]
+    InvalidLength(usize, usize),
+    #[error("could not deserialize index: {0}")]
+    IndexError(#[from] std::array::TryFromSliceError),
+}
+
+#[derive(Debug, Error)]
+pub enum ThresholdError<I: SignatureScheme> {
+    #[error("could not recover public key: {0}")]
+    PolyError(PolyError<I::Signature>),
+
+    #[error(transparent)]
+    IndexError(#[from] IndexSerializerError),
+
+    #[error("signing error {0}")]
+    SignatureError(I::Error),
+
+    #[error("not enough partial signatures: {0}/{1}")]
+    NotEnoughPartialSignatures(usize, usize),
+}
+
+/// Helper trait for serializing/deserializing indexes in a signature
 pub trait Serializer {
-    fn extract(partial: &[u8]) -> Result<(Index, Partial), TBLSError> {
+    fn extract(partial: &[u8]) -> Result<(Index, Partial), IndexSerializerError> {
         extract_index(partial)
     }
-    fn inject(idx: Index, partial: &mut Partial) -> Vec<u8> {
+
+    fn inject(idx: Index, partial: &[u8]) -> Vec<u8> {
         inject_index(idx, partial)
     }
 }
 
-impl<I> Serializer for TScheme<I> where I: SignatureScheme {}
+impl<I: SignatureScheme> Serializer for I {}
 
-pub struct TScheme<I: SignatureScheme> {
-    i: PhantomData<I>,
-}
+impl<I: SignatureScheme> ThresholdScheme for I {
+    type Error = ThresholdError<I>;
 
-impl<I> SScheme for TScheme<I>
-where
-    I: SignatureScheme,
-{
-    type Private = I::Private;
-    type Public = I::Public;
-    type Signature = I::Signature;
-}
-
-impl<I> ThresholdScheme for TScheme<I>
-where
-    I: SignatureScheme,
-{
-    fn partial_sign(private: &Share<Self::Private>, msg: &[u8]) -> Result<Vec<u8>, Box<dyn Error>> {
-        let mut sig = I::sign(&private.private, msg)?;
+    fn partial_sign(
+        private: &Share<Self::Private>,
+        msg: &[u8],
+    ) -> Result<Vec<u8>, <Self as ThresholdScheme>::Error> {
+        let mut sig = Self::sign(&private.private, msg).map_err(ThresholdError::SignatureError)?;
         let ret = inject_index(private.index, &mut sig);
         Ok(ret)
     }
@@ -46,20 +58,23 @@ where
         public: &Poly<Self::Private, Self::Public>,
         msg: &[u8],
         partial: &[u8],
-    ) -> Result<(), Box<dyn Error>> {
-        match extract_index(partial) {
-            Ok((idx, bls_sig)) => {
-                let public_i = public.eval(idx);
-                I::verify(&public_i.value, msg, &bls_sig)
-            }
-            Err(e) => Err(Box::new(e)),
-        }
+    ) -> Result<(), <Self as ThresholdScheme>::Error> {
+        let (idx, bls_sig) = extract_index(partial)?;
+        let public_i = public.eval(idx);
+        Self::verify(&public_i.value, msg, &bls_sig).map_err(ThresholdError::SignatureError)
     }
 
-    fn aggregate(threshold: usize, partials: &[Partial]) -> Result<Vec<u8>, Box<dyn Error>> {
+    fn aggregate(
+        threshold: usize,
+        partials: &[Partial],
+    ) -> Result<Vec<u8>, <Self as ThresholdScheme>::Error> {
         if threshold > partials.len() {
-            return Err(Box::new(TBLSError::NotEnoughPartialSignatures));
+            return Err(ThresholdError::NotEnoughPartialSignatures(
+                partials.len(),
+                threshold,
+            ));
         }
+
         let valid_partials: Vec<Eval<Self::Signature>> = partials
             .iter()
             .map(|s| extract_index(s))
@@ -79,63 +94,34 @@ where
             })
             .filter_map(Result::ok)
             .collect();
+
         let recovered_sig =
-            Poly::<Self::Private, Self::Signature>::recover(threshold, valid_partials)?;
+            Poly::<Self::Private, Self::Signature>::recover(threshold, valid_partials)
+                .map_err(ThresholdError::PolyError)?;
         Ok(recovered_sig.marshal())
     }
 
-    fn verify(public: &Self::Public, msg: &[u8], sig: &[u8]) -> Result<(), Box<dyn Error>> {
-        I::verify(public, msg, sig)
+    fn verify(public: &Self::Public, msg: &[u8], sig: &[u8]) -> Result<(), Self::Error> {
+        <Self as SignatureScheme>::verify(public, msg, sig).map_err(ThresholdError::SignatureError)
     }
 }
 
-#[derive(Debug)]
-pub enum TBLSError {
-    BLSError,
-    InvalidLength,
-    NotEnoughPartialSignatures,
+fn inject_index(index: Index, sig: &[u8]) -> Vec<u8> {
+    let mut res = index.to_le_bytes().to_vec();
+    res.extend_from_slice(sig);
+    res
 }
 
-impl fmt::Display for TBLSError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        use TBLSError::*;
-        match self {
-            InvalidLength => write!(f, "invalid length of signature"),
-            NotEnoughPartialSignatures => write!(f, "not enough partial signatures"),
-            BLSError => write!(f, "{}", self),
-        }
-    }
-}
-
-// This is important for other errors to wrap this one.
-impl Error for TBLSError {
-    fn source(&self) -> Option<&(dyn Error + 'static)> {
-        // Generic error, underlying cause isn't tracked.
-        // TODO
-        None
-    }
-}
-
-fn inject_index(index: Index, sig: &mut Vec<u8>) -> Vec<u8> {
-    let mut idx_slice = index.to_le_bytes().to_vec();
-    let mut full_vector = Vec::with_capacity(idx_slice.len() + sig.len());
-    full_vector.append(&mut idx_slice);
-    full_vector.append(sig);
-    full_vector
-}
-
-fn extract_index(sig: &[u8]) -> Result<(Index, Vec<u8>), TBLSError> {
+fn extract_index(sig: &[u8]) -> Result<(Index, Vec<u8>), IndexSerializerError> {
     let size_idx = std::mem::size_of::<Index>();
     if sig.len() < size_idx {
-        return Err(TBLSError::InvalidLength);
+        return Err(IndexSerializerError::InvalidLength(sig.len(), size_idx));
     }
+
     let (int_bytes, rest) = sig.split_at(size_idx);
-    let index = Index::from_le_bytes(int_bytes.try_into().unwrap());
+    let index = Index::from_le_bytes(int_bytes.try_into()?);
     Ok((index, rest.to_vec()))
 }
-
-pub type TG1Scheme<C> = TScheme<bls::G1Scheme<C>>;
-pub type TG2Scheme<C> = TScheme<bls::G2Scheme<C>>;
 
 #[cfg(feature = "bls12_381")]
 #[cfg(test)]
@@ -143,13 +129,17 @@ mod tests {
     use super::*;
     use crate::curve::bls12381::PairingCurve as PCurve;
     use crate::group::{Encodable, Point};
+    use crate::sig::{
+        bls::{G1Scheme, G2Scheme},
+        Scheme,
+    };
 
     type ShareCreator<T> = fn(
         usize,
         usize,
     ) -> (
-        Vec<Share<<T as SScheme>::Private>>,
-        Poly<<T as SScheme>::Private, <T as SScheme>::Public>,
+        Vec<Share<<T as Scheme>::Private>>,
+        Poly<<T as Scheme>::Private, <T as Scheme>::Public>,
     );
 
     fn shares<T: ThresholdScheme>(
@@ -171,10 +161,10 @@ mod tests {
 
     #[test]
     fn inject() {
-        let mut sig: Vec<u8> = (0..48).collect();
+        let sig: Vec<u8> = (0..48).collect();
         let siglen = sig.len();
         let c = sig.clone();
-        let extended = inject_index(4 as Index, &mut sig);
+        let extended = inject_index(4 as Index, &sig);
         let size_idx = std::mem::size_of::<Index>();
         assert_eq!(extended.len(), siglen + size_idx);
         assert_eq!(&extended[size_idx..], c.as_slice());
@@ -198,17 +188,19 @@ mod tests {
                 .any(|p| T::partial_verify(&public, &msg_point_bytes, &p).is_err())
         );
         let final_sig = T::aggregate(threshold, &partials).unwrap();
+
         T::verify(&public.free_coeff(), &msg_point_bytes, &final_sig).unwrap();
     }
 
     #[test]
     fn threshold_g1() {
-        test_threshold_scheme::<TG1Scheme<PCurve>>(shares::<TG1Scheme<PCurve>>);
+        type S = G1Scheme<PCurve>;
+        test_threshold_scheme::<S>(shares::<S>);
     }
 
     #[test]
     fn threshold_g2() {
-        test_threshold_scheme::<TG2Scheme<PCurve>>(shares::<TG2Scheme<PCurve>>);
+        type S = G2Scheme<PCurve>;
+        test_threshold_scheme::<S>(shares::<S>);
     }
-    /*}*/
 }
