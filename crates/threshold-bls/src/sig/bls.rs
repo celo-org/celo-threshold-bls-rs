@@ -45,6 +45,30 @@ mod common {
             Ok(h.marshal())
         }
 
+        fn internal_verify(
+            public: &Self::Public,
+            msg: &[u8],
+            sig_bytes: &[u8],
+            should_hash: bool,
+        ) -> Result<(), BLSError<Self::Signature>> {
+            let mut sig = Self::Signature::new();
+            sig.unmarshal(sig_bytes).map_err(BLSError::EncodableError)?;
+
+            let mut h = Self::Signature::new();
+            if should_hash {
+                h.map(msg).map_err(|_| BLSError::HashingError)?;
+            } else {
+                h.unmarshal(msg).map_err(BLSError::EncodableError)?;
+            }
+
+            let success = Self::final_exp(public, &sig, &h);
+            if !success {
+                return Err(BLSError::InvalidSig);
+            }
+
+            return Ok(());
+        }
+
         /// Performs the final exponentiation for the BLS sig scheme
         fn final_exp(p: &Self::Public, sig: &Self::Signature, hm: &Self::Signature) -> bool;
     }
@@ -66,24 +90,21 @@ mod common {
             T::internal_sign(private, msg, false)
         }
 
-        /// Verifies the signature by the provided public key **on the message's hash**.
+        /// Verifies the signature by the provided public key
         fn verify(
             public: &Self::Public,
             msg_bytes: &[u8],
             sig_bytes: &[u8],
         ) -> Result<(), Self::Error> {
-            let mut sig = Self::Signature::new();
-            sig.unmarshal(sig_bytes).map_err(BLSError::EncodableError)?;
+            T::internal_verify(public, msg_bytes, sig_bytes, true)
+        }
 
-            let mut hm = Self::Signature::new();
-            hm.map(msg_bytes).map_err(|_| BLSError::HashingError)?;
-
-            let success = T::final_exp(public, &sig, &hm);
-            if !success {
-                return Err(BLSError::InvalidSig);
-            }
-
-            Ok(())
+        fn verify_without_hashing(
+            public: &Self::Public,
+            msg_bytes: &[u8],
+            sig_bytes: &[u8],
+        ) -> Result<(), Self::Error> {
+            T::internal_verify(public, msg_bytes, sig_bytes, false)
         }
     }
 }
