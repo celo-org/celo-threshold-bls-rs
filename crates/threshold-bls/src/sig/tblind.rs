@@ -23,9 +23,11 @@ where
         partial: &Partial,
     ) -> Result<Partial, <Self as BlindThreshold>::Error> {
         let (index, sig) = Self::extract(partial)?;
-        let mut p = Self::unblind(t, &sig).map_err(BlindThresholdError::BlinderError)?;
-        T::inject(index, &mut p);
-        Ok(p)
+        let partially_unblinded =
+            Self::unblind(t, &sig).map_err(BlindThresholdError::BlinderError)?;
+        let injected = T::inject(index, &partially_unblinded);
+
+        Ok(injected)
     }
 }
 
@@ -61,29 +63,29 @@ mod tests {
 
     #[cfg(feature = "bls12_377")]
     #[test]
-    fn tblind_g1_zexe() {
-        tblind_test::<G1Scheme<Zexe>>();
+    fn tblind_g1_zexe_unblind() {
+        aggregate_partially_unblinded::<G1Scheme<Zexe>>();
     }
 
     #[cfg(feature = "bls12_377")]
     #[test]
-    fn tblind_g1_zexe_unblind() {
-        unblind_then_aggregate_test::<G1Scheme<Zexe>>();
+    fn tblind_g2_zexe_unblind() {
+        aggregate_partially_unblinded::<G2Scheme<Zexe>>();
     }
 
     #[cfg(feature = "bls12_381")]
     #[test]
-    fn tblind_g1() {
-        tblind_test::<G1Scheme<PCurve>>();
+    fn tblind_g1_bellman_unblind() {
+        aggregate_partially_unblinded::<G1Scheme<PCurve>>();
     }
 
     #[cfg(feature = "bls12_381")]
     #[test]
-    fn tblind_g2() {
-        tblind_test::<G2Scheme<PCurve>>();
+    fn tblind_g2_bellman_unblind() {
+        aggregate_partially_unblinded::<G2Scheme<PCurve>>();
     }
 
-    fn tblind_test<B>()
+    fn aggregate_partially_unblinded<B>()
     where
         B: BlindThreshold,
     {
@@ -91,47 +93,31 @@ mod tests {
         let thr = 4;
         let (shares, public) = shares::<B>(n, thr);
         let msg = vec![1, 9, 6, 9];
+
+        // blind the msg
+        let (token, blinded) = B::blind(&msg, &mut thread_rng());
+
+        // hash it
         let mut msg_point = B::Signature::new();
         msg_point.map(&msg).unwrap();
         let msg_point_bytes = msg_point.marshal();
-        let (token, blinded) = B::blind(&msg, &mut thread_rng());
+
+        // partially sign it
         let partials: Vec<_> = shares
             .iter()
             .map(|share| B::partial_sign(share, &blinded).unwrap())
             .collect();
-        assert_eq!(
-            false,
-            partials
-                .iter()
-                .any(|p| B::partial_verify(&public, &blinded, &p).is_err())
-        );
-        let blinded_sig = B::aggregate(thr, &partials).unwrap();
-        let unblinded = B::unblind(&token, &blinded_sig).unwrap();
 
-        B::verify(&public.public_key(), &msg_point_bytes, &unblinded).unwrap();
-    }
-
-    fn unblind_then_aggregate_test<B>()
-    where
-        B: BlindThreshold,
-    {
-        let n = 5;
-        let thr = 4;
-        let (shares, public) = shares::<B>(n, thr);
-        let msg = vec![1, 9, 6, 9];
-        let (token, blinded) = B::blind(&msg, &mut thread_rng());
-        let mut msg_point = B::Signature::new();
-        msg_point.map(&msg).unwrap();
-        let msg_point_bytes = msg_point.marshal();
-        let partials: Vec<_> = shares
-            .iter()
-            .map(|share| B::partial_sign(share, &blinded).unwrap())
-            .collect();
+        // unblind each partial sig
         let unblindeds: Vec<_> = partials
             .iter()
-            .map(|p| B::unblind_partial(&token, p))
-            .filter_map(Result::ok)
+            .map(|p| {
+                let ret = B::unblind_partial(&token, p).unwrap();
+                ret
+            })
             .collect();
+
+        // aggregate
         let final_sig = B::aggregate(thr, &unblindeds).unwrap();
 
         B::verify(&public.public_key(), &msg_point_bytes, &final_sig).unwrap();

@@ -35,7 +35,7 @@ pub trait Serializer {
         extract_index(partial)
     }
 
-    fn inject(idx: Index, partial: &mut Partial) -> Vec<u8> {
+    fn inject(idx: Index, partial: &[u8]) -> Vec<u8> {
         inject_index(idx, partial)
     }
 }
@@ -102,12 +102,10 @@ impl<I: SignatureScheme> ThresholdScheme for I {
     }
 }
 
-fn inject_index(index: Index, sig: &mut Vec<u8>) -> Vec<u8> {
-    let mut idx_slice = index.to_le_bytes().to_vec();
-    let mut full_vector = Vec::with_capacity(idx_slice.len() + sig.len());
-    full_vector.append(&mut idx_slice);
-    full_vector.append(sig);
-    full_vector
+fn inject_index(index: Index, sig: &[u8]) -> Vec<u8> {
+    let mut res = index.to_le_bytes().to_vec();
+    res.extend_from_slice(sig);
+    res
 }
 
 fn extract_index(sig: &[u8]) -> Result<(Index, Vec<u8>), IndexSerializerError> {
@@ -159,10 +157,10 @@ mod tests {
 
     #[test]
     fn inject() {
-        let mut sig: Vec<u8> = (0..48).collect();
+        let sig: Vec<u8> = (0..48).collect();
         let siglen = sig.len();
         let c = sig.clone();
-        let extended = inject_index(4 as Index, &mut sig);
+        let extended = inject_index(4 as Index, &sig);
         let size_idx = std::mem::size_of::<Index>();
         assert_eq!(extended.len(), siglen + size_idx);
         assert_eq!(&extended[size_idx..], c.as_slice());

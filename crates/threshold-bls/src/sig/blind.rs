@@ -73,9 +73,10 @@ impl<I: SignatureScheme> Blinder for I {
         sig.unmarshal(sigbuff)
             .map_err(BlinderError::EncodableError)?;
 
-        let ri = t.0.inverse().ok_or(BlinderError::InvalidToken)?;
         // r^-1 * ( r * H(m)^x) = H(m)^x
+        let ri = t.0.inverse().ok_or(BlinderError::InvalidToken)?;
         sig.mul(&ri);
+
         Ok(sig.marshal())
     }
 }
