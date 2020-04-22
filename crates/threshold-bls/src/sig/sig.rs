@@ -58,8 +58,10 @@ pub trait Scheme {
 /// ```
 /// Note signature scheme handles the format of the signature itself.
 pub trait SignatureScheme: Scheme {
-    fn sign(private: &Self::Private, msg: &[u8]) -> Result<Vec<u8>, Box<dyn Error>>;
-    fn verify(public: &Self::Public, msg: &[u8], sig: &[u8]) -> Result<(), Box<dyn Error>>;
+    type Error;
+
+    fn sign(private: &Self::Private, msg: &[u8]) -> Result<Vec<u8>, Self::Error>;
+    fn verify(public: &Self::Public, msg: &[u8], sig: &[u8]) -> Result<(), Self::Error>;
 }
 
 /// Blinder holds the functionality of blinding and unblinding a message. It is

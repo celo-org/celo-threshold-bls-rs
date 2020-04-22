@@ -1,4 +1,4 @@
-use std::{fmt::Debug, convert::TryInto};
+use std::{convert::TryInto, fmt::Debug};
 
 pub mod curve;
 pub mod ecies;
