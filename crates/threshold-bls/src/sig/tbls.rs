@@ -40,6 +40,8 @@ pub trait Serializer {
     }
 }
 
+impl<I: SignatureScheme> Serializer for I {}
+
 impl<I: SignatureScheme> ThresholdScheme for I {
     type Error = ThresholdError<I>;
 

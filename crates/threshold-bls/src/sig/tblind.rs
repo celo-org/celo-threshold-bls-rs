@@ -1,81 +1,31 @@
-use crate::poly::Poly;
-use crate::sig::blind::{BG1Scheme, BG2Scheme};
-use crate::sig::tbls::{Serializer, TScheme};
-use crate::sig::{BlindThreshold, Blinder, Partial, Scheme as SScheme, ThresholdScheme};
-use crate::Share;
-use rand::RngCore;
-use std::error::Error;
-use std::marker::PhantomData;
+use crate::sig::tbls::{IndexSerializerError, Serializer};
+use crate::sig::{BlindThreshold, Blinder, Partial, ThresholdScheme};
 
-pub struct Scheme<T: ThresholdScheme + Serializer, B: Blinder> {
-    m: PhantomData<T>,
-    b: PhantomData<B>,
+use thiserror::Error;
+
+#[derive(Debug, Error)]
+// TODO: Can we get rid of this static lifetime bound?
+pub enum BlindThresholdError<E: 'static + std::error::Error> {
+    #[error(transparent)]
+    SerializerError(#[from] IndexSerializerError),
+    #[error(transparent)]
+    BlinderError(E),
 }
 
-pub type G1Scheme<C> = Scheme<TScheme<BG1Scheme<C>>, BG1Scheme<C>>;
-pub type G2Scheme<C> = Scheme<TScheme<BG2Scheme<C>>, BG2Scheme<C>>;
-
-impl<T, B> SScheme for Scheme<T, B>
+impl<T> BlindThreshold for T
 where
-    T: ThresholdScheme + Serializer,
-    B: Blinder,
+    T: 'static + ThresholdScheme + Blinder + Serializer,
 {
-    type Private = T::Private;
-    type Public = T::Public;
-    type Signature = T::Signature;
-}
+    type Error = BlindThresholdError<<T as Blinder>::Error>;
 
-impl<T, B> ThresholdScheme for Scheme<T, B>
-where
-    T: ThresholdScheme + Serializer,
-    B: Blinder,
-{
-    fn partial_sign(private: &Share<T::Private>, msg: &[u8]) -> Result<Partial, Box<dyn Error>> {
-        T::partial_sign(private, msg)
-    }
-
-    /// partial verify takes a blinded partial signature.
-    fn partial_verify(
-        public: &Poly<T::Private, T::Public>,
-        msg: &[u8],
-        partial: &[u8],
-    ) -> Result<(), Box<dyn Error>> {
-        T::partial_verify(public, msg, partial)
-    }
-
-    fn aggregate(threshold: usize, partials: &[Partial]) -> Result<Partial, Box<dyn Error>> {
-        T::aggregate(threshold, partials)
-    }
-
-    fn verify(public: &T::Public, msg: &[u8], sig: &[u8]) -> Result<(), Box<dyn Error>> {
-        T::verify(public, msg, sig)
-    }
-}
-impl<T, B> Blinder for Scheme<T, B>
-where
-    T: ThresholdScheme + Serializer,
-    B: Blinder,
-{
-    type Token = B::Token;
-    fn blind<R: RngCore>(msg: &[u8], rng: &mut R) -> (Self::Token, Vec<u8>) {
-        B::blind(msg, rng)
-    }
-    fn unblind(t: &Self::Token, blind_sig: &[u8]) -> Result<Vec<u8>, Box<dyn Error>> {
-        B::unblind(&t, &blind_sig)
-    }
-}
-
-impl<T, B> BlindThreshold for Scheme<T, B>
-where
-    T: ThresholdScheme + Serializer,
-    B: Blinder,
-{
-    fn unblind_partial(t: &Self::Token, partial: &Partial) -> Result<Partial, Box<dyn Error>> {
-        let (index, sig) = T::extract(partial)?;
-        match B::unblind(t, &sig) {
-            Ok(mut p) => Ok(T::inject(index, &mut p)),
-            Err(e) => Err(e),
-        }
+    fn unblind_partial(
+        t: &Self::Token,
+        partial: &Partial,
+    ) -> Result<Partial, <Self as BlindThreshold>::Error> {
+        let (index, sig) = Self::extract(partial)?;
+        let mut p = Self::unblind(t, &sig).map_err(BlindThresholdError::BlinderError)?;
+        T::inject(index, &mut p);
+        Ok(p)
     }
 }
 
@@ -86,6 +36,8 @@ mod tests {
     use crate::curve::bls12381::PairingCurve as PCurve;
     #[cfg(feature = "bls12_377")]
     use crate::curve::zexe::PairingCurve as Zexe;
+    use crate::sig::bls::{G1Scheme, G2Scheme};
+    use crate::{poly::Poly, Share};
     use rand::thread_rng;
 
     use crate::{

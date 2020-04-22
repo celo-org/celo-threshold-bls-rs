@@ -111,11 +111,16 @@ pub trait ThresholdScheme: SignatureScheme {
     ) -> Result<Vec<u8>, <Self as ThresholdScheme>::Error>;
 }
 
-/// BlindThreshold is ThresholdScheme that allows to verifiy a partial blinded
+/// BlindThreshold is ThresholdScheme that allows to verifiy a partially blinded
 /// signature as well blinded message, to aggregate them into one blinded signature
 /// such that it can be unblinded after and verified as a regular signature.
-pub trait BlindThreshold: ThresholdScheme + Blinder {
+pub trait BlindThreshold: ThresholdScheme + BlindScheme {
+    type Error: Error;
+
     /// unblind_partial takes a blinded partial signatures and removes the blind
     /// component.
-    fn unblind_partial(t: &Self::Token, partial: &Partial) -> Result<Partial, Box<dyn Error>>;
+    fn unblind_partial(
+        t: &Self::Token,
+        partial: &Partial,
+    ) -> Result<Partial, <Self as BlindThreshold>::Error>;
 }
