@@ -180,7 +180,7 @@ mod tests {
         // generates a partial sig with each share from the dkg
         let partial_sigs = outputs
             .iter()
-            .map(|output| S::partial_sign(&output.share, &blinded_msg[..]).unwrap())
+            .map(|output| S::partial_sign_without_hashing(&output.share, &blinded_msg[..]).unwrap())
             .collect::<Vec<_>>();
 
         // aggregates them
@@ -192,10 +192,7 @@ mod tests {
         // get the public key (we have already checked that all outputs' pubkeys are the same)
         let pubkey = outputs[0].public.public_key();
 
-        // verify the threshold signature _against the hash of the message_
-        let mut msg_point = <S as Scheme>::Signature::new();
-        msg_point.map(&msg).unwrap();
-        let msg = msg_point.marshal();
+        // verify the threshold signature
         S::verify(&pubkey, &msg, &unblinded_sig).unwrap();
     }
 

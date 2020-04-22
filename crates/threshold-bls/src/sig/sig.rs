@@ -44,13 +44,10 @@ pub trait Scheme: Debug {
 ///
 ///
 ///  let msg = vec![1,9,6,9];
-///  let mut msg_point = <G2Scheme::<PC> as Scheme>::Signature::new();
-///  msg_point.map(&msg).unwrap();
-///  let msg_point_bytes = msg_point.marshal();
 ///
 ///  let (private,public) = G2Scheme::<PC>::keypair(&mut thread_rng());
-///  let signature = G2Scheme::<PC>::sign(&private,&msg_point_bytes).unwrap();
-///  match G2Scheme::<PC>::verify(&public,&msg_point_bytes,&signature) {
+///  let signature = G2Scheme::<PC>::sign(&private,&msg).unwrap();
+///  match G2Scheme::<PC>::verify(&public, &msg, &signature) {
 ///     Ok(_) => println!("signature is correct!"),
 ///     Err(e) => println!("signature is invalid: {}",e),
 ///  };
@@ -61,6 +58,7 @@ pub trait SignatureScheme: Scheme {
     type Error: Error;
 
     fn sign(private: &Self::Private, msg: &[u8]) -> Result<Vec<u8>, Self::Error>;
+    fn sign_without_hashing(private: &Self::Private, msg: &[u8]) -> Result<Vec<u8>, Self::Error>;
     fn verify(public: &Self::Public, msg: &[u8], sig: &[u8]) -> Result<(), Self::Error>;
 }
 
@@ -93,6 +91,12 @@ pub trait ThresholdScheme: Scheme {
     type Error: Error;
 
     fn partial_sign(private: &Share<Self::Private>, msg: &[u8]) -> Result<Partial, Self::Error>;
+
+    fn partial_sign_without_hashing(
+        private: &Share<Self::Private>,
+        msg: &[u8],
+    ) -> Result<Partial, Self::Error>;
+
     fn partial_verify(
         public: &Poly<Self::Private, Self::Public>,
         msg: &[u8],

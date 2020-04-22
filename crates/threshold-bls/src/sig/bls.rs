@@ -1,4 +1,4 @@
-use crate::group::{Element, Encodable, PairingCurve};
+use crate::group::{Element, Encodable, PairingCurve, Point};
 use crate::sig::{Scheme, SignatureScheme};
 use std::{fmt::Debug, marker::PhantomData};
 use thiserror::Error;
@@ -13,6 +13,9 @@ pub enum BLSError<E: Encodable + Debug> {
 
     #[error("could not decode data: {0}")]
     EncodableError(E::Error),
+
+    #[error("could not hash to curve")]
+    HashingError,
 }
 
 // private module workaround to avoid leaking a private
@@ -29,9 +32,14 @@ mod common {
         fn internal_sign(
             private: &Self::Private,
             msg: &[u8],
+            should_hash: bool,
         ) -> Result<Vec<u8>, BLSError<Self::Signature>> {
             let mut h = Self::Signature::new();
-            h.unmarshal(msg).map_err(BLSError::EncodableError)?;
+            if should_hash {
+                h.map(msg).map_err(|_| BLSError::HashingError)?;
+            } else {
+                h.unmarshal(msg).map_err(BLSError::EncodableError)?;
+            }
             h.mul(private);
 
             Ok(h.marshal())
@@ -48,7 +56,14 @@ mod common {
         type Error = BLSError<T::Signature>;
 
         fn sign(private: &Self::Private, msg: &[u8]) -> Result<Vec<u8>, Self::Error> {
-            T::internal_sign(private, msg)
+            T::internal_sign(private, msg, true)
+        }
+
+        fn sign_without_hashing(
+            private: &Self::Private,
+            msg: &[u8],
+        ) -> Result<Vec<u8>, Self::Error> {
+            T::internal_sign(private, msg, false)
         }
 
         /// Verifies the signature by the provided public key **on the message's hash**.
@@ -61,7 +76,7 @@ mod common {
             sig.unmarshal(sig_bytes).map_err(BLSError::EncodableError)?;
 
             let mut hm = Self::Signature::new();
-            hm.unmarshal(msg_bytes).map_err(BLSError::EncodableError)?;
+            hm.map(msg_bytes).map_err(|_| BLSError::HashingError)?;
 
             let success = T::final_exp(public, &sig, &hm);
             if !success {
@@ -136,7 +151,6 @@ where
 mod tests {
     use super::*;
     use crate::curve::bls12381::{PairingCurve as PCurve, Scalar, G1, G2};
-    use crate::group::{Encodable, Point};
     use rand::prelude::*;
 
     // TODO: make it one like in tbls
@@ -160,23 +174,15 @@ mod tests {
     fn nbls_g2() {
         let (private, public) = g2_pair();
         let msg = vec![1, 9, 6, 9];
-        let mut msg_point = <G2Scheme<PCurve> as Scheme>::Signature::new();
-        msg_point.map(&msg).unwrap();
-        let msg_point_bytes = msg_point.marshal();
-        let sig = G2Scheme::<PCurve>::sign(&private, &msg_point_bytes).unwrap();
-        G2Scheme::<PCurve>::verify(&public, &msg_point_bytes, &sig)
-            .expect("that should not happen");
+        let sig = G2Scheme::<PCurve>::sign(&private, &msg).unwrap();
+        G2Scheme::<PCurve>::verify(&public, &msg, &sig).expect("that should not happen");
     }
 
     #[test]
     fn nbls_g1() {
         let (private, public) = g1_pair();
         let msg = vec![1, 9, 6, 9];
-        let mut msg_point = <G1Scheme<PCurve> as Scheme>::Signature::new();
-        msg_point.map(&msg).unwrap();
-        let msg_point_bytes = msg_point.marshal();
-        let sig = G1Scheme::<PCurve>::sign(&private, &msg_point_bytes).unwrap();
-        G1Scheme::<PCurve>::verify(&public, &msg_point_bytes, &sig)
-            .expect("that should not happen");
+        let sig = G1Scheme::<PCurve>::sign(&private, &msg).unwrap();
+        G1Scheme::<PCurve>::verify(&public, &msg, &sig).expect("that should not happen");
     }
 }

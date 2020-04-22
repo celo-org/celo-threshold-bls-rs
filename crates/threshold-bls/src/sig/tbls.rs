@@ -54,6 +54,16 @@ impl<I: SignatureScheme> ThresholdScheme for I {
         Ok(ret)
     }
 
+    fn partial_sign_without_hashing(
+        private: &Share<Self::Private>,
+        msg: &[u8],
+    ) -> Result<Vec<u8>, <Self as ThresholdScheme>::Error> {
+        let mut sig = Self::sign_without_hashing(&private.private, msg)
+            .map_err(ThresholdError::SignatureError)?;
+        let ret = inject_index(private.index, &mut sig);
+        Ok(ret)
+    }
+
     fn partial_verify(
         public: &Poly<Self::Private, Self::Public>,
         msg: &[u8],
@@ -174,22 +184,21 @@ mod tests {
         let threshold = 4;
         let (shares, public) = creator(5, threshold);
         let msg = vec![1, 9, 6, 9];
-        let mut msg_point = T::Signature::new();
-        msg_point.map(&msg).unwrap();
-        let msg_point_bytes = msg_point.marshal();
+
         let partials: Vec<_> = shares
             .iter()
-            .map(|s| T::partial_sign(s, &msg_point_bytes).unwrap())
+            .map(|s| T::partial_sign(s, &msg).unwrap())
             .collect();
+
         assert_eq!(
             false,
             partials
                 .iter()
-                .any(|p| T::partial_verify(&public, &msg_point_bytes, &p).is_err())
+                .any(|p| T::partial_verify(&public, &msg, &p).is_err())
         );
         let final_sig = T::aggregate(threshold, &partials).unwrap();
 
-        T::verify(&public.free_coeff(), &msg_point_bytes, &final_sig).unwrap();
+        T::verify(&public.free_coeff(), &msg, &final_sig).unwrap();
     }
 
     #[test]
