@@ -557,7 +557,6 @@ mod tests {
             (Buffer::from(&msg[..]), &empty_token)
         };
 
-
         // 2. partially sign the blinded message
         let mut sigs = Vec::new();
         for i in 0..3 {
