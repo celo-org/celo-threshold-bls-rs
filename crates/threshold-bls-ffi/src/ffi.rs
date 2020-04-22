@@ -110,7 +110,7 @@ pub extern "C" fn verify(
 
     // checks the signature on the message hash
     let signature = <&[u8]>::from(unsafe { &*signature });
-    match SigScheme::verify(public_key, &msg_hash, signature) {
+    match <SigScheme as SignatureScheme>::verify(public_key, &msg_hash, signature) {
         Ok(_) => true,
         Err(_) => false,
     }

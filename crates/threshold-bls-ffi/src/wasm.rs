@@ -92,7 +92,7 @@ pub fn verify(public_key_buf: &[u8], message: &[u8], signature: &[u8]) -> Result
     let msg_hash = msg_hash.marshal();
 
     // checks the signature on the message hash
-    SigScheme::verify(&public_key, &msg_hash, &signature)
+    <SigScheme as SignatureScheme>::verify(&public_key, &msg_hash, &signature)
         .map_err(|err| JsValue::from_str(&format!("signature verification failed: {}", err)))
 }
 

@@ -100,6 +100,10 @@ impl<I: SignatureScheme> ThresholdScheme for I {
                 .map_err(ThresholdError::PolyError)?;
         Ok(recovered_sig.marshal())
     }
+
+    fn verify(public: &Self::Public, msg: &[u8], sig: &[u8]) -> Result<(), Self::Error> {
+        <Self as SignatureScheme>::verify(public, msg, sig).map_err(ThresholdError::SignatureError)
+    }
 }
 
 fn inject_index(index: Index, sig: &[u8]) -> Vec<u8> {
@@ -184,6 +188,7 @@ mod tests {
                 .any(|p| T::partial_verify(&public, &msg_point_bytes, &p).is_err())
         );
         let final_sig = T::aggregate(threshold, &partials).unwrap();
+
         T::verify(&public.free_coeff(), &msg_point_bytes, &final_sig).unwrap();
     }
 

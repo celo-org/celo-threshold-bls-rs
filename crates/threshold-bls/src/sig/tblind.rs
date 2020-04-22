@@ -1,5 +1,5 @@
 use crate::sig::tbls::{IndexSerializerError, Serializer};
-use crate::sig::{BlindThreshold, Blinder, Partial, ThresholdScheme};
+use crate::sig::{BlindThresholdScheme, Blinder, Partial, ThresholdScheme};
 
 use thiserror::Error;
 
@@ -12,7 +12,7 @@ pub enum BlindThresholdError<E: 'static + std::error::Error> {
     BlinderError(E),
 }
 
-impl<T> BlindThreshold for T
+impl<T> BlindThresholdScheme for T
 where
     T: 'static + ThresholdScheme + Blinder + Serializer,
 {
@@ -21,11 +21,11 @@ where
     fn unblind_partial(
         t: &Self::Token,
         partial: &Partial,
-    ) -> Result<Partial, <Self as BlindThreshold>::Error> {
+    ) -> Result<Partial, <Self as BlindThresholdScheme>::Error> {
         let (index, sig) = Self::extract(partial)?;
         let partially_unblinded =
             Self::unblind(t, &sig).map_err(BlindThresholdError::BlinderError)?;
-        let injected = T::inject(index, &partially_unblinded);
+        let injected = Self::inject(index, &partially_unblinded);
 
         Ok(injected)
     }
@@ -46,7 +46,7 @@ mod tests {
         group::{Element, Encodable, Point},
         Index,
     };
-    fn shares<B: BlindThreshold>(
+    fn shares<B: BlindThresholdScheme>(
         n: usize,
         t: usize,
     ) -> (Vec<Share<B::Private>>, Poly<B::Private, B::Public>) {
@@ -87,7 +87,7 @@ mod tests {
 
     fn aggregate_partially_unblinded<B>()
     where
-        B: BlindThreshold,
+        B: BlindThresholdScheme,
     {
         let n = 5;
         let thr = 4;

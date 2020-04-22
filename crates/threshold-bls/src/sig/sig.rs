@@ -89,32 +89,28 @@ pub type Partial = Vec<u8>;
 /// signature" to then produce a regular signature.
 /// The `dkg` module allows participants to create a distributed private/public key
 /// that can be used with implementations `ThresholdScheme`.
-pub trait ThresholdScheme: SignatureScheme {
+pub trait ThresholdScheme: Scheme {
     type Error: Error;
 
-    fn partial_sign(
-        private: &Share<Self::Private>,
-        msg: &[u8],
-    ) -> Result<Partial, <Self as ThresholdScheme>::Error>;
+    fn partial_sign(private: &Share<Self::Private>, msg: &[u8]) -> Result<Partial, Self::Error>;
     fn partial_verify(
         public: &Poly<Self::Private, Self::Public>,
         msg: &[u8],
         partial: &[u8],
-    ) -> Result<(), <Self as ThresholdScheme>::Error>;
+    ) -> Result<(), Self::Error>;
 
     /// Aggregates all partials signature together. Note that this method does
     /// not verify if the partial signatures are correct or not; it only
     /// aggregates them.
-    fn aggregate(
-        threshold: usize,
-        partials: &[Partial],
-    ) -> Result<Vec<u8>, <Self as ThresholdScheme>::Error>;
+    fn aggregate(threshold: usize, partials: &[Partial]) -> Result<Vec<u8>, Self::Error>;
+
+    fn verify(public: &Self::Public, msg: &[u8], sig: &[u8]) -> Result<(), Self::Error>;
 }
 
 /// BlindThreshold is ThresholdScheme that allows to verifiy a partially blinded
 /// signature as well blinded message, to aggregate them into one blinded signature
 /// such that it can be unblinded after and verified as a regular signature.
-pub trait BlindThreshold: ThresholdScheme + BlindScheme {
+pub trait BlindThresholdScheme: ThresholdScheme + Blinder {
     type Error: Error;
 
     /// unblind_partial takes a blinded partial signatures and removes the blind
@@ -122,5 +118,5 @@ pub trait BlindThreshold: ThresholdScheme + BlindScheme {
     fn unblind_partial(
         t: &Self::Token,
         partial: &Partial,
-    ) -> Result<Partial, <Self as BlindThreshold>::Error>;
+    ) -> Result<Partial, <Self as BlindThresholdScheme>::Error>;
 }
