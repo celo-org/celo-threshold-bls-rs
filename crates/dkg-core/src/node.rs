@@ -143,7 +143,7 @@ mod tests {
         curve::zexe::{self as bls12_377, PairingCurve as BLS12_377},
         group::{Element, Encodable, Point},
         sig::{
-            tblind::{G1Scheme, G2Scheme},
+            bls::{G1Scheme, G2Scheme},
             Blinder, Scheme, ThresholdScheme,
         },
         Index,

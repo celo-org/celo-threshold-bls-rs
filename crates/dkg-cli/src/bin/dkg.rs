@@ -8,7 +8,7 @@ use std::process;
 
 use threshold_bls::{
     curve::zexe::{self as bls12_377, PairingCurve as BLS12_377},
-    sig::tblind::G2Scheme,
+    sig::bls::G2Scheme,
 };
 
 // TODO: In the future, we may want to make the CLI work with both G1

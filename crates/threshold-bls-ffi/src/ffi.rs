@@ -6,22 +6,16 @@ use threshold_bls::{
     curve::zexe::PairingCurve as Bls12_377,
     group::{Element, Encodable, Point},
     poly::Poly,
-    sig::{
-        blind::{BG2Scheme, Token},
-        tblind::G2Scheme,
-        Blinder, Scheme, SignatureScheme, ThresholdScheme,
-    },
+    sig::{blind::Token, bls::G2Scheme, Blinder, Scheme, SignatureScheme, ThresholdScheme},
     Index, Share,
 };
 
 use bls_crypto::ffi::Buffer;
 
-// TODO(gakonst): Make these bindings more generic. Maybe a macro is needed here since
-type BlindThresholdSigs = G2Scheme<Bls12_377>;
-type BlindSigs = BG2Scheme<Bls12_377>;
-type PublicKey = <BlindThresholdSigs as Scheme>::Public;
-type PrivateKey = <BlindThresholdSigs as Scheme>::Private;
-type Signature = <BlindThresholdSigs as Scheme>::Signature;
+type SigScheme = G2Scheme<Bls12_377>;
+type PublicKey = <SigScheme as Scheme>::Public;
+type PrivateKey = <SigScheme as Scheme>::Private;
+type Signature = <SigScheme as Scheme>::Signature;
 
 ///////////////////////////////////////////////////////////////////////////
 // User -> Library
@@ -57,7 +51,7 @@ pub extern "C" fn blind(
 
     // blind the message with this randomness
     let message = <&[u8]>::from(unsafe { &*message });
-    let (blinding_factor, blinded_message_bytes) = BlindThresholdSigs::blind(&message, &mut rng);
+    let (blinding_factor, blinded_message_bytes) = SigScheme::blind(&message, &mut rng);
 
     unsafe { *blinded_message_out = Buffer::from(&blinded_message_bytes[..]) };
     std::mem::forget(blinded_message_bytes);
@@ -81,7 +75,7 @@ pub extern "C" fn unblind(
     let blinded_signature = <&[u8]>::from(unsafe { &*blinded_signature });
     let blinding_factor = unsafe { &*blinding_factor };
 
-    let sig = match BlindThresholdSigs::unblind(blinding_factor, blinded_signature) {
+    let sig = match SigScheme::unblind(blinding_factor, blinded_signature) {
         Ok(s) => s,
         Err(_) => return false,
     };
@@ -116,7 +110,7 @@ pub extern "C" fn verify(
 
     // checks the signature on the message hash
     let signature = <&[u8]>::from(unsafe { &*signature });
-    match BlindThresholdSigs::verify(public_key, &msg_hash, signature) {
+    match SigScheme::verify(public_key, &msg_hash, signature) {
         Ok(_) => true,
         Err(_) => false,
     }
@@ -140,7 +134,7 @@ pub extern "C" fn sign(
     let private_key = unsafe { &*private_key };
     let message = <&[u8]>::from(unsafe { &*message });
 
-    let sig = match BlindSigs::sign(&private_key, &message) {
+    let sig = match SigScheme::sign(&private_key, &message) {
         Ok(s) => s,
         Err(_) => return false,
     };
@@ -161,7 +155,7 @@ pub extern "C" fn partial_sign(
 ) -> bool {
     let share = unsafe { &*share };
     let message = unsafe { &*message };
-    let sig = match BlindThresholdSigs::partial_sign(share, <&[u8]>::from(message)) {
+    let sig = match SigScheme::partial_sign(share, <&[u8]>::from(message)) {
         Ok(s) => s,
         Err(_) => return false,
     };
@@ -190,7 +184,7 @@ pub extern "C" fn partial_verify(
     let blinded_message = <&[u8]>::from(unsafe { &*blinded_message });
     let sig = <&[u8]>::from(unsafe { &*sig });
 
-    match BlindThresholdSigs::partial_verify(&polynomial, blinded_message, sig) {
+    match SigScheme::partial_verify(&polynomial, blinded_message, sig) {
         Ok(_) => true,
         Err(_) => false,
     }
@@ -210,7 +204,7 @@ pub extern "C" fn combine(threshold: usize, signatures: *const Buffer, asig: *mu
         .map(|chunk| chunk.to_vec())
         .collect::<Vec<Vec<u8>>>();
 
-    let signature = match BlindThresholdSigs::aggregate(threshold, &sigs) {
+    let signature = match SigScheme::aggregate(threshold, &sigs) {
         Ok(s) => s,
         Err(_) => return false,
     };
@@ -385,7 +379,7 @@ pub extern "C" fn threshold_keygen(n: usize, t: usize, seed: &[u8], keys: *mut *
 pub extern "C" fn keygen(seed: *const Buffer, keypair: *mut *mut Keypair) {
     let seed = <&[u8]>::from(unsafe { &*seed });
     let mut rng = get_rng(&seed);
-    let (private, public) = BlindThresholdSigs::keypair(&mut rng);
+    let (private, public) = SigScheme::keypair(&mut rng);
     let keypair_local = Keypair { private, public };
     unsafe { *keypair = Box::into_raw(Box::new(keypair_local)) };
 }
