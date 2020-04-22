@@ -2,14 +2,14 @@
 
 use rand_core::RngCore;
 use serde::{de::DeserializeOwned, Serialize};
-use std::fmt;
+use std::fmt::{Debug, Display};
 use std::marker::PhantomData;
 
 /// Element represents an element of a group with the additive notation
 /// which is also equipped with a multiplication transformation.
 /// Two implementations are for Scalar which forms a ring so RHS is the same
 /// and Point which can be multiplied by a scalar of its prime field.
-pub trait Element<RHS = Self>: Clone + fmt::Display + fmt::Debug + Eq {
+pub trait Element<RHS = Self>: Clone + Display + Debug + Eq {
     /// new MUST return the zero element of the group.
     fn new() -> Self;
     fn one() -> Self;
@@ -33,7 +33,7 @@ pub trait Scalar: Element + Encodable {
 
 /// Basic point functionality that can be multiplied by a scalar
 pub trait Point<A: Scalar>: Element<A> + Encodable {
-    type Error;
+    type Error: Debug;
 
     fn map(&mut self, data: &[u8]) -> Result<(), <Self as Point<A>>::Error>;
 }
@@ -42,7 +42,7 @@ pub trait Point<A: Scalar>: Element<A> + Encodable {
 
 /// A group holds functionalities to create scalar and points related; it is
 /// similar to the Engine definition, just much more simpler.
-pub trait Curve: Clone + std::fmt::Debug {
+pub trait Curve: Clone + Debug {
     type Scalar: Scalar;
     type Point: Point<Self::Scalar>;
 
@@ -57,7 +57,7 @@ pub trait Curve: Clone + std::fmt::Debug {
     }
 }
 
-pub trait PairingCurve {
+pub trait PairingCurve: Debug {
     type Scalar: Scalar;
     type G1: Point<Self::Scalar> + Encodable;
     type G2: Point<Self::Scalar> + Encodable;

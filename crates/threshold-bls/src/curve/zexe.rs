@@ -291,6 +291,7 @@ impl Curve for G2Curve {
     type Point = G2;
 }
 
+#[derive(Clone, Debug)]
 pub struct PairingCurve {}
 
 impl PC for PairingCurve {

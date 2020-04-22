@@ -70,13 +70,12 @@ mod common {
 
             Ok(())
         }
-
     }
-
 }
 
 /// G1Scheme implements the BLS signature scheme with G1 as private / public
 /// keys and G2 as signature elements over the given pairing curve.
+#[derive(Clone, Debug)]
 pub struct G1Scheme<C: PairingCurve> {
     m: PhantomData<C>,
 }
@@ -105,6 +104,7 @@ where
 
 /// G2Scheme implements the BLS signature scheme with G2 as private / public
 /// keys and G1 as signature elements over the given pairing curve.
+#[derive(Clone, Debug)]
 pub struct G2Scheme<C: PairingCurve> {
     m: PhantomData<C>,
 }

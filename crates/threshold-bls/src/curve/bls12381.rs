@@ -236,6 +236,7 @@ impl C for TrialCurve {
     type Point = G1;
 }
 
+#[derive(Clone, Debug)]
 pub struct PairingCurve;
 
 impl PC for PairingCurve {
