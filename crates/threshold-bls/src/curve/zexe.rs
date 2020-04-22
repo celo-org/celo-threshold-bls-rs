@@ -9,7 +9,7 @@ use algebra::{
 use bls_crypto::{
     hash_to_curve::{try_and_increment::TryAndIncrement, HashToCurve},
     hashers::DirectHasher,
-    SIG_DOMAIN,
+    BLSError, SIG_DOMAIN,
 };
 use rand_core::RngCore;
 use serde::Serialize;
@@ -17,9 +17,19 @@ use serde::{
     de::Error as DeserializeError, ser::Error as SerializationError, Deserialize, Deserializer,
     Serializer,
 };
-use std::error::Error;
 use std::fmt;
 use std::ops::{AddAssign, MulAssign, Neg, SubAssign};
+use thiserror::Error;
+
+#[derive(Debug, Error)]
+pub enum ZexeError {
+    #[error("{0}")]
+    SerializationError(#[from] algebra::SerializationError),
+    #[error("{0}")]
+    BLSError(#[from] BLSError),
+}
+
+// TODO(gakonst): Make this work with any PairingEngine.
 
 #[derive(Debug, Clone, Eq, PartialEq, Deserialize, Serialize)]
 pub struct Scalar(
@@ -74,6 +84,8 @@ impl Element<Scalar> for Scalar {
 }
 
 impl Encodable for Scalar {
+    type Error = ZexeError;
+
     fn marshal_len() -> usize {
         zexe::Fr::SERIALIZED_SIZE
     }
@@ -86,8 +98,8 @@ impl Encodable for Scalar {
         out
     }
 
-    fn unmarshal(&mut self, data: &[u8]) -> Result<(), Box<dyn Error>> {
-        self.0 = zexe::Fr::deserialize(&mut data.as_ref()).map_err(Box::new)?;
+    fn unmarshal(&mut self, data: &[u8]) -> Result<(), ZexeError> {
+        self.0 = zexe::Fr::deserialize(&mut data.as_ref())?;
         Ok(())
     }
 }
@@ -138,6 +150,8 @@ impl Element<Scalar> for G1 {
 }
 
 impl Encodable for G1 {
+    type Error = ZexeError;
+
     fn marshal_len() -> usize {
         ZG1A::SERIALIZED_SIZE
     }
@@ -151,17 +165,17 @@ impl Encodable for G1 {
         out
     }
 
-    fn unmarshal(&mut self, data: &[u8]) -> Result<(), Box<dyn Error>> {
-        self.0 = ZG1A::deserialize(&mut data.as_ref())
-            .map_err(Box::new)?
-            .into_projective();
+    fn unmarshal(&mut self, data: &[u8]) -> Result<(), ZexeError> {
+        self.0 = ZG1A::deserialize(&mut data.as_ref())?.into_projective();
         Ok(())
     }
 }
 
 /// Implementation of Point using G1 from BLS12-377
 impl Point<Scalar> for G1 {
-    fn map(&mut self, data: &[u8]) -> Result<(), Box<dyn Error>> {
+    type Error = ZexeError;
+
+    fn map(&mut self, data: &[u8]) -> Result<(), ZexeError> {
         let hasher = TryAndIncrement::new(&DirectHasher);
 
         let hash = hasher.hash(SIG_DOMAIN, data, &vec![])?;
@@ -202,6 +216,8 @@ impl Element<Scalar> for G2 {
 }
 
 impl Encodable for G2 {
+    type Error = ZexeError;
+
     fn marshal_len() -> usize {
         ZG2A::SERIALIZED_SIZE
     }
@@ -215,17 +231,17 @@ impl Encodable for G2 {
         out
     }
 
-    fn unmarshal(&mut self, data: &[u8]) -> Result<(), Box<dyn Error>> {
-        self.0 = ZG2A::deserialize(&mut data.as_ref())
-            .map_err(Box::new)?
-            .into_projective();
+    fn unmarshal(&mut self, data: &[u8]) -> Result<(), ZexeError> {
+        self.0 = ZG2A::deserialize(&mut data.as_ref())?.into_projective();
         Ok(())
     }
 }
 
 /// Implementation of Point using G2 from BLS12-377
 impl Point<Scalar> for G2 {
-    fn map(&mut self, data: &[u8]) -> Result<(), Box<dyn Error>> {
+    type Error = ZexeError;
+
+    fn map(&mut self, data: &[u8]) -> Result<(), ZexeError> {
         let hasher = TryAndIncrement::new(&DirectHasher);
 
         let hash = hasher.hash(SIG_DOMAIN, data, &vec![])?;

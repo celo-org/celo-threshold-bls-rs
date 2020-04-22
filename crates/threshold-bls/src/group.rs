@@ -1,6 +1,7 @@
+//! Traits for operating on Groups and Elliptic Curves.
+
 use rand_core::RngCore;
 use serde::{de::DeserializeOwned, Serialize};
-use std::error::Error;
 use std::fmt;
 use std::marker::PhantomData;
 
@@ -32,7 +33,9 @@ pub trait Scalar: Element + Encodable {
 
 /// Basic point functionality that can be multiplied by a scalar
 pub trait Point<A: Scalar>: Element<A> + Encodable {
-    fn map(&mut self, data: &[u8]) -> Result<(), Box<dyn Error>>;
+    type Error;
+
+    fn map(&mut self, data: &[u8]) -> Result<(), <Self as Point<A>>::Error>;
 }
 
 //type PPoint = Point<A: Scalar>;
@@ -82,11 +85,9 @@ pub type G1Curve<C> = CurveFrom<<C as PairingCurve>::Scalar, <C as PairingCurve>
 pub type G2Curve<C> = CurveFrom<<C as PairingCurve>::Scalar, <C as PairingCurve>::G2>;
 
 pub trait Encodable: Serialize + DeserializeOwned {
+    type Error: std::error::Error;
+
     fn marshal_len() -> usize;
     fn marshal(&self) -> Vec<u8>;
-    fn unmarshal(&mut self, data: &[u8]) -> Result<(), Box<dyn Error>>;
-}
-
-pub enum DecodingError {
-    InvalidPoint,
+    fn unmarshal(&mut self, data: &[u8]) -> Result<(), Self::Error>;
 }

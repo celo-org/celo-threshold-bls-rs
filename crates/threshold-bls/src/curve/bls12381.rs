@@ -8,13 +8,26 @@ use paired::bls12_381::{
 };
 use paired::Engine;
 use rand_core::RngCore;
-use std::error::Error;
 use std::result::Result;
 
 pub type Scalar = Fr;
 pub type G1 = PG1;
 pub type G2 = PG2;
 pub type GT = Fq12;
+
+use thiserror::Error;
+
+#[derive(Debug, Error)]
+pub enum BellmanError {
+    #[error("decoding: invalid length {0}/{1}")]
+    InvalidLength(usize, usize),
+    #[error("IO Error: {0}")]
+    IoError(#[from] std::io::Error),
+    #[error("Field Decoding Error: {0}")]
+    PrimeFieldDecodingError(#[from] ff::PrimeFieldDecodingError),
+    #[error("Group Decoding Error: {0}")]
+    GroupDecodingError(#[from] groupy::GroupDecodingError),
+}
 
 impl Element<Scalar> for Scalar {
     fn new() -> Self {
@@ -30,16 +43,18 @@ impl Element<Scalar> for Scalar {
     fn mul(&mut self, mul: &Fr) {
         self.mul_assign(mul)
     }
-    // XXX Why do I need to put twice mut here ??
-    fn pick<R: RngCore>(&mut self, mut rng: &mut R) {
-        *self = Fr::random(&mut rng)
+    fn pick<R: RngCore>(&mut self, rng: &mut R) {
+        *self = Fr::random(rng)
     }
 }
 
 impl Encodable for Scalar {
+    type Error = BellmanError;
+
     fn marshal_len() -> usize {
         32
     }
+
     fn marshal(&self) -> Vec<u8> {
         let repr = self.into_repr();
         let mut out = Vec::with_capacity((repr.num_bits() / 8) as usize);
@@ -48,9 +63,9 @@ impl Encodable for Scalar {
         out
     }
 
-    fn unmarshal(&mut self, data: &[u8]) -> Result<(), Box<dyn Error>> {
+    fn unmarshal(&mut self, data: &[u8]) -> Result<(), BellmanError> {
         if data.len() != 32 {
-            return Err(Box::new(crate::curve::InvalidLength(data.len(), 32)));
+            return Err(BellmanError::InvalidLength(data.len(), 32));
         }
         let mut out = FrRepr::default();
         out.read_le(data)?;
@@ -58,6 +73,7 @@ impl Encodable for Scalar {
         Ok(())
     }
 }
+
 /// Implementation of Scalar using field elements used in BLS12-381
 impl Sc for Scalar {
     fn set_int(&mut self, i: u64) {
@@ -98,6 +114,8 @@ impl Element<Scalar> for G1 {
 }
 
 impl Encodable for G1 {
+    type Error = BellmanError;
+
     fn marshal_len() -> usize {
         48
     }
@@ -106,26 +124,24 @@ impl Encodable for G1 {
         let out = c.as_ref().clone();
         out.to_vec()
     }
-    fn unmarshal(&mut self, data: &[u8]) -> Result<(), Box<dyn Error>> {
+    fn unmarshal(&mut self, data: &[u8]) -> Result<(), BellmanError> {
         if data.len() != Self::marshal_len() {
-            return Err(Box::new(crate::curve::InvalidLength(
-                data.len(),
-                Self::marshal_len(),
-            )));
+            return Err(BellmanError::InvalidLength(data.len(), Self::marshal_len()));
         }
         let mut c = G1Compressed::empty();
         c.as_mut().copy_from_slice(data);
-        match c.into_affine() {
-            Ok(affine) => {
-                *self = affine.into_projective();
-                Ok(())
-            }
-            Err(e) => Err(Box::new(e)),
-        }
+
+        // Is there a better way to go from G1Compressed to G1?
+        let affine = c.into_affine()?;
+        *self = affine.into_projective();
+
+        Ok(())
     }
 }
 
 impl Encodable for G2 {
+    type Error = BellmanError;
+
     fn marshal_len() -> usize {
         96
     }
@@ -135,20 +151,18 @@ impl Encodable for G2 {
         let out = c.as_ref().clone();
         out.to_vec()
     }
-    fn unmarshal(&mut self, data: &[u8]) -> Result<(), Box<dyn Error>> {
+    fn unmarshal(&mut self, data: &[u8]) -> Result<(), BellmanError> {
         if data.len() != Self::marshal_len() {
-            return Err(Box::new(crate::curve::InvalidLength(data.len(), 96)));
+            return Err(BellmanError::InvalidLength(data.len(), Self::marshal_len()));
         }
+
         let mut c = G2Compressed::empty();
-        // TODO this can panic !
+        // TODO this can panic ! (when?)
         c.as_mut().copy_from_slice(data);
-        match c.into_affine() {
-            Ok(affine) => {
-                *self = affine.into_projective();
-                Ok(())
-            }
-            Err(e) => Err(Box::new(e)),
-        }
+        let affine = c.into_affine()?;
+        *self = affine.into_projective();
+
+        Ok(())
     }
 }
 
@@ -171,9 +185,12 @@ impl Element<Scalar> for G2 {
         self.mul_assign(FrRepr::from(*mul))
     }
 }
+
 /// Implementation of Point using G1 from BLS12-381
 impl Point<Fr> for G1 {
-    fn map(&mut self, data: &[u8]) -> Result<(), Box<dyn Error>> {
+    type Error = ();
+
+    fn map(&mut self, data: &[u8]) -> Result<(), ()> {
         *self = G1::hash(data);
         Ok(())
     }
@@ -181,7 +198,9 @@ impl Point<Fr> for G1 {
 
 /// Implementation of Point using G2 from BLS12-381
 impl Point<Fr> for G2 {
-    fn map(&mut self, data: &[u8]) -> Result<(), Box<dyn Error>> {
+    type Error = ();
+
+    fn map(&mut self, data: &[u8]) -> Result<(), ()> {
         *self = G2::hash(data);
         Ok(())
     }
@@ -201,9 +220,9 @@ impl Element for GT {
     fn mul(&mut self, mul: &GT) {
         self.mul_assign(mul)
     }
-    // XXX Why do I need to put twice mut here ??
-    fn pick<R: RngCore>(&mut self, mut rng: &mut R) {
-        *self = ff::Field::random(&mut rng)
+
+    fn pick<R: RngCore>(&mut self, rng: &mut R) {
+        *self = ff::Field::random(rng)
     }
 }
 

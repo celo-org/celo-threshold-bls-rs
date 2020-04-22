@@ -1,25 +1,19 @@
-use std::error::Error;
-use std::fmt;
-
 #[cfg(feature = "bls12_381")]
 pub mod bls12381;
 
 #[cfg(feature = "bls12_377")]
 pub mod zexe;
 
-#[derive(Debug)]
-pub struct InvalidLength(usize, usize);
+use thiserror::Error;
 
-impl fmt::Display for InvalidLength {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "decoding: invalid length {}/{}", self.0, self.1)
-    }
-}
+/// Error which unifies all curve specific errors from different libraries
+#[derive(Debug, Error)]
+pub enum CurveError {
+    #[cfg(feature = "bls12_377")]
+    #[error("Zexe Error: {0}")]
+    BLS12_377(zexe::ZexeError),
 
-impl Error for InvalidLength {
-    fn source(&self) -> Option<&(dyn Error + 'static)> {
-        // Generic error, underlying cause isn't tracked.
-        // TODO
-        None
-    }
+    #[cfg(feature = "bls12_381")]
+    #[error("Bellman Error: {0}")]
+    BLS12_381(bls12381::BellmanError),
 }
