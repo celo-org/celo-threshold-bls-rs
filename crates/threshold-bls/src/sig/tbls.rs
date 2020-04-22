@@ -74,6 +74,17 @@ impl<I: SignatureScheme> ThresholdScheme for I {
         Self::verify(&public_i.value, msg, &bls_sig).map_err(ThresholdError::SignatureError)
     }
 
+    fn partial_verify_without_hashing(
+        public: &Poly<Self::Private, Self::Public>,
+        msg: &[u8],
+        partial: &[u8],
+    ) -> Result<(), <Self as ThresholdScheme>::Error> {
+        let (idx, bls_sig) = extract_index(partial)?;
+        let public_i = public.eval(idx);
+        Self::verify_without_hashing(&public_i.value, msg, &bls_sig)
+            .map_err(ThresholdError::SignatureError)
+    }
+
     fn aggregate(
         threshold: usize,
         partials: &[Partial],

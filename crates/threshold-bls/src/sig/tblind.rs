@@ -39,9 +39,9 @@ mod tests {
     #[cfg(feature = "bls12_377")]
     use crate::curve::zexe::PairingCurve as Zexe;
     use crate::sig::bls::{G1Scheme, G2Scheme};
+    use crate::Index;
     use crate::{poly::Poly, Share};
     use rand::thread_rng;
-    use crate::Index;
 
     fn shares<B: BlindThresholdScheme>(
         n: usize,

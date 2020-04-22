@@ -58,8 +58,16 @@ pub trait SignatureScheme: Scheme {
     type Error: Error;
 
     fn sign(private: &Self::Private, msg: &[u8]) -> Result<Vec<u8>, Self::Error>;
+
     fn sign_without_hashing(private: &Self::Private, msg: &[u8]) -> Result<Vec<u8>, Self::Error>;
+
     fn verify(public: &Self::Public, msg: &[u8], sig: &[u8]) -> Result<(), Self::Error>;
+
+    fn verify_without_hashing(
+        public: &Self::Public,
+        msg: &[u8],
+        sig: &[u8],
+    ) -> Result<(), Self::Error>;
 }
 
 /// Blinder holds the functionality of blinding and unblinding a message. It is
@@ -98,6 +106,12 @@ pub trait ThresholdScheme: Scheme {
     ) -> Result<Partial, Self::Error>;
 
     fn partial_verify(
+        public: &Poly<Self::Private, Self::Public>,
+        msg: &[u8],
+        partial: &[u8],
+    ) -> Result<(), Self::Error>;
+
+    fn partial_verify_without_hashing(
         public: &Poly<Self::Private, Self::Public>,
         msg: &[u8],
         partial: &[u8],
