@@ -1,4 +1,4 @@
-use std::convert::TryInto;
+use std::{fmt::Debug, convert::TryInto};
 
 pub mod curve;
 pub mod ecies;
@@ -8,6 +8,7 @@ pub mod sig;
 pub use group::*;
 
 use serde::{Deserialize, Serialize};
+use thiserror::Error;
 
 pub type Index = poly::Idx;
 
@@ -15,21 +16,31 @@ pub type DistPublic<C> = poly::PublicPoly<C>;
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(bound = "S: Serialize + serde::de::DeserializeOwned")]
-pub struct Share<S: group::Scalar> {
+pub struct Share<S: Scalar> {
     pub index: Index,
     pub private: S,
 }
 
-impl<S: group::Scalar> Share<S> {
+impl<S: Scalar> Share<S> {
     pub fn new(index: Index, private: S) -> Self {
         Self { index, private }
     }
+}
+
+#[derive(Debug, Error)]
+pub enum ShareError<E: Encodable + Debug> {
+    #[error("could not deserialize index: {0}")]
+    IndexError(#[from] std::array::TryFromSliceError),
+    #[error("could not deserialize scalar: {0}")]
+    EncodableError(E::Error),
 }
 
 impl<S> Encodable for Share<S>
 where
     S: Scalar,
 {
+    type Error = ShareError<S>;
+
     fn marshal_len() -> usize {
         <S as Encodable>::marshal_len() + std::mem::size_of::<Index>()
     }
@@ -41,12 +52,16 @@ where
         bytes
     }
 
-    fn unmarshal(&mut self, data: &[u8]) -> Result<(), Box<dyn std::error::Error>> {
+    fn unmarshal(&mut self, data: &[u8]) -> Result<(), ShareError<S>> {
         let (int_bytes, rest) = data.split_at(std::mem::size_of::<Index>());
         let index = u32::from_le_bytes(int_bytes.try_into()?);
 
         self.index = index;
-        self.private.unmarshal(rest)?;
+        self.private
+            .unmarshal(rest)
+            // We cannot implement `From` for ScalarError because it is generic
+            // and results in `conflicting From<T> for T` implementations
+            .map_err(ShareError::EncodableError)?;
 
         Ok(())
     }
