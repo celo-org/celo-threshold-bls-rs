@@ -1,25 +1,28 @@
-use crate::group::{Element, Encodable, PairingCurve};
+use crate::group::{Element, Encodable, PairingCurve,Point,Scalar};
 use crate::sig::{Scheme, SignatureScheme};
 use std::{fmt::Debug, marker::PhantomData};
 use thiserror::Error;
 
 /// BLSError are thrown out when using the BLS signature scheme.
 #[derive(Debug, Error)]
-pub enum BLSError<E: Encodable + Debug> {
+pub enum BLSError<E: Point<S> + Debug,S:Scalar> {
     /// InvalidSig is raised when the validation routine of the BLS algorithm
     /// does not finish successfully,i.e. it is an invalid signature.
     #[error("invalid signature")]
     InvalidSig,
 
     #[error("could not decode data: {0}")]
-    EncodableError(E::Error),
+    EncodableError(<E as Encodable>::Error),
+
+    #[error("could not map data")]
+    MapError(<E as Point<S>>::Error),
 }
 
 // private module workaround to avoid leaking a private
 // trait into a public trait
 // see https://github.com/rust-lang/rust/issues/34537
 // XXX another way to pull it off without this hack?
-mod common {
+pub mod common {
     use super::*;
 
     /// BLSScheme is an internal trait that encompasses the common work between a
@@ -29,12 +32,26 @@ mod common {
         fn internal_sign(
             private: &Self::Private,
             msg: &[u8],
-        ) -> Result<Vec<u8>, BLSError<Self::Signature>> {
+        ) -> Result<Vec<u8>, BLSError<Self::Signature,Self::Private>> {
+            // sig = H(m)^x
             let mut h = Self::Signature::new();
-            h.unmarshal(msg).map_err(BLSError::EncodableError)?;
+            h.map(msg).map_err(BLSError::MapError)?;
             h.mul(private);
-
             Ok(h.marshal())
+        }
+
+        fn internal_verify(
+            msg: &[u8],
+            sig: &[u8],
+        ) -> Result<(Self::Signature, Self::Signature), BLSError<Self::Signature,Self::Private>>{
+            let mut sigp = Self::Signature::new();
+            if let Err(e) = sigp.unmarshal(sig) {
+                return Err(BLSError::EncodableError(e));
+            }
+            // H(m)
+            let mut h = Self::Signature::new();
+            h.map(msg).map_err(BLSError::MapError)?;
+            return Ok((sigp, h));
         }
 
         /// Performs the final exponentiation for the BLS sig scheme
@@ -45,7 +62,7 @@ mod common {
     where
         T: BLSScheme,
     {
-        type Error = BLSError<T::Signature>;
+        type Error = BLSError<T::Signature,T::Private>;
 
         fn sign(private: &Self::Private, msg: &[u8]) -> Result<Vec<u8>, Self::Error> {
             T::internal_sign(private, msg)
@@ -54,21 +71,19 @@ mod common {
         /// Verifies the signature by the provided public key **on the message's hash**.
         fn verify(
             public: &Self::Public,
-            msg_bytes: &[u8],
-            sig_bytes: &[u8],
+            msg: &[u8],
+            sig: &[u8],
         ) -> Result<(), Self::Error> {
-            let mut sig = Self::Signature::new();
-            sig.unmarshal(sig_bytes).map_err(BLSError::EncodableError)?;
-
-            let mut hm = Self::Signature::new();
-            hm.unmarshal(msg_bytes).map_err(BLSError::EncodableError)?;
-
-            let success = T::final_exp(public, &sig, &hm);
-            if !success {
-                return Err(BLSError::InvalidSig);
+         match T::internal_verify(msg, sig) {
+                Ok((sig, hm)) => {
+                    if T::final_exp(public, &sig, &hm) {
+                        Ok(())
+                    } else {
+                        Err(BLSError::InvalidSig)
+                    }
+                }
+                Err(e) => Err(e),
             }
-
-            Ok(())
         }
     }
 }
@@ -160,11 +175,8 @@ mod tests {
     fn nbls_g2() {
         let (private, public) = g2_pair();
         let msg = vec![1, 9, 6, 9];
-        let mut msg_point = <G2Scheme<PCurve> as Scheme>::Signature::new();
-        msg_point.map(&msg).unwrap();
-        let msg_point_bytes = msg_point.marshal();
-        let sig = G2Scheme::<PCurve>::sign(&private, &msg_point_bytes).unwrap();
-        G2Scheme::<PCurve>::verify(&public, &msg_point_bytes, &sig)
+        let sig = G2Scheme::<PCurve>::sign(&private, &msg).unwrap();
+        G2Scheme::<PCurve>::verify(&public, &msg, &sig)
             .expect("that should not happen");
     }
 
@@ -172,11 +184,8 @@ mod tests {
     fn nbls_g1() {
         let (private, public) = g1_pair();
         let msg = vec![1, 9, 6, 9];
-        let mut msg_point = <G1Scheme<PCurve> as Scheme>::Signature::new();
-        msg_point.map(&msg).unwrap();
-        let msg_point_bytes = msg_point.marshal();
-        let sig = G1Scheme::<PCurve>::sign(&private, &msg_point_bytes).unwrap();
-        G1Scheme::<PCurve>::verify(&public, &msg_point_bytes, &sig)
+        let sig = G1Scheme::<PCurve>::sign(&private, &msg).unwrap();
+        G1Scheme::<PCurve>::verify(&public, &msg, &sig)
             .expect("that should not happen");
     }
 }

@@ -44,9 +44,24 @@ impl<S: Scalar> Encodable for Token<S> {
     }
 }
 
-// We implement Blinder for anything that implements Signature scheme, so we also
-// enable the BlindScheme for all these, for convenience
-impl<I> BlindScheme for I where I: SignatureScheme {}
+// We implement BlindScheme for anything that is both a blinder and a scheme. We
+// don't take a regular Signature since the signing process isn't the same
+impl<B> BlindScheme for B where B: Blinder + Scheme  {
+    fn sign(private: &Self::Private, blinded: &[u8]) -> Result<Vec<u8>, Self::Error> {
+    let mut hm = I::Signature::new();
+        match hm.unmarshal(blinded) {
+            Ok(()) => {
+                hm.mul(private);
+                Ok(hm.marshal())
+            }
+            Err(e) => Err(e),
+        }
+
+    }
+    fn verify(public: &Self::Public, msg: &[u8], sig: &[u8]) -> Result<(), Self::Error> {
+        I::verify(public,msg,sig)
+    }
+}
 
 /// The blinder follows the protocol described
 /// in this [paper](https://eprint.iacr.org/2018/733.pdf).

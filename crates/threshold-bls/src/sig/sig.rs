@@ -79,7 +79,11 @@ pub trait Blinder {
 /// signature so the signer does not know the real message. The signature can
 /// later be "unblinded" as to reveal a valid signature over the initial
 /// message.
-pub trait BlindScheme: SignatureScheme + Blinder {}
+pub trait BlindScheme: Scheme + Blinder {
+    fn blind_sign(private: &Self::Private, blind_msg :&[u8]) -> Result<Vec<u8>,Self::Error>;
+    fn blind_verify(public: &Self::Public, blinded_msg: &[u8], sig: &[u8]) -> Result<(), Self::Error>;
+    fn verify(public: &Self::Public, msg: &[u8], sig: &[u8]) -> Result<(), Self::Error>;
+}
 
 /// Partial is simply an alias to denote a partial signature.
 pub type Partial = Vec<u8>;
