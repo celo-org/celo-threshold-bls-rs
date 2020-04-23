@@ -101,6 +101,11 @@ pub trait ThresholdScheme: Scheme {
 /// signature as well blinded message, to aggregate them into one blinded signature
 /// such that it can be unblinded after and verified as a regular signature.
 pub trait BlindThreshold: ThresholdScheme + Blinder {
+    fn partial_verify_blind( public: &Poly<Self::Private, Self::Public>,
+        blinded_msg: &[u8],
+        blinded_partial: &Partial,
+    ) -> Result<(), Box<dyn Error>>;
+
     /// unblind_partial takes a blinded partial signatures and removes the blind
     /// component.
     fn unblind_partial(t: &Self::Token, partial: &Partial) -> Result<Partial, Box<dyn Error>>;

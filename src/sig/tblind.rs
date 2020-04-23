@@ -1,5 +1,5 @@
 use crate::poly::Poly;
-use crate::sig::blind::{BG1Scheme, BG2Scheme};
+use crate::sig::blind::{BG1Scheme, BG2Scheme,BlindVerifier};
 use crate::sig::tbls::{Serializer, TScheme};
 use crate::sig::{BlindThreshold, Blinder, Partial, Scheme as SScheme, ThresholdScheme};
 use crate::Share;
@@ -67,8 +67,17 @@ where
 impl<T, B> BlindThreshold for Scheme<T, B>
 where
     T: ThresholdScheme + Serializer,
-    B: Blinder,
+    B: Blinder + BlindVerifier<Public=T::Public,Private=T::Private,Signature=T::Signature>,
 {
+    fn partial_verify_blind( public: &Poly<Self::Private, Self::Public>,
+        blinded_msg: &[u8],
+        blinded_partial: &Partial,
+    ) -> Result<(), Box<dyn Error>> {
+        let (index,blindsig) = T::extract(blinded_partial)?;
+        let public_i = public.eval(index);
+        B::verify_blind(&public_i.value, blinded_msg, &blindsig)
+    }
+
     fn unblind_partial(t: &Self::Token, partial: &Partial) -> Result<Partial, Box<dyn Error>> {
         let (index, sig) = T::extract(partial)?;
         match B::unblind(t, &sig) {
@@ -144,10 +153,7 @@ mod tests {
             false,
             partials
                 .iter()
-                .map(|p| B::unblind_partial(&token,p))
-                .filter(Result::is_ok)
-                .map(|up| up.unwrap())
-                .any(|up| B::partial_verify(&public, &msg, &up).is_err())
+                .any(|up| B::partial_verify_blind(&public, &blinded, &up).is_err())
         );
         println!("HELLO BACK");
 

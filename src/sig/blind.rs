@@ -93,7 +93,16 @@ where
     }
 }
 
+pub trait BlindVerifier: SScheme {
+    fn verify_blind(public: &Self::Public, blinded_msg: &[u8], blinded_sig: &[u8]) -> Result<(), Box<dyn Error>>;
+}
+
 impl<I> BlindScheme for Scheme<I> where I: SignatureScheme + common::BLSScheme {
+    fn verify_blind(public: &Self::Public, blinded_msg: &[u8], blinded_sig: &[u8]) -> Result<(), Box<dyn Error>> {
+        <Self as BlindVerifier>::verify_blind(public,blinded_msg,blinded_sig)
+    }
+}
+impl<I> BlindVerifier for Scheme<I> where I: SignatureScheme + common::BLSScheme {
     fn verify_blind(public: &Self::Public, blinded_msg: &[u8], blinded_sig: &[u8]) -> Result<(), Box<dyn Error>> {
         // message point
         let mut hm = I::Signature::new();
