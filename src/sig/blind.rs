@@ -1,5 +1,5 @@
 use crate::group::{Element, Encodable, Point, Scalar};
-use crate::sig::bls::{self, BLSError};
+use crate::sig::bls::{self, BLSError,common};
 use crate::sig::{BlindScheme, Blinder, Scheme as SScheme, SignatureScheme};
 use rand::prelude::thread_rng;
 use std::error::Error;
@@ -93,7 +93,26 @@ where
     }
 }
 
-impl<I> BlindScheme for Scheme<I> where I: SignatureScheme {}
+impl<I> BlindScheme for Scheme<I> where I: SignatureScheme + common::BLSScheme {
+    fn verify_blind(public: &Self::Public, blinded_msg: &[u8], blinded_sig: &[u8]) -> Result<(), Box<dyn Error>> {
+        // message point
+        let mut hm = I::Signature::new();
+        if let Err(_) =  hm.unmarshal(blinded_msg) {
+            return Err(Box::new(BlindError::TempError));
+        }
+        // signature point
+        let mut hs  = I::Signature::new();
+        if let Err(_) = hs.unmarshal(blinded_sig) {
+            return Err(Box::new(BlindError::TempError));
+        }
+
+        if I::final_exp(public,&hs,&hm) {
+            return Ok(());
+        } else {
+            return Err(Box::new(BlindError::TempError));
+        }
+    }
+}
 
 /// BlindError are a type of errors that blind signature scheme can return.
 #[derive(Debug)]
@@ -105,6 +124,7 @@ pub enum BlindError {
     /// BLS errors are thrown out by the currently implemented scheme since it
     /// uses BLS verification routines underneath.
     SigError(BLSError),
+    TempError,
 }
 
 /// BG2Scheme is a blind signature scheme implementation that operates with
@@ -121,6 +141,7 @@ impl fmt::Display for BlindError {
         match self {
             BlindError::InvalidToken => write!(f, "invalid token"),
             BlindError::SigError(e) => write!(f, "BLS error: {}", e),
+            BlindError::TempError => write!(f, "TEMP ERROR that should not exists"),
         }
     }
 }
@@ -130,6 +151,7 @@ impl Error for BlindError {
         match self {
             BlindError::InvalidToken => None,
             BlindError::SigError(e) => Some(e),
+            BlindError::TempError => None,
         }
     }
 }
@@ -168,6 +190,12 @@ mod tests {
         let msg = vec![1, 9, 6, 9];
         let (token, blinded) = B::blind(&msg);
         let blinded_sig = B::sign(&private, &blinded).unwrap();
+        match B::verify_blind(&public,&blinded,&blinded_sig) {
+            Ok(()) => {},
+            Err(e) => {
+                println!("{:?}",e);
+            }
+        };
         let clear_sig = B::unblind(&token, &blinded_sig).expect("unblind should go well");
         match B::verify(&public, &msg, &clear_sig) {
             Ok(()) => {}
