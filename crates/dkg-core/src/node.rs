@@ -141,10 +141,10 @@ mod tests {
     use threshold_bls::{
         curve::bls12381::{self, PairingCurve as BLS12_381},
         curve::zexe::{self as bls12_377, PairingCurve as BLS12_377},
-        group::{Element, Encodable, Point},
+        group::Point,
         sig::{
             bls::{G1Scheme, G2Scheme},
-            Blinder, Scheme, ThresholdScheme,
+            BlindThresholdScheme, Scheme,
         },
         Index,
     };
@@ -164,8 +164,7 @@ mod tests {
         C: Curve,
         // We need to bind the Curve's Point and Scalars to the Scheme
         S: Scheme<Public = <C as Curve>::Point, Private = <C as Curve>::Scalar>
-            + Blinder
-            + ThresholdScheme,
+            + BlindThresholdScheme,
         <C as Curve>::Point: Point<S::Private>,
         <S as Scheme>::Signature: Point<<C as Curve>::Scalar>,
     {

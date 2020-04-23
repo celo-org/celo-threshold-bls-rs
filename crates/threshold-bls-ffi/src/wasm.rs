@@ -8,7 +8,10 @@ use threshold_bls::{
     curve::zexe::PairingCurve as Bls12_377,
     group::{Element, Encodable},
     poly::Poly,
-    sig::{blind::Token, bls::G2Scheme, Blinder, Scheme, SignatureScheme, ThresholdScheme},
+    sig::{
+        blind::Token, bls::G2Scheme, Blinder, Scheme, SignatureScheme, ThresholdScheme,
+        ThresholdSchemeExt,
+    },
     Index, Share,
 };
 

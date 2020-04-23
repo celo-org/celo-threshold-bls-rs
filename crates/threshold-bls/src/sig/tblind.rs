@@ -1,5 +1,5 @@
 use crate::sig::tbls::{IndexSerializerError, Serializer};
-use crate::sig::{BlindThresholdScheme, Blinder, Partial, ThresholdScheme};
+use crate::sig::{BlindThresholdScheme, Blinder, Partial, ThresholdSchemeExt};
 
 use thiserror::Error;
 
@@ -14,7 +14,7 @@ pub enum BlindThresholdError<E: 'static + std::error::Error> {
 
 impl<T> BlindThresholdScheme for T
 where
-    T: 'static + ThresholdScheme + Blinder + Serializer,
+    T: 'static + ThresholdSchemeExt + Blinder + Serializer,
 {
     type Error = BlindThresholdError<<T as Blinder>::Error>;
 
