@@ -139,6 +139,17 @@ mod tests {
             .iter()
             .map(|share| B::partial_sign(share, &blinded).unwrap())
             .collect();
+        println!("HELLO");
+        assert_eq!(
+            false,
+            partials
+                .iter()
+                .map(|p| B::unblind_partial(&token,p))
+                .filter(Result::is_ok)
+                .map(|up| up.unwrap())
+                .any(|up| B::partial_verify(&public, &msg, &up).is_err())
+        );
+        println!("HELLO BACK");
 
         let blinded_sig = B::aggregate(thr, &partials).unwrap();
         let unblinded = B::unblind(&token, &blinded_sig).unwrap();
@@ -158,7 +169,7 @@ mod tests {
             .iter()
             .map(|share| B::partial_sign(share, &blinded).unwrap())
             .collect();
-        let unblindeds: Vec<_> = partials
+                let unblindeds: Vec<_> = partials
             .iter()
             .map(|p| B::unblind_partial(&token, p))
             .filter_map(Result::ok)

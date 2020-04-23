@@ -23,18 +23,8 @@ ff = { version = "0.2", package = "fff", optional = true }
 groupy = {version = "0.3.0", optional = true }
 
 
-# bls12_377
-
-algebra = { git = "https://github.com/scipr-lab/zexe", features = ["bls12_377", "edwards_sw6"], optional = true }
-bls-crypto = { git = "https://github.com/celo-org/bls-zexe", optional = true }
 #algebra_core = { git = "https://github.com/scipr-lab/zexe" }
 
 [features]
-default = ["bls12_377", "bls12_381"]
-bls12_377 = ["algebra", "bls-crypto"]
+default = [ "bls12_381"]
 bls12_381 = ["paired", "groupy", "ff"]
-
-[[example]]
-name = "tblind"
-path = "examples/tblind/main.rs"
-required-features = ["bls12_377"]
