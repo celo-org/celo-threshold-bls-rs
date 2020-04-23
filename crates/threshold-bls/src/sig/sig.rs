@@ -66,7 +66,7 @@ pub trait SignatureScheme: Scheme {
 
 /// Blinder holds the functionality of blinding and unblinding a message. It is
 /// not to be used alone but in combination with a signature scheme or a
-/// threshold scheme.
+/// threshold scheme or to build a blindscheme.
 pub trait Blinder {
     type Token: Encodable;
     type Error: Error;
@@ -79,10 +79,11 @@ pub trait Blinder {
 /// signature so the signer does not know the real message. The signature can
 /// later be "unblinded" as to reveal a valid signature over the initial
 /// message.
-pub trait BlindScheme: Scheme + Blinder {
-    fn blind_sign(private: &Self::Private, blind_msg :&[u8]) -> Result<Vec<u8>,Self::Error>;
-    fn blind_verify(public: &Self::Public, blinded_msg: &[u8], sig: &[u8]) -> Result<(), Self::Error>;
-    fn verify(public: &Self::Public, msg: &[u8], sig: &[u8]) -> Result<(), Self::Error>;
+pub trait BlindScheme: Blinder + Scheme {
+    //fn sign_blind(private: &Self::Private, blinded_msg: &[u8]) -> Result<Vec<u8>, <Self as Blinder>::Error>;
+    fn sign_blind(private: &Self::Private, blinded_msg: &[u8]) -> Result<Vec<u8>, String>;
+    //fn verify_blind(public: &Self::Public, blinded_msg: &[u8], blinded_sig: &[u8]) -> Result<(), <Self as Blinder>::Error>;
+    fn verify_blind(public: &Self::Public, blinded_msg: &[u8], blinded_sig: &[u8]) -> Result<(), String>;
 }
 
 /// Partial is simply an alias to denote a partial signature.
@@ -123,4 +124,9 @@ pub trait BlindThresholdScheme: ThresholdScheme + Blinder {
         t: &Self::Token,
         partial: &Partial,
     ) -> Result<Partial, <Self as BlindThresholdScheme>::Error>;
+
+    fn partial_verify_blind( public: &Poly<Self::Private, Self::Public>,
+        blinded_msg: &[u8],
+        blinded_partial: &Partial,
+    ) -> Result<(), String>;
 }

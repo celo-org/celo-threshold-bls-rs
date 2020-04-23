@@ -1,4 +1,6 @@
 use crate::sig::tbls::{IndexSerializerError, Serializer};
+use crate::sig::blind::BlindVerifier;
+use crate::poly::Poly;
 use crate::sig::{BlindThresholdScheme, Blinder, Partial, ThresholdScheme};
 
 use thiserror::Error;
@@ -14,7 +16,7 @@ pub enum BlindThresholdError<E: 'static + std::error::Error> {
 
 impl<T> BlindThresholdScheme for T
 where
-    T: 'static + ThresholdScheme + Blinder + Serializer,
+    T: 'static + ThresholdScheme + Blinder + Serializer + BlindVerifier,
 {
     type Error = BlindThresholdError<<T as Blinder>::Error>;
 
@@ -28,6 +30,19 @@ where
         let injected = Self::inject(index, &partially_unblinded);
 
         Ok(injected)
+    }
+     fn partial_verify_blind( public: &Poly<Self::Private, Self::Public>,
+        blinded_msg: &[u8],
+        blinded_partial: &Partial,
+    ) -> Result<(), String>{ 
+        //let (index,blindsig) = T::extract(blinded_partial)?;
+         match T::extract(blinded_partial) {
+            Ok((index,blindsig)) => {
+                let public_i = public.eval(index);
+                T::private_blind_verify(&public_i.value, blinded_msg, &blindsig)
+            },
+            Err(e) => Err(String::from("Aie")),
+         }
     }
 }
 
@@ -97,18 +112,31 @@ mod tests {
         // blind the msg
         let (token, blinded) = B::blind(&msg, &mut thread_rng());
 
-        // hash it
-        let mut msg_point = B::Signature::new();
-        msg_point.map(&msg).unwrap();
-        let msg_point_bytes = msg_point.marshal();
-
         // partially sign it
         let partials: Vec<_> = shares
             .iter()
+            // Issue is here - it should not use the same "partial_sign" as tbls
+            // provides, it should override it to use a combination of
+            // BlindScheme and ThresholdScheme 
+            // 1. BlindScheme::sign_blind
+            // 2. Inject index to the result
             .map(|share| B::partial_sign(share, &blinded).unwrap())
             .collect();
 
+        // check they are all correct
+        /*assert_eq!(false,*/
+            //partials.iter()
+            /*.any(|p| B::partial_verify_blind(&public,&blinded,p).is_err()));*/
+        /*partials.iter().for_each(|p| {*/
+            //match B::partial_verify_blind(&public,&blinded,p) {
+                //Ok(()) => println!("winner"),
+                //Err(e) => println!("{:?}",e),
+            //}
+        //});
+
         // unblind each partial sig
+        // the unblinding can be done before on each partials or after on the
+        // final signature
         let unblindeds: Vec<_> = partials
             .iter()
             .map(|p| {
@@ -120,6 +148,6 @@ mod tests {
         // aggregate
         let final_sig = B::aggregate(thr, &unblindeds).unwrap();
 
-        B::verify(&public.public_key(), &msg_point_bytes, &final_sig).unwrap();
+        B::verify(&public.public_key(), &msg, &final_sig).unwrap();
     }
 }
