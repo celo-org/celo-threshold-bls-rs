@@ -1,5 +1,5 @@
 use crate::group::{Element, Encodable, PairingCurve, Point};
-use crate::sig::{Scheme, SignatureScheme};
+use crate::sig::{Scheme, SignatureScheme, SignatureSchemeExt};
 use std::{fmt::Debug, marker::PhantomData};
 use thiserror::Error;
 
@@ -83,13 +83,6 @@ mod common {
             T::internal_sign(private, msg, true)
         }
 
-        fn sign_without_hashing(
-            private: &Self::Private,
-            msg: &[u8],
-        ) -> Result<Vec<u8>, Self::Error> {
-            T::internal_sign(private, msg, false)
-        }
-
         /// Verifies the signature by the provided public key
         fn verify(
             public: &Self::Public,
@@ -97,6 +90,18 @@ mod common {
             sig_bytes: &[u8],
         ) -> Result<(), Self::Error> {
             T::internal_verify(public, msg_bytes, sig_bytes, true)
+        }
+    }
+
+    impl<T> SignatureSchemeExt for T
+    where
+        T: BLSScheme,
+    {
+        fn sign_without_hashing(
+            private: &Self::Private,
+            msg: &[u8],
+        ) -> Result<Vec<u8>, Self::Error> {
+            T::internal_sign(private, msg, false)
         }
 
         fn verify_without_hashing(

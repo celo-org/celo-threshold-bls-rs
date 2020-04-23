@@ -59,9 +59,11 @@ pub trait SignatureScheme: Scheme {
 
     fn sign(private: &Self::Private, msg: &[u8]) -> Result<Vec<u8>, Self::Error>;
 
-    fn sign_without_hashing(private: &Self::Private, msg: &[u8]) -> Result<Vec<u8>, Self::Error>;
-
     fn verify(public: &Self::Public, msg: &[u8], sig: &[u8]) -> Result<(), Self::Error>;
+}
+
+pub trait SignatureSchemeExt: SignatureScheme {
+    fn sign_without_hashing(private: &Self::Private, msg: &[u8]) -> Result<Vec<u8>, Self::Error>;
 
     fn verify_without_hashing(
         public: &Self::Public,
@@ -85,7 +87,7 @@ pub trait Blinder {
 /// signature so the signer does not know the real message. The signature can
 /// later be "unblinded" as to reveal a valid signature over the initial
 /// message.
-pub trait BlindScheme: SignatureScheme + Blinder {}
+pub trait BlindScheme: SignatureSchemeExt + Blinder {}
 
 /// Partial is simply an alias to denote a partial signature.
 pub type Partial = Vec<u8>;
@@ -93,25 +95,14 @@ pub type Partial = Vec<u8>;
 /// ThresholdScheme is a threshold-based `t-n` signature scheme. The security of
 /// such a scheme means at least `t` participants are required produce a "partial
 /// signature" to then produce a regular signature.
-/// The `dkg` module allows participants to create a distributed private/public key
+/// The `dkg-core` module allows participants to create a distributed private/public key
 /// that can be used with implementations `ThresholdScheme`.
 pub trait ThresholdScheme: Scheme {
     type Error: Error;
 
     fn partial_sign(private: &Share<Self::Private>, msg: &[u8]) -> Result<Partial, Self::Error>;
 
-    fn partial_sign_without_hashing(
-        private: &Share<Self::Private>,
-        msg: &[u8],
-    ) -> Result<Partial, Self::Error>;
-
     fn partial_verify(
-        public: &Poly<Self::Private, Self::Public>,
-        msg: &[u8],
-        partial: &[u8],
-    ) -> Result<(), Self::Error>;
-
-    fn partial_verify_without_hashing(
         public: &Poly<Self::Private, Self::Public>,
         msg: &[u8],
         partial: &[u8],
@@ -125,10 +116,23 @@ pub trait ThresholdScheme: Scheme {
     fn verify(public: &Self::Public, msg: &[u8], sig: &[u8]) -> Result<(), Self::Error>;
 }
 
-/// BlindThreshold is ThresholdScheme that allows to verifiy a partially blinded
+pub trait ThresholdSchemeExt: ThresholdScheme {
+    fn partial_sign_without_hashing(
+        private: &Share<Self::Private>,
+        msg: &[u8],
+    ) -> Result<Partial, Self::Error>;
+
+    fn partial_verify_without_hashing(
+        public: &Poly<Self::Private, Self::Public>,
+        msg: &[u8],
+        partial: &[u8],
+    ) -> Result<(), Self::Error>;
+}
+
+/// BlindThreshold is ThresholdScheme that allows to verify a partially blinded
 /// signature as well blinded message, to aggregate them into one blinded signature
 /// such that it can be unblinded after and verified as a regular signature.
-pub trait BlindThresholdScheme: ThresholdScheme + Blinder {
+pub trait BlindThresholdScheme: ThresholdSchemeExt + Blinder {
     type Error: Error;
 
     /// unblind_partial takes a blinded partial signatures and removes the blind

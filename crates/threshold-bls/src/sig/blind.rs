@@ -1,5 +1,5 @@
 use crate::group::{Element, Encodable, Point, Scalar};
-use crate::sig::{BlindScheme, Blinder, SignatureScheme};
+use crate::sig::{BlindScheme, Blinder, SignatureScheme, SignatureSchemeExt};
 use rand::RngCore;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
@@ -46,7 +46,7 @@ impl<S: Scalar> Encodable for Token<S> {
 
 // We implement Blinder for anything that implements Signature scheme, so we also
 // enable the BlindScheme for all these, for convenience
-impl<I> BlindScheme for I where I: SignatureScheme {}
+impl<I> BlindScheme for I where I: SignatureSchemeExt {}
 
 /// The blinder follows the protocol described
 /// in this [paper](https://eprint.iacr.org/2018/733.pdf).
