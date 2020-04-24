@@ -14,10 +14,15 @@ pub trait Element<RHS = Self>:
 {
     /// new MUST return the zero element of the group.
     fn new() -> Self;
+
     fn one() -> Self;
+
     fn add(&mut self, s2: &Self);
+
     fn mul(&mut self, mul: &RHS);
-    fn pick<R: RngCore>(&mut self, rng: &mut R);
+
+    fn rand<R: RngCore>(rng: &mut R) -> Self;
+
     fn zero() -> Self {
         Self::new()
     }

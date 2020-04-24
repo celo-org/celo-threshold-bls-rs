@@ -41,8 +41,7 @@ impl<I: SignatureScheme> Blinder for I {
     type Error = BlinderError;
 
     fn blind<R: RngCore>(msg: &[u8], rng: &mut R) -> (Self::Token, Vec<u8>) {
-        let mut r = I::Private::new();
-        r.pick(rng);
+        let r = I::Private::rand(rng);
 
         let mut h = I::Signature::new();
 

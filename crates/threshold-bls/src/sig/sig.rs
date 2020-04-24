@@ -22,10 +22,11 @@ pub trait Scheme: Debug {
 
     /// Returns a new fresh keypair usable by the scheme.
     fn keypair<R: RngCore>(rng: &mut R) -> (Self::Private, Self::Public) {
-        let mut private = Self::Private::new();
-        private.pick(rng);
+        let private = Self::Private::rand(rng);
+
         let mut public = Self::Public::one();
         public.mul(&private);
+
         (private, public)
     }
 }

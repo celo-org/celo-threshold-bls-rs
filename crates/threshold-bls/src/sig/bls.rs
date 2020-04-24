@@ -179,29 +179,20 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::curve::bls12381::{PairingCurve as PCurve, Scalar, G1, G2};
+    use crate::curve::bls12381::{Curve as G1Curve, G2Curve, PairingCurve as PCurve};
+    use crate::group::Curve;
     use rand::prelude::*;
 
-    // TODO: make it one like in tbls
-    fn g2_pair() -> (Scalar, G2) {
-        let mut private = Scalar::new();
-        let mut public = G2::one();
-        private.pick(&mut thread_rng());
-        public.mul(&private);
-        (private, public)
-    }
-
-    fn g1_pair() -> (Scalar, G1) {
-        let mut private = Scalar::new();
-        let mut public = G1::one();
-        private.pick(&mut thread_rng());
+    fn keypair<C: Curve>() -> (C::Scalar, C::Point) {
+        let private = C::Scalar::rand(&mut thread_rng());
+        let mut public = C::Point::one();
         public.mul(&private);
         (private, public)
     }
 
     #[test]
     fn nbls_g2() {
-        let (private, public) = g2_pair();
+        let (private, public) = keypair::<G2Curve>();
         let msg = vec![1, 9, 6, 9];
         let sig = G2Scheme::<PCurve>::sign(&private, &msg).unwrap();
         G2Scheme::<PCurve>::verify(&public, &msg, &sig).expect("that should not happen");
@@ -209,7 +200,7 @@ mod tests {
 
     #[test]
     fn nbls_g1() {
-        let (private, public) = g1_pair();
+        let (private, public) = keypair::<G1Curve>();
         let msg = vec![1, 9, 6, 9];
         let sig = G1Scheme::<PCurve>::sign(&private, &msg).unwrap();
         G1Scheme::<PCurve>::verify(&public, &msg, &sig).expect("that should not happen");
