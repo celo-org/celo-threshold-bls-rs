@@ -1,4 +1,4 @@
-use crate::group::{Curve as C, CurveFrom as CF, Element, PairingCurve as PC, Point, Scalar as Sc};
+use crate::group::{CurveFrom as CF, Element, PairingCurve as PC, Point, Scalar as Sc};
 use ff::{Field, PrimeField};
 use groupy::CurveProjective;
 use paired::bls12_381::{Bls12, Fq12, Fr, FrRepr, G1 as PG1, G2 as PG2};
@@ -39,8 +39,8 @@ impl Element<Scalar> for Scalar {
     fn mul(&mut self, mul: &Fr) {
         self.mul_assign(mul)
     }
-    fn pick<R: RngCore>(&mut self, rng: &mut R) {
-        *self = Fr::random(rng)
+    fn rand<R: RngCore>(rng: &mut R) -> Self {
+        Fr::random(rng)
     }
 }
 
@@ -72,12 +72,14 @@ impl Element<Scalar> for G1 {
         groupy::CurveProjective::one()
     }
 
-    fn pick<R: RngCore>(&mut self, mut rng: &mut R) {
-        *self = G1::random(&mut rng)
+    fn rand<R: RngCore>(rng: &mut R) -> Self {
+        G1::random(rng)
     }
+
     fn add(&mut self, s2: &Self) {
         self.add_assign(s2);
     }
+
     fn mul(&mut self, mul: &Scalar) {
         self.mul_assign(FrRepr::from(*mul))
     }
@@ -92,12 +94,14 @@ impl Element<Scalar> for G2 {
         groupy::CurveProjective::one()
     }
 
-    fn pick<R: RngCore>(&mut self, mut rng: &mut R) {
-        *self = G2::random(&mut rng)
+    fn rand<R: RngCore>(rng: &mut R) -> Self {
+        G2::random(rng)
     }
+
     fn add(&mut self, s2: &Self) {
         self.add_assign(s2);
     }
+
     fn mul(&mut self, mul: &Scalar) {
         self.mul_assign(FrRepr::from(*mul))
     }
@@ -138,20 +142,14 @@ impl Element for GT {
         self.mul_assign(mul)
     }
 
-    fn pick<R: RngCore>(&mut self, rng: &mut R) {
-        *self = ff::Field::random(rng)
+    fn rand<R: RngCore>(rng: &mut R) -> Self {
+        ff::Field::random(rng)
     }
 }
 
 // TODO rename to G1
 pub type Curve = CF<Scalar, G1>;
 pub type G2Curve = CF<Scalar, G2>;
-#[derive(Debug, Clone)]
-pub struct TrialCurve {}
-impl C for TrialCurve {
-    type Scalar = Scalar;
-    type Point = G1;
-}
 
 #[derive(Clone, Debug)]
 pub struct PairingCurve;
@@ -188,8 +186,7 @@ mod tests {
 
     #[test]
     fn basic_group() {
-        let mut s = Scalar::new();
-        s.pick(&mut thread_rng());
+        let s = Scalar::rand(&mut thread_rng());
         let mut e1 = s.clone();
         let e2 = s.clone();
         let mut s2 = s.clone();

@@ -14,8 +14,7 @@
 //!
 //! let message = b"hello";
 //! let rng = &mut rand::thread_rng();
-//! let mut secret_key = <G2Curve as Curve>::Scalar::new();
-//! secret_key.pick(rng);
+//! let secret_key = <G2Curve as Curve>::Scalar::rand(rng);
 //! let mut public_key = <G2Curve as Curve>::Point::one();
 //! public_key.mul(&secret_key);
 //!
@@ -67,8 +66,7 @@ pub struct EciesCipher<C: Curve> {
 
 /// Encrypts the message with a public key (curve point) and returns a ciphertext
 pub fn encrypt<C: Curve, R: RngCore>(to: &C::Point, msg: &[u8], rng: &mut R) -> EciesCipher<C> {
-    let mut eph_secret = C::Scalar::new();
-    eph_secret.pick(rng);
+    let eph_secret = C::Scalar::rand(rng);
 
     let mut ephemeral = C::Point::one();
     ephemeral.mul(&eph_secret);
@@ -135,8 +133,7 @@ mod tests {
     use rand::thread_rng;
 
     fn kp() -> (Scalar, G1) {
-        let mut secret = Scalar::new();
-        secret.pick(&mut thread_rng());
+        let secret = Scalar::rand(&mut thread_rng());
         let mut public = G1::one();
         public.mul(&secret);
         (secret, public)

@@ -71,17 +71,21 @@ impl Element<Scalar> for Scalar {
     fn new() -> Self {
         Self(Zero::zero())
     }
+
     fn one() -> Self {
         Self(One::one())
     }
+
     fn add(&mut self, s2: &Self) {
         self.0.add_assign(s2.0);
     }
+
     fn mul(&mut self, mul: &Scalar) {
         self.0.mul_assign(mul.0)
     }
-    fn pick<R: RngCore>(&mut self, mut rng: &mut R) {
-        *self = Self(zexe::Fr::rand(&mut rng))
+
+    fn rand<R: RngCore>(rng: &mut R) -> Self {
+        Self(zexe::Fr::rand(rng))
     }
 }
 
@@ -119,12 +123,14 @@ impl Element<Scalar> for G1 {
         Self(ZG1::prime_subgroup_generator())
     }
 
-    fn pick<R: RngCore>(&mut self, mut rng: &mut R) {
-        self.0 = ZG1::rand(&mut rng)
+    fn rand<R: RngCore>(rng: &mut R) -> Self {
+        Self(ZG1::rand(rng))
     }
+
     fn add(&mut self, s2: &Self) {
         self.0.add_assign(s2.0);
     }
+
     fn mul(&mut self, mul: &Scalar) {
         self.0.mul_assign(mul.0)
     }
@@ -161,8 +167,8 @@ impl Element<Scalar> for G2 {
         Self(ZG2::prime_subgroup_generator())
     }
 
-    fn pick<R: RngCore>(&mut self, mut rng: &mut R) {
-        self.0 = ZG2::rand(&mut rng)
+    fn rand<R: RngCore>(mut rng: &mut R) -> Self {
+        Self(ZG2::rand(&mut rng))
     }
 
     fn add(&mut self, s2: &Self) {
@@ -207,8 +213,8 @@ impl Element<GT> for GT {
     fn mul(&mut self, mul: &GT) {
         self.0.mul_assign(mul.0)
     }
-    fn pick<R: RngCore>(&mut self, mut rng: &mut R) {
-        *self = Self(zexe::Fq12::rand(&mut rng))
+    fn rand<R: RngCore>(rng: &mut R) -> Self {
+        Self(zexe::Fq12::rand(rng))
     }
 }
 
@@ -379,8 +385,7 @@ mod tests {
 
     fn serialize_group_test<E: Element<Scalar>>(size: usize) {
         let rng = &mut rand::thread_rng();
-        let mut sig = E::new();
-        sig.pick(rng);
+        let sig = E::rand(rng);
         let ser = bincode::serialize(&sig).unwrap();
         assert_eq!(ser.len(), size);
 
@@ -396,8 +401,7 @@ mod tests {
 
     fn serialize_field_test<E: Element>(size: usize) {
         let rng = &mut rand::thread_rng();
-        let mut sig = E::new();
-        sig.pick(rng);
+        let sig = E::rand(rng);
         let ser = bincode::serialize(&sig).unwrap();
         assert_eq!(ser.len(), size);
 

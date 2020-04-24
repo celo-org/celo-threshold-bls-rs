@@ -50,13 +50,7 @@ where
     /// sampled at random from the given RNG.
     /// In the context of secret sharing, the threshold is the degree + 1.
     pub fn new_from<R: RngCore>(degree: usize, rng: &mut R) -> Self {
-        let coeffs: Vec<C> = (0..=degree)
-            .map(|_| {
-                let mut coeff = C::new();
-                coeff.pick(rng);
-                coeff
-            })
-            .collect();
+        let coeffs: Vec<C> = (0..=degree).map(|_| C::rand(rng)).collect();
         Self::from(coeffs)
     }
 
@@ -457,8 +451,7 @@ pub mod tests {
 
     #[test]
     fn new_neg_constant() {
-        let mut rd = Sc::new();
-        rd.pick(&mut thread_rng());
+        let rd = Sc::rand(&mut thread_rng());
         let p = Poly::<Sc, Sc>::new_neg_constant(&rd);
         let res = p.eval(0);
         let mut exp = rd.clone();
