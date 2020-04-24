@@ -1210,9 +1210,11 @@ dependencies = [
 name = "threshold-bls-ffi"
 version = "0.1.0"
 dependencies = [
+ "bincode",
  "bls-crypto",
  "rand_chacha",
  "rand_core",
+ "serde",
  "threshold-bls",
  "wasm-bindgen",
 ]

@@ -16,6 +16,8 @@ rand_core = { version = "0.5.1", default-features = false }
 rand_chacha = { version = "0.2.2", default-features = false }
 
 wasm-bindgen = { version = "0.2.60", optional = true }
+bincode = { version = "1.2.1", default-features = false }
+serde = { version = "1.0.106", default-features =  false }
 
 [features]
 wasm = ["wasm-bindgen"]
