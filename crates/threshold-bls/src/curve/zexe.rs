@@ -4,7 +4,7 @@ use algebra::{
     curves::{AffineCurve, PairingEngine, ProjectiveCurve},
     fields::Field,
     prelude::{One, UniformRand, Zero},
-    CanonicalDeserialize, CanonicalSerialize,
+    CanonicalDeserialize, CanonicalSerialize, ConstantSerializedSize,
 };
 use bls_crypto::{
     hash_to_curve::{try_and_increment::TryAndIncrement, HashToCurve},
@@ -12,13 +12,17 @@ use bls_crypto::{
     BLSError, SIG_DOMAIN,
 };
 use rand_core::RngCore;
-use serde::Serialize;
 use serde::{
-    de::Error as DeserializeError, ser::Error as SerializationError, Deserialize, Deserializer,
-    Serializer,
+    de::{Error as DeserializeError, SeqAccess, Visitor},
+    ser::{Error as SerializationError, SerializeTuple},
+    Deserialize, Deserializer, Serialize, Serializer,
 };
-use std::fmt;
-use std::ops::{AddAssign, MulAssign, Neg, SubAssign};
+use std::{
+    fmt,
+    marker::PhantomData,
+    ops::{AddAssign, MulAssign, Neg, SubAssign},
+};
+
 use thiserror::Error;
 
 #[derive(Debug, Error)]
@@ -237,15 +241,45 @@ impl PC for PairingCurve {
     }
 }
 
-// Serde implementations
+// Serde implementations (ideally, these should be upstreamed to Zexe)
 
 fn deserialize_field<'de, D, C>(deserializer: D) -> Result<C, D::Error>
 where
     D: Deserializer<'de>,
-    C: CanonicalDeserialize,
+    C: CanonicalDeserialize + ConstantSerializedSize,
 {
-    let bytes = Vec::<u8>::deserialize(deserializer)?;
-    C::deserialize(&mut &bytes[..]).map_err(|err| DeserializeError::custom(err))
+    struct FieldVisitor<C>(PhantomData<C>);
+
+    impl<'de, C> Visitor<'de> for FieldVisitor<C>
+    where
+        C: CanonicalDeserialize + ConstantSerializedSize,
+    {
+        type Value = C;
+
+        fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+            formatter.write_str("a valid group element")
+        }
+
+        fn visit_seq<S>(self, mut seq: S) -> Result<C, S::Error>
+        where
+            S: SeqAccess<'de>,
+        {
+            let len = C::SERIALIZED_SIZE;
+            let bytes: Vec<u8> = (0..len)
+                .map(|_| {
+                    seq.next_element()?
+                        .ok_or(DeserializeError::custom("could not read bytes"))
+                })
+                .collect::<Result<Vec<_>, _>>()?;
+
+            let res =
+                C::deserialize(&mut &bytes[..]).map_err(|err| DeserializeError::custom(err))?;
+            Ok(res)
+        }
+    }
+
+    let visitor = FieldVisitor(PhantomData);
+    deserializer.deserialize_tuple(C::SERIALIZED_SIZE, visitor)
 }
 
 fn serialize_field<S, C>(c: &C, s: S) -> Result<S::Ok, S::Error>
@@ -253,22 +287,57 @@ where
     S: Serializer,
     C: CanonicalSerialize,
 {
-    let mut bytes = Vec::with_capacity(c.serialized_size());
+    let len = c.serialized_size();
+    let mut bytes = Vec::with_capacity(len);
     c.serialize(&mut bytes)
         .map_err(|err| SerializationError::custom(err))?;
-    s.serialize_bytes(&bytes)
+
+    let mut tup = s.serialize_tuple(len)?;
+    for byte in &bytes {
+        tup.serialize_element(byte)?;
+    }
+    tup.end()
 }
 
 fn deserialize_group<'de, D, C>(deserializer: D) -> Result<C, D::Error>
 where
     D: Deserializer<'de>,
     C: ProjectiveCurve,
-    C::Affine: CanonicalDeserialize,
+    C::Affine: CanonicalDeserialize + ConstantSerializedSize,
 {
-    let bytes = Vec::<u8>::deserialize(deserializer)?;
-    let affine =
-        C::Affine::deserialize(&mut &bytes[..]).map_err(|err| DeserializeError::custom(err))?;
-    Ok(affine.into_projective())
+    struct GroupVisitor<C>(PhantomData<C>);
+
+    impl<'de, C> Visitor<'de> for GroupVisitor<C>
+    where
+        C: ProjectiveCurve,
+        C::Affine: CanonicalDeserialize + ConstantSerializedSize,
+    {
+        type Value = C;
+
+        fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+            formatter.write_str("a valid group element")
+        }
+
+        fn visit_seq<S>(self, mut seq: S) -> Result<C, S::Error>
+        where
+            S: SeqAccess<'de>,
+        {
+            let len = C::Affine::SERIALIZED_SIZE;
+            let bytes: Vec<u8> = (0..len)
+                .map(|_| {
+                    seq.next_element()?
+                        .ok_or(DeserializeError::custom("could not read bytes"))
+                })
+                .collect::<Result<Vec<_>, _>>()?;
+
+            let affine = C::Affine::deserialize(&mut &bytes[..])
+                .map_err(|err| DeserializeError::custom(err))?;
+            Ok(affine.into_projective())
+        }
+    }
+
+    let visitor = GroupVisitor(PhantomData);
+    deserializer.deserialize_tuple(C::Affine::SERIALIZED_SIZE, visitor)
 }
 
 fn serialize_group<S, C>(c: &C, s: S) -> Result<S::Ok, S::Error>
@@ -278,11 +347,17 @@ where
     C::Affine: CanonicalSerialize,
 {
     let affine = c.into_affine();
-    let mut bytes = Vec::with_capacity(affine.serialized_size());
+    let len = affine.serialized_size();
+    let mut bytes = Vec::with_capacity(len);
     affine
         .serialize(&mut bytes)
         .map_err(|err| SerializationError::custom(err))?;
-    s.serialize_bytes(&bytes)
+
+    let mut tup = s.serialize_tuple(len)?;
+    for byte in &bytes {
+        tup.serialize_element(byte)?;
+    }
+    tup.end()
 }
 
 #[cfg(test)]
@@ -295,4 +370,38 @@ mod tests {
     assert_impl_all!(G2: Serialize, DeserializeOwned, Clone);
     assert_impl_all!(GT: Serialize, DeserializeOwned, Clone);
     assert_impl_all!(Scalar: Serialize, DeserializeOwned, Clone);
+
+    #[test]
+    fn serialize_group() {
+        serialize_group_test::<G1>(48);
+        serialize_group_test::<G2>(96);
+    }
+
+    fn serialize_group_test<E: Element<Scalar>>(size: usize) {
+        let rng = &mut rand::thread_rng();
+        let mut sig = E::new();
+        sig.pick(rng);
+        let ser = bincode::serialize(&sig).unwrap();
+        assert_eq!(ser.len(), size);
+
+        let de: E = bincode::deserialize(&ser).unwrap();
+        assert_eq!(de, sig);
+    }
+
+    #[test]
+    fn serialize_field() {
+        serialize_field_test::<GT>(576);
+        serialize_field_test::<Scalar>(32);
+    }
+
+    fn serialize_field_test<E: Element>(size: usize) {
+        let rng = &mut rand::thread_rng();
+        let mut sig = E::new();
+        sig.pick(rng);
+        let ser = bincode::serialize(&sig).unwrap();
+        assert_eq!(ser.len(), size);
+
+        let de: E = bincode::deserialize(&ser).unwrap();
+        assert_eq!(de, sig);
+    }
 }

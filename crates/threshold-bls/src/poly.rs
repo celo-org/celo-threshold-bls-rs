@@ -1,9 +1,8 @@
 use crate::group::{Curve, Element, Point, Scalar};
 use rand_core::RngCore;
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
-use std::fmt;
-use std::marker::PhantomData;
+use std::{collections::HashMap, fmt, marker::PhantomData};
+use thiserror::Error;
 
 // TODO can't we have trait bounds on type aliases ?
 pub type PrivatePoly<C> = Poly<<C as Curve>::Scalar, <C as Curve>::Scalar>;
@@ -12,15 +11,12 @@ pub type PublicPoly<C> = Poly<<C as Curve>::Scalar, <C as Curve>::Point>;
 pub type Idx = u32;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct Eval<A: Clone> {
+pub struct Eval<A> {
     pub value: A,
     pub index: Idx,
 }
 
-impl<A> fmt::Display for Eval<A>
-where
-    A: Element,
-{
+impl<A: fmt::Display> fmt::Display for Eval<A> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{{ idx: {}, value: {} }}", self.index, self.value)
     }
@@ -38,8 +34,6 @@ pub struct Poly<Var: Scalar, Coeff: Element<Var>> {
     c: Vec<Coeff>,
     phantom: PhantomData<Var>,
 }
-
-use thiserror::Error;
 
 #[derive(Debug, Error)]
 pub enum PolyError {
