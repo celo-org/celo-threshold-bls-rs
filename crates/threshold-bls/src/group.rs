@@ -9,9 +9,9 @@ use std::marker::PhantomData;
 /// which is also equipped with a multiplication transformation.
 /// Two implementations are for Scalar which forms a ring so RHS is the same
 /// and Point which can be multiplied by a scalar of its prime field.
-pub trait Element<RHS = Self>:
-    Clone + Display + Debug + Eq + Serialize + for<'a> Deserialize<'a>
-{
+pub trait Element: Clone + Display + Debug + Eq + Serialize + for<'a> Deserialize<'a> {
+    type RHS;
+
     /// new MUST return the zero element of the group.
     fn new() -> Self;
 
@@ -19,7 +19,7 @@ pub trait Element<RHS = Self>:
 
     fn add(&mut self, s2: &Self);
 
-    fn mul(&mut self, mul: &RHS);
+    fn mul(&mut self, mul: &Self::RHS);
 
     fn rand<R: RngCore>(rng: &mut R) -> Self;
 
@@ -39,19 +39,17 @@ pub trait Scalar: Element {
 }
 
 /// Basic point functionality that can be multiplied by a scalar
-pub trait Point<A: Scalar>: Element<A> {
+pub trait Point: Element {
     type Error: Debug;
 
-    fn map(&mut self, data: &[u8]) -> Result<(), <Self as Point<A>>::Error>;
+    fn map(&mut self, data: &[u8]) -> Result<(), <Self as Point>::Error>;
 }
-
-//type PPoint = Point<A: Scalar>;
 
 /// A group holds functionalities to create scalar and points related; it is
 /// similar to the Engine definition, just much more simpler.
 pub trait Curve: Clone + Debug {
-    type Scalar: Scalar;
-    type Point: Point<Self::Scalar>;
+    type Scalar: Scalar<RHS = Self::Scalar>;
+    type Point: Point<RHS = Self::Scalar>;
 
     /// scalar returns the identity element of the field.
     fn scalar() -> Self::Scalar {
@@ -65,24 +63,24 @@ pub trait Curve: Clone + Debug {
 }
 
 pub trait PairingCurve: Debug {
-    type Scalar: Scalar;
-    type G1: Point<Self::Scalar>;
-    type G2: Point<Self::Scalar>;
+    type Scalar: Scalar<RHS = Self::Scalar>;
+    type G1: Point<RHS = Self::Scalar>;
+    type G2: Point<RHS = Self::Scalar>;
     type GT: Element;
 
     fn pair(a: &Self::G1, b: &Self::G2) -> Self::GT;
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub struct CurveFrom<S: Scalar, P: Point<S>> {
+pub struct CurveFrom<S: Scalar, P: Point> {
     m: PhantomData<S>,
     mm: PhantomData<P>,
 }
 
 impl<S, P> Curve for CurveFrom<S, P>
 where
-    S: Scalar,
-    P: Point<S>,
+    S: Scalar<RHS = S>,
+    P: Point<RHS = S>,
 {
     type Scalar = S;
     type Point = P;
