@@ -55,8 +55,8 @@ mod tests {
     fn shares<B: BlindThresholdScheme>(
         n: usize,
         t: usize,
-    ) -> (Vec<Share<B::Private>>, Poly<B::Private, B::Public>) {
-        let private = Poly::<B::Private, B::Private>::new(t - 1);
+    ) -> (Vec<Share<B::Private>>, Poly<B::Public>) {
+        let private = Poly::<B::Private>::new(t - 1);
         let shares = (0..n)
             .map(|i| private.eval(i as Index))
             .map(|e| Share {

@@ -13,12 +13,12 @@ use std::{error::Error, fmt::Debug};
 /// well for threshold based signature scheme.
 pub trait Scheme: Debug {
     /// `Private` represents the field over which private keys are represented.
-    type Private: Scalar;
+    type Private: Scalar<RHS = Self::Private>;
     /// `Public` represents the group over which the public keys are
     /// represented.
-    type Public: Point<Self::Private> + Serialize + DeserializeOwned;
+    type Public: Point<RHS = Self::Private> + Serialize + DeserializeOwned;
     /// `Signature` represents the group over which the signatures are reresented.
-    type Signature: Point<Self::Private> + Serialize + DeserializeOwned;
+    type Signature: Point<RHS = Self::Private> + Serialize + DeserializeOwned;
 
     /// Returns a new fresh keypair usable by the scheme.
     fn keypair<R: RngCore>(rng: &mut R) -> (Self::Private, Self::Public) {
@@ -105,7 +105,7 @@ pub trait ThresholdScheme: Scheme {
     fn partial_sign(private: &Share<Self::Private>, msg: &[u8]) -> Result<Partial, Self::Error>;
 
     fn partial_verify(
-        public: &Poly<Self::Private, Self::Public>,
+        public: &Poly<Self::Public>,
         msg: &[u8],
         partial: &[u8],
     ) -> Result<(), Self::Error>;
@@ -125,7 +125,7 @@ pub trait ThresholdSchemeExt: ThresholdScheme {
     ) -> Result<Partial, Self::Error>;
 
     fn partial_verify_without_hashing(
-        public: &Poly<Self::Private, Self::Public>,
+        public: &Poly<Self::Public>,
         msg: &[u8],
         partial: &[u8],
     ) -> Result<(), Self::Error>;

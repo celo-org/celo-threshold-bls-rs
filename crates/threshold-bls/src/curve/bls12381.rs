@@ -25,7 +25,9 @@ pub enum BellmanError {
     GroupDecodingError(#[from] groupy::GroupDecodingError),
 }
 
-impl Element<Scalar> for Scalar {
+impl Element for Scalar {
+    type RHS = Fr;
+
     fn new() -> Self {
         ff::Field::zero()
     }
@@ -63,7 +65,9 @@ impl Sc for Scalar {
     }
 }
 /// G1 points can be multiplied by Fr elements
-impl Element<Scalar> for G1 {
+impl Element for G1 {
+    type RHS = Scalar;
+
     fn new() -> Self {
         groupy::CurveProjective::zero()
     }
@@ -85,7 +89,9 @@ impl Element<Scalar> for G1 {
     }
 }
 
-impl Element<Scalar> for G2 {
+impl Element for G2 {
+    type RHS = Scalar;
+
     fn new() -> Self {
         groupy::CurveProjective::zero()
     }
@@ -108,7 +114,7 @@ impl Element<Scalar> for G2 {
 }
 
 /// Implementation of Point using G1 from BLS12-381
-impl Point<Fr> for G1 {
+impl Point for G1 {
     type Error = ();
 
     fn map(&mut self, data: &[u8]) -> Result<(), ()> {
@@ -118,7 +124,7 @@ impl Point<Fr> for G1 {
 }
 
 /// Implementation of Point using G2 from BLS12-381
-impl Point<Fr> for G2 {
+impl Point for G2 {
     type Error = ();
 
     fn map(&mut self, data: &[u8]) -> Result<(), ()> {
@@ -128,6 +134,8 @@ impl Point<Fr> for G2 {
 }
 
 impl Element for GT {
+    type RHS = GT;
+
     fn new() -> Self {
         ff::Field::zero()
     }
@@ -179,7 +187,7 @@ mod tests {
     assert_impl_all!(Scalar: Serialize, DeserializeOwned, Clone);
 
     // test if the element trait is usable
-    fn add_two<T: Element>(e1: &mut T, e2: &T) {
+    fn add_two<T: Element<RHS = T>>(e1: &mut T, e2: &T) {
         e1.add(e2);
         e1.mul(e2);
     }

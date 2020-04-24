@@ -1,12 +1,11 @@
 use crate::group::{Curve, Element, Point, Scalar};
 use rand_core::RngCore;
 use serde::{Deserialize, Serialize};
-use std::{collections::HashMap, fmt, marker::PhantomData};
+use std::{collections::HashMap, fmt};
 use thiserror::Error;
 
-// TODO can't we have trait bounds on type aliases ?
-pub type PrivatePoly<C> = Poly<<C as Curve>::Scalar, <C as Curve>::Scalar>;
-pub type PublicPoly<C> = Poly<<C as Curve>::Scalar, <C as Curve>::Point>;
+pub type PrivatePoly<C> = Poly<<C as Curve>::Scalar>;
+pub type PublicPoly<C> = Poly<<C as Curve>::Point>;
 
 pub type Idx = u32;
 
@@ -25,27 +24,18 @@ impl<A: fmt::Display> fmt::Display for Eval<A> {
 /// A polynomial that is using a scalar for the variable x and a generic
 /// element for the coefficients. The coefficients must be able to multiply
 /// the type of the variable, which is always a scalar.
-//  TODO Annoying to have an unused type warning here for Var: it is used in the
-//  constraint but not in the struct directly.-> phantomdata ?
-//  TODO: make it implement Element trait ;) ?
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-#[serde(bound = "Var: Serialize + serde::de::DeserializeOwned")]
-pub struct Poly<Var: Scalar, Coeff: Element<Var>> {
-    c: Vec<Coeff>,
-    phantom: PhantomData<Var>,
+pub struct Poly<C> {
+    c: Vec<C>,
 }
 
-#[derive(Debug, Error)]
-pub enum PolyError {
-    #[error("Invalid recovery: only has {0}/{1} shares")]
-    InvalidRecovery(usize, usize),
+impl<C> Poly<C> {
+    pub fn degree(&self) -> usize {
+        self.c.len() - 1
+    }
 }
 
-impl<X, C> Poly<X, C>
-where
-    X: Scalar,
-    C: Element<X>,
-{
+impl<C: Element> Poly<C> {
     /// Returns a new polynomial of the given degree where each coefficients is
     /// sampled at random from the given RNG.
     /// In the context of secret sharing, the threshold is the degree + 1.
@@ -59,8 +49,28 @@ where
         Self::new_from(degree, &mut thread_rng())
     }
 
+    /// Returns a polynomial from the given list of coefficients
+    // TODO: implement the From<> trait
+    // TODO fix semantics of zero:
+    // it should be G1::zero() as only element
+    pub fn zero() -> Self {
+        Self::from(vec![C::zero()])
+    }
+}
+
+#[derive(Debug, Error)]
+pub enum PolyError {
+    #[error("Invalid recovery: only has {0}/{1} shares")]
+    InvalidRecovery(usize, usize),
+}
+
+impl<C> Poly<C>
+where
+    C: Element,
+    C::RHS: Scalar<RHS = C::RHS>,
+{
     pub fn eval(&self, i: Idx) -> Eval<C> {
-        let mut xi = X::new();
+        let mut xi = C::RHS::new();
         // +1 because we must never evaluate the polynomial at its first point
         // otherwise it reveals the "secret" value !
         // TODO: maybe move that a layer above, to not mix ss scheme with poly.
@@ -74,10 +84,6 @@ where
             value: res,
             index: i,
         }
-    }
-
-    pub fn degree(&self) -> usize {
-        (self.c.len() as usize) - 1
     }
 
     /// Adds the two polynomial togethers.
@@ -100,36 +106,43 @@ where
         if shares.len() < t {
             return Err(PolyError::InvalidRecovery(shares.len(), t));
         }
+
         // first sort the shares as it can happens recovery happens for
         // non-correlated shares so the subset chosen becomes important
         shares.sort_by(|a, b| a.index.cmp(&b.index));
 
         // convert the indexes of the shares into scalars
         let xs = shares.iter().take(t).fold(HashMap::new(), |mut m, sh| {
-            let mut xi = X::new();
+            let mut xi = C::RHS::new();
             xi.set_int((sh.index + 1).into());
             m.insert(sh.index, (xi, &sh.value));
             m
         });
+
         assert!(xs.len() == t);
         let mut acc = C::zero();
+
         // iterate over all indices and for each multiply the lagrange basis
         // with the value of the share
         for (i, xi) in &xs {
             let mut yi = xi.1.clone();
-            let mut num = X::one();
-            let mut den = X::one();
+            let mut num = C::RHS::one();
+            let mut den = C::RHS::one();
+
             for (j, xj) in &xs {
                 if i == j {
                     continue;
                 }
+
                 // xj - 0
                 num.mul(&xj.0);
+
                 // 1 / (xj - xi)
                 let mut tmp = xj.0.clone();
                 tmp.sub(&xi.0);
                 den.mul(&tmp);
             }
+
             let inv = den.inverse().unwrap();
             num.mul(&inv);
             yi.mul(&num);
@@ -148,7 +161,7 @@ where
 
         // convert the indexes of the shares into scalars
         let xs = shares.iter().take(t).fold(HashMap::new(), |mut m, sh| {
-            let mut xi = X::new();
+            let mut xi = C::RHS::new();
             xi.set_int((sh.index + 1).into());
             m.insert(sh.index, (xi, &sh.value));
             m
@@ -171,7 +184,7 @@ where
                     s
                 })
                 .collect::<Vec<C>>();
-            let linear_poly: Poly<X, C> = Self::from(lin);
+            let linear_poly: Poly<C> = Self::from(lin);
             acc.add(&linear_poly);
         }
         Ok(acc)
@@ -179,10 +192,10 @@ where
 
     /// Computes the lagrange basis polynomial of index i
     // TODO: move that to poly<X,X>
-    fn lagrange_basis(i: Idx, xs: &HashMap<Idx, (X, &C)>) -> Poly<X, X> {
-        let mut basis = Poly::<X, X>::from(vec![X::one()]);
+    fn lagrange_basis(i: Idx, xs: &HashMap<Idx, (C::RHS, &C)>) -> Poly<C::RHS> {
+        let mut basis = Poly::<C::RHS>::from(vec![C::RHS::one()]);
         // accumulator of the denominator values
-        let mut acc = X::one();
+        let mut acc = C::RHS::one();
         // TODO remove that cloning due to borrowing issue with the map
         let xi = xs.get(&i).unwrap().clone().0;
         for (idx, sc) in xs.iter() {
@@ -194,7 +207,7 @@ where
             let minus_sc = Self::new_neg_constant(&sc.0);
             basis.mul(&minus_sc);
             // den = xi - sc
-            let mut den = X::zero();
+            let mut den = C::RHS::zero();
             den.add(&xi);
             den.sub(&sc.0);
             // den = 1 / den
@@ -203,22 +216,15 @@ where
             acc.mul(&den);
         }
         // multiply all coefficients by the denominator
-        basis.mul(&Poly::<X, X>::from(vec![acc]));
+        basis.mul(&Poly::from(vec![acc]));
         basis
     }
 
     /// Returns a scalar polynomial f(x) = x - c
-    fn new_neg_constant(x: &X) -> Poly<X, X> {
+    fn new_neg_constant(x: &C::RHS) -> Poly<C::RHS> {
         let mut neg = x.clone();
         neg.negate();
-        Poly::<X, X>::from(vec![neg, X::one()])
-    }
-    /// Returns a polynomial from the given list of coefficients
-    // TODO: implement the From<> trait
-    // TODO fix semantics of zero:
-    // it should be G1::zero() as only element
-    pub fn zero() -> Self {
-        Self::from(vec![C::zero()])
+        Poly::from(vec![neg, C::RHS::one()])
     }
 
     pub fn free_coeff(&self) -> C {
@@ -230,25 +236,14 @@ where
     }
 }
 
-impl<X, C> From<Vec<C>> for Poly<X, C>
-where
-    X: Scalar,
-    C: Element<X>,
-{
+impl<C: Element> From<Vec<C>> for Poly<C> {
     fn from(c: Vec<C>) -> Self {
-        Self {
-            c,
-            phantom: Default::default(),
-        }
+        Self { c }
     }
 }
 
-impl<X, C> From<Poly<X, C>> for Vec<C>
-where
-    X: Scalar,
-    C: Element<X>,
-{
-    fn from(poly: Poly<X, C>) -> Self {
+impl<C: Element> From<Poly<C>> for Vec<C> {
+    fn from(poly: Poly<C>) -> Self {
         poly.c
     }
 }
@@ -258,13 +253,15 @@ where
 /// be inneficient for other purposes: the degree of the returned polynomial
 /// is always the greatest possible, regardless of the actual coefficients
 /// given.
-impl<X: Scalar> Poly<X, X> {
+impl<X: Scalar<RHS = X>> Poly<X> {
     fn mul(&mut self, other: &Self) {
         let d1 = self.degree();
         let d2 = other.degree();
         let d3 = d1 + d2;
+
         // need to initializes every coeff to zero first
         let mut coeffs = (0..=d3).map(|_| X::zero()).collect::<Vec<X>>();
+
         for (i, c1) in self.c.iter().enumerate() {
             for (j, c2) in other.c.iter().enumerate() {
                 let mut tmp = X::one();
@@ -273,10 +270,11 @@ impl<X: Scalar> Poly<X, X> {
                 coeffs[i + j].add(&tmp);
             }
         }
+
         self.c = coeffs;
     }
 
-    pub fn commit<P: Point<X>>(&self) -> Poly<X, P> {
+    pub fn commit<P: Point<RHS = X>>(&self) -> Poly<P> {
         let commits = self
             .c
             .iter()
@@ -286,15 +284,11 @@ impl<X: Scalar> Poly<X, X> {
                 commitment
             })
             .collect::<Vec<P>>();
-        Poly::<X, P>::from(commits)
+        Poly::<P>::from(commits)
     }
 }
 
-impl<X, Y> fmt::Display for Poly<X, Y>
-where
-    X: Scalar,
-    Y: Element<X>,
-{
+impl<C: fmt::Display> fmt::Display for Poly<C> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         let s = self
             .c
@@ -318,17 +312,17 @@ pub mod tests {
     #[test]
     fn new_poly() {
         let s = 5;
-        let p = Poly::<Sc, Sc>::new(s);
+        let p = Poly::<Sc>::new(s);
         assert_eq!(p.c.len(), s + 1);
     }
 
     #[test]
     fn serialization() {
-        let p = Poly::<Sc, Sc>::new(10);
+        let p = Poly::<Sc>::new(10);
 
         let ser = bincode::serialize(&p).unwrap();
 
-        let de: Poly<Sc, Sc> = bincode::deserialize(&ser).unwrap();
+        let de: Poly<Sc> = bincode::deserialize(&ser).unwrap();
 
         assert_eq!(p, de);
     }
@@ -337,31 +331,31 @@ pub mod tests {
     fn full_interpolation() {
         let degree = 4;
         let threshold = degree + 1;
-        let poly = Poly::<Sc, Sc>::new(degree);
+        let poly = Poly::<Sc>::new(degree);
         let shares = (0..threshold)
             .map(|i| poly.eval(i as Idx))
             .collect::<Vec<Eval<Sc>>>();
         let smaller_shares: Vec<_> = shares.iter().take(threshold - 1).cloned().collect();
-        let recovered = Poly::<Sc, Sc>::full_recover(threshold as usize, shares).unwrap();
+        let recovered = Poly::<Sc>::full_recover(threshold as usize, shares).unwrap();
         let expected = poly.c[0];
         let computed = recovered.c[0];
         assert_eq!(expected, computed);
-        Poly::<Sc, Sc>::recover(threshold as usize, smaller_shares).unwrap_err();
+        Poly::<Sc>::recover(threshold as usize, smaller_shares).unwrap_err();
     }
 
     #[test]
     fn interpolation() {
         let degree = 4;
         let threshold = degree + 1;
-        let poly = Poly::<Sc, Sc>::new(degree);
+        let poly = Poly::<Sc>::new(degree);
         let shares = (0..threshold)
             .map(|i| poly.eval(i as Idx))
             .collect::<Vec<Eval<Sc>>>();
         let smaller_shares: Vec<_> = shares.iter().take(threshold - 1).cloned().collect();
-        let recovered = Poly::<Sc, Sc>::recover(threshold as usize, shares).unwrap();
+        let recovered = Poly::<Sc>::recover(threshold as usize, shares).unwrap();
         let expected = poly.c[0];
         assert_eq!(expected, recovered);
-        Poly::<Sc, Sc>::recover(threshold as usize, smaller_shares).unwrap_err();
+        Poly::<Sc>::recover(threshold as usize, smaller_shares).unwrap_err();
     }
 
     #[test]
@@ -369,12 +363,12 @@ pub mod tests {
         use std::time::SystemTime;
         let degree = 49;
         let threshold = degree + 1;
-        let poly = Poly::<Sc, Sc>::new(degree);
+        let poly = Poly::<Sc>::new(degree);
         let shares = (0..threshold)
             .map(|i| poly.eval(i as Idx))
             .collect::<Vec<Eval<Sc>>>();
         let now = SystemTime::now();
-        Poly::<Sc, Sc>::recover(threshold as usize, shares).unwrap();
+        Poly::<Sc>::recover(threshold as usize, shares).unwrap();
         match now.elapsed() {
             Ok(e) => println!("single recover: time elapsed {:?}", e),
             Err(e) => panic!("{}", e),
@@ -384,7 +378,7 @@ pub mod tests {
             .collect::<Vec<Eval<Sc>>>();
 
         let now = SystemTime::now();
-        Poly::<Sc, Sc>::full_recover(threshold as usize, shares).unwrap();
+        Poly::<Sc>::full_recover(threshold as usize, shares).unwrap();
         match now.elapsed() {
             Ok(e) => println!("full_recover: time elapsed {:?}", e),
             Err(e) => panic!("{}", e),
@@ -394,7 +388,7 @@ pub mod tests {
     #[test]
     fn eval() {
         let d = 4;
-        let p1 = Poly::<Sc, Sc>::new(d);
+        let p1 = Poly::<Sc>::new(d);
         // f(1) = SUM( coeffs)
         let f1 = p1.eval(0);
         let exp = p1.c.iter().fold(Sc::new(), |mut acc, coeff| {
@@ -407,8 +401,8 @@ pub mod tests {
     #[test]
     fn add() {
         let d = 4;
-        let p1 = Poly::<Sc, Sc>::new(d);
-        let p2 = Poly::<Sc, Sc>::new(d);
+        let p1 = Poly::<Sc>::new(d);
+        let p2 = Poly::<Sc>::new(d);
         let mut p3 = p1.clone();
         p3.add(&p2);
         let mut exp = p1.c[0].clone();
@@ -418,8 +412,8 @@ pub mod tests {
     #[test]
     fn mul() {
         let d = 1;
-        let p1 = Poly::<Sc, Sc>::new(d);
-        let p2 = Poly::<Sc, Sc>::new(d);
+        let p1 = Poly::<Sc>::new(d);
+        let p2 = Poly::<Sc>::new(d);
         let mut p3 = p1.clone();
         p3.mul(&p2);
         assert_eq!(p3.degree(), d + d);
@@ -452,7 +446,7 @@ pub mod tests {
     #[test]
     fn new_neg_constant() {
         let rd = Sc::rand(&mut thread_rng());
-        let p = Poly::<Sc, Sc>::new_neg_constant(&rd);
+        let p = Poly::<Sc>::new_neg_constant(&rd);
         let res = p.eval(0);
         let mut exp = rd.clone();
         // -rd
@@ -464,7 +458,7 @@ pub mod tests {
 
     #[test]
     fn commit() {
-        let secret = Poly::<Sc, Sc>::new(5);
+        let secret = Poly::<Sc>::new(5);
         let commitment = secret.commit::<G1>();
         let first = secret.c[0].clone();
         let mut p = G1::one();

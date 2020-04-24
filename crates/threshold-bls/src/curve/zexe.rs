@@ -67,7 +67,9 @@ pub struct GT(
     <zexe::Bls12_377 as PairingEngine>::Fqk,
 );
 
-impl Element<Scalar> for Scalar {
+impl Element for Scalar {
+    type RHS = Scalar;
+
     fn new() -> Self {
         Self(Zero::zero())
     }
@@ -114,7 +116,9 @@ impl fmt::Display for Scalar {
 }
 
 /// G1 points can be multiplied by Fr elements
-impl Element<Scalar> for G1 {
+impl Element for G1 {
+    type RHS = Scalar;
+
     fn new() -> Self {
         Self(Zero::zero())
     }
@@ -137,7 +141,7 @@ impl Element<Scalar> for G1 {
 }
 
 /// Implementation of Point using G1 from BLS12-377
-impl Point<Scalar> for G1 {
+impl Point for G1 {
     type Error = ZexeError;
 
     fn map(&mut self, data: &[u8]) -> Result<(), ZexeError> {
@@ -158,7 +162,9 @@ impl fmt::Display for G1 {
 }
 
 /// G1 points can be multiplied by Fr elements
-impl Element<Scalar> for G2 {
+impl Element for G2 {
+    type RHS = Scalar;
+
     fn new() -> Self {
         Self(Zero::zero())
     }
@@ -181,7 +187,7 @@ impl Element<Scalar> for G2 {
 }
 
 /// Implementation of Point using G2 from BLS12-377
-impl Point<Scalar> for G2 {
+impl Point for G2 {
     type Error = ZexeError;
 
     fn map(&mut self, data: &[u8]) -> Result<(), ZexeError> {
@@ -200,7 +206,9 @@ impl fmt::Display for G2 {
     }
 }
 
-impl Element<GT> for GT {
+impl Element for GT {
+    type RHS = GT;
+
     fn new() -> Self {
         Self(Zero::zero())
     }
@@ -383,7 +391,7 @@ mod tests {
         serialize_group_test::<G2>(96);
     }
 
-    fn serialize_group_test<E: Element<Scalar>>(size: usize) {
+    fn serialize_group_test<E: Element>(size: usize) {
         let rng = &mut rand::thread_rng();
         let sig = E::rand(rng);
         let ser = bincode::serialize(&sig).unwrap();

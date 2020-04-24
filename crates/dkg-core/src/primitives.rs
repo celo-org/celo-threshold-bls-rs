@@ -185,8 +185,8 @@ struct DKGInfo<C: Curve> {
     private_key: C::Scalar,
     index: ID,
     group: Group<C>,
-    secret: Poly<C::Scalar, C::Scalar>,
-    public: Poly<C::Scalar, C::Point>,
+    secret: Poly<C::Scalar>,
+    public: Poly<C::Point>,
 }
 
 impl<C> DKGInfo<C>
