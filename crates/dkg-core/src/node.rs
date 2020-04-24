@@ -71,7 +71,9 @@ where
     type Next = Phase1<C>;
 
     fn run(self, board: &mut B, be_bad: bool) -> NodeResult<Self::Next> {
-        let (next, shares) = self.inner.shares();
+        // TODO: Should we remove `be_bad` and replace it with an RNG implementer,
+        // which gets passed as an rng, instead of assuming thread_rng here?
+        let (next, shares) = self.inner.encrypt_shares(&mut rand::thread_rng());
 
         if !be_bad {
             board

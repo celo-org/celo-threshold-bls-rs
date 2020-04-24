@@ -355,7 +355,7 @@ where
         }
     }
 
-    pub fn shares(self) -> (DKGWaitingShare<C>, BundledShares<C>) {
+    pub fn encrypt_shares<R: RngCore>(self, rng: &mut R) -> (DKGWaitingShare<C>, BundledShares<C>) {
         let shares = self
             .info
             .group
@@ -364,7 +364,7 @@ where
             .map(|n| {
                 let sec = self.info.secret.eval(n.id() as Idx);
                 let buff = bincode::serialize(&sec.value).expect("serialization should not fail");
-                let cipher = ecies::encrypt::<C>(n.key(), &buff);
+                let cipher = ecies::encrypt::<C, _>(n.key(), &buff, rng);
                 EncryptedShare::<C> {
                     share_idx: n.id(),
                     secret: cipher,
@@ -560,16 +560,9 @@ where
                 InvalidPublicPolynomial(public.degree(), thr),
             ));
         }
-        // TODO By implementing From<> should be able to use `?` notation
-        let res = ecies::decrypt::<C>(&self.info.private_key, &share.secret);
-        if res.is_err() {
-            // report (c) error
-            return Err(ShareError::from(
-                dealer,
-                InvalidCiphertext(res.unwrap_err()),
-            ));
-        }
-        let buff = res.unwrap();
+        let buff = ecies::decrypt::<C>(&self.info.private_key, &share.secret)
+            .map_err(|err| ShareError::from(dealer, InvalidCiphertext(err)))?;
+
         let share: C::Scalar =
             bincode::deserialize(&buff).expect("scalar should not fail when unmarshaling");
         if !share_correct::<C>(self.info.index, &share, public) {
@@ -836,7 +829,7 @@ impl ShareError {
 
 #[derive(Debug)]
 enum ShareErrorType {
-    /// InvalidCipherText returns the error raised when decrypted the encrypted
+    /// InvalidCipherText returns the error raised when decrypting the encrypted
     /// share.
     InvalidCiphertext(ecies::EciesError),
     /// InvalidShare is raised when the share does not corresponds to the public

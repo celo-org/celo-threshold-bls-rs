@@ -1,167 +1,163 @@
+//! # ECIES
+//!
+//! Implements an Elliptic Curve Integrated Encryption Scheme using SHA256 as the Key Derivation
+//! Function.
+//!
+//! # Examples
+//!
+//! ```rust
+//! use threshold_bls::{
+//!     ecies::{encrypt, decrypt},
+//!     curve::bls12381::G2Curve,
+//!     group::{Curve, Element}
+//! };
+//!
+//! let message = b"hello";
+//! let rng = &mut rand::thread_rng();
+//! let mut secret_key = <G2Curve as Curve>::Scalar::new();
+//! secret_key.pick(rng);
+//! let mut public_key = <G2Curve as Curve>::Point::one();
+//! public_key.mul(&secret_key);
+//!
+//! // encrypt the message with the receiver's public key
+//! let ciphertext = encrypt::<G2Curve, _>(&public_key, &message[..], rng);
+//!
+//! // the receiver can then decrypt the ciphertext with their secret key
+//! let cleartext = decrypt(&secret_key, &ciphertext).unwrap();
+//!
+//! assert_eq!(&message[..], &cleartext[..]);
+//! ```
+
 use crate::group::{Curve, Element};
+use rand_core::RngCore;
+use serde::{Deserialize, Serialize};
+
+// crypto imports
 use chacha20poly1305::{
-    aead,
     aead::{Aead, Error as AError, NewAead},
     ChaCha20Poly1305,
 };
 use hkdf::Hkdf;
-use rand::prelude::thread_rng;
-use rand_core::RngCore;
-use serde::{Deserialize, Serialize};
 use sha2::Sha256;
-use std::fmt;
 
+// re-export for usage by dkg primitives
+pub use chacha20poly1305::aead::Error as EciesError;
+
+/// The nonce length
 const NONCE_LEN: usize = 12;
+
+/// The ephemeral key length
 const KEY_LEN: usize = 32;
 
+/// A domain separator
+const DOMAIN: [u8; 4] = [1, 9, 6, 9];
+
+/// An ECIES encrypted cipher. Contains the ciphertext's bytes as well as the
+/// ephemeral public key
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct EciesCipher<C: Curve> {
+    /// The ciphertext which was encrypted
     aead: Vec<u8>,
-    #[serde(bound = "C::Point: Serialize + serde::de::DeserializeOwned")]
-    ephemereal: C::Point,
+    /// The ephemeral public key corresponding to the scalar which was used to
+    /// encrypt the plaintext
+    ephemeral: C::Point,
+    /// The nonce used to encrypt the ciphertext
+    nonce: [u8; NONCE_LEN],
 }
 
-#[derive(Debug)]
-pub enum EciesError {
-    TooShortCipher(usize, usize),
-    InvalidCipher(AError),
-}
-
-impl fmt::Display for EciesError {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        use EciesError::*;
-        let s = match self {
-            TooShortCipher(c, n) => format!("cipher len {} < nonce len {}", c, n),
-            InvalidCipher(e) => format!("invalid cipher: {:?}", e),
-        };
-        write!(f, "{}", s)
-    }
-}
-
-impl From<aead::Error> for EciesError {
-    fn from(e: aead::Error) -> Self {
-        EciesError::InvalidCipher(e)
-    }
-}
-
-fn derive(dh: &[u8]) -> [u8; KEY_LEN] {
-    // no salt is fine since we use ephemereal - static DH
-    let h = Hkdf::<Sha256>::new(None, dh);
-    let info = vec![1, 9, 6, 9];
-    let mut fkey = [0u8; KEY_LEN];
-    h.expand(&info, &mut fkey).expect("hkdf should not fail");
-    assert!(fkey.len() == KEY_LEN);
-    fkey
-}
-
-fn encrypt_data(dh: &[u8], data: &[u8]) -> Vec<u8> {
-    let fkey = derive(dh);
-    let mut nonce: [u8; NONCE_LEN] = [0u8; NONCE_LEN];
-    thread_rng().fill_bytes(&mut nonce);
-    let aead = ChaCha20Poly1305::new(fkey.into());
-    let mut cipher = aead
-        .encrypt(&nonce.into(), &data[..])
-        .expect("aead should not fail");
-    cipher.append(&mut nonce.to_vec());
-    cipher
-}
-
-fn decrypt_data(dh: &[u8], cipher: &[u8]) -> Result<Vec<u8>, EciesError> {
-    if cipher.len() < NONCE_LEN {
-        return Err(EciesError::TooShortCipher(cipher.len(), NONCE_LEN));
-    }
-    let fkey = derive(dh);
-    let mut nonce: [u8; NONCE_LEN] = [0u8; NONCE_LEN];
-    let from = cipher.len() - NONCE_LEN;
-    let to = cipher.len();
-    nonce.copy_from_slice(&cipher[from..to]);
-    let aead = ChaCha20Poly1305::new((fkey).into());
-    let encrypted = &cipher[..from];
-    // TODO Why does the From trait does not kick-in automatically ?
-    aead.decrypt(&nonce.into(), encrypted)
-        .map_err(|e| EciesError::from(e))
-}
-
-pub fn encrypt_with<C: Curve>(
-    to: &C::Point,
-    msg: &[u8],
-    mut rng: &mut dyn RngCore,
-) -> EciesCipher<C> {
+/// Encrypts the message with a public key (curve point) and returns a ciphertext
+pub fn encrypt<C: Curve, R: RngCore>(to: &C::Point, msg: &[u8], rng: &mut R) -> EciesCipher<C> {
     let mut eph_secret = C::Scalar::new();
-    eph_secret.pick(&mut rng);
-    let mut eph_public = C::Point::one();
-    eph_public.mul(&eph_secret);
+    eph_secret.pick(rng);
+
+    let mut ephemeral = C::Point::one();
+    ephemeral.mul(&eph_secret);
+
     // dh = eph(yG) = eph * public
     let mut dh = to.clone();
     dh.mul(&eph_secret);
 
-    let serialized = bincode::serialize(&dh).expect("serialization should not fail");
-    let cipher = encrypt_data(&serialized, msg);
+    // derive an ephemeral key from the public key
+    let ephemeral_key = derive::<C>(&dh);
+
+    // instantiate the AEAD scheme
+    let aead = ChaCha20Poly1305::new(ephemeral_key.into());
+
+    // generate a random nonce
+    let mut nonce: [u8; NONCE_LEN] = [0u8; NONCE_LEN];
+    rng.fill_bytes(&mut nonce);
+
+    // do the encryption
+    let aead = aead
+        .encrypt(&nonce.into(), &msg[..])
+        .expect("aead should not fail");
+
     EciesCipher {
-        aead: cipher,
-        ephemereal: eph_public,
+        aead,
+        nonce,
+        ephemeral,
     }
 }
 
-pub fn decrypt<C: Curve>(
-    private: &C::Scalar,
-    cipher: &EciesCipher<C>,
-) -> Result<Vec<u8>, EciesError> {
-    // dh = private (eph * G) = private * ephPublic
-    let mut dh = cipher.ephemereal.clone();
-    dh.mul(private);
-    let serialized = bincode::serialize(&dh).expect("serialization should not fail");
-    decrypt_data(&serialized, &cipher.aead)
+/// Decrypts the message with a secret key (curve scalar) and returns the cleartext
+pub fn decrypt<C: Curve>(private: &C::Scalar, cipher: &EciesCipher<C>) -> Result<Vec<u8>, AError> {
+    // dh = private * (eph * G) = private * ephPublic
+    let mut dh = cipher.ephemeral.clone();
+    dh.mul(&private);
+
+    let ephemeral_key = derive::<C>(&dh);
+
+    let aead = ChaCha20Poly1305::new((ephemeral_key).into());
+
+    aead.decrypt(&cipher.nonce.into(), &cipher.aead[..])
 }
 
-pub fn encrypt<C: Curve>(to: &C::Point, msg: &[u8]) -> EciesCipher<C> {
-    use rand::prelude::*;
-    encrypt_with(to, msg, &mut thread_rng())
+/// Derives an ephemeral key from the provided public key
+fn derive<C: Curve>(dh: &C::Point) -> [u8; KEY_LEN] {
+    let serialized = bincode::serialize(dh).expect("could not serialize element");
+
+    // no salt is fine since we use ephemeral - static DH
+    let h = Hkdf::<Sha256>::new(None, &serialized);
+    let mut ephemeral_key = [0u8; KEY_LEN];
+    h.expand(&DOMAIN, &mut ephemeral_key)
+        .expect("hkdf should not fail");
+
+    debug_assert!(ephemeral_key.len() == KEY_LEN);
+
+    ephemeral_key
 }
 
 #[cfg(feature = "bls12_381")]
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::curve::bls12381::{Curve, Scalar as Sc, G1};
+    use crate::curve::bls12381::{Curve, Scalar, G1};
+    use rand::thread_rng;
 
-    fn kp() -> (Sc, G1) {
-        let mut s1 = Sc::new();
-        s1.pick(&mut thread_rng());
-        let mut p1 = G1::one();
-        p1.mul(&s1);
-        (s1, p1)
+    fn kp() -> (Scalar, G1) {
+        let mut secret = Scalar::new();
+        secret.pick(&mut thread_rng());
+        let mut public = G1::one();
+        public.mul(&secret);
+        (secret, public)
     }
 
     #[test]
-    fn encrypt() {
+    fn test_decryption() {
         let (s1, _) = kp();
         let (s2, p2) = kp();
         let data = vec![1, 2, 3, 4];
-        let mut cipher = encrypt_with::<Curve>(&p2, &data, &mut thread_rng());
-        // just trying if clone is working
-        assert_eq!(cipher.ephemereal, cipher.clone().ephemereal);
 
+        // decryption with the right key OK
+        let mut cipher = encrypt::<Curve, _>(&p2, &data, &mut thread_rng());
         let deciphered = decrypt::<Curve>(&s2, &cipher).unwrap();
         assert_eq!(data, deciphered);
 
-        // decrypting with other private key should fail
-        match decrypt::<Curve>(&s1, &cipher) {
-            Ok(d) => assert!(d != data),
-            _ => {}
-        }
-        cipher.aead = vec![0; 32];
-        let err = decrypt::<Curve>(&s2, &cipher).unwrap_err();
-        assert!(match err {
-            EciesError::InvalidCipher(_) => true,
-            _ => false,
-        });
+        // decrypting with wrong private key should fail
+        decrypt::<Curve>(&s1, &cipher).unwrap_err();
 
-        cipher.aead = vec![0; NONCE_LEN - 1];
-        let err = decrypt::<Curve>(&s2, &cipher).unwrap_err();
-        assert!(match err {
-            EciesError::TooShortCipher(_, _) => true,
-            _ => false,
-        });
+        // having an invalid ciphertext should fail
+        cipher.aead = vec![0; 32];
+        decrypt::<Curve>(&s2, &cipher).unwrap_err();
     }
 }
