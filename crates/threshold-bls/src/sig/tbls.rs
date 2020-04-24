@@ -38,7 +38,7 @@ impl<I: SignatureScheme> ThresholdScheme for I {
     }
 
     fn partial_verify(
-        public: &Poly<Self::Private, Self::Public>,
+        public: &Poly<Self::Public>,
         msg: &[u8],
         partial: &[u8],
     ) -> Result<(), <Self as ThresholdScheme>::Error> {
@@ -72,9 +72,8 @@ impl<I: SignatureScheme> ThresholdScheme for I {
             })
             .collect::<Result<_, <Self as ThresholdScheme>::Error>>()?;
 
-        let recovered_sig =
-            Poly::<Self::Private, Self::Signature>::recover(threshold, valid_partials)
-                .map_err(ThresholdError::PolyError)?;
+        let recovered_sig = Poly::<Self::Signature>::recover(threshold, valid_partials)
+            .map_err(ThresholdError::PolyError)?;
         Ok(bincode::serialize(&recovered_sig).expect("could not serialize"))
     }
 
@@ -102,7 +101,7 @@ impl<I: SignatureSchemeExt> ThresholdSchemeExt for I {
     }
 
     fn partial_verify_without_hashing(
-        public: &Poly<Self::Private, Self::Public>,
+        public: &Poly<Self::Public>,
         msg: &[u8],
         partial: &[u8],
     ) -> Result<(), <Self as ThresholdScheme>::Error> {
@@ -132,14 +131,11 @@ mod tests {
         usize,
     ) -> (
         Vec<Share<<T as Scheme>::Private>>,
-        Poly<<T as Scheme>::Private, <T as Scheme>::Public>,
+        Poly<<T as Scheme>::Public>,
     );
 
-    fn shares<T: ThresholdScheme>(
-        n: usize,
-        t: usize,
-    ) -> (Vec<Share<T::Private>>, Poly<T::Private, T::Public>) {
-        let private = Poly::<T::Private, T::Private>::new(t - 1);
+    fn shares<T: ThresholdScheme>(n: usize, t: usize) -> (Vec<Share<T::Private>>, Poly<T::Public>) {
+        let private = Poly::<T::Private>::new(t - 1);
         let shares = (0..n)
             .map(|i| private.eval(i as Index))
             .map(|e| Share {
