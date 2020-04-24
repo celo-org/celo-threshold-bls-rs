@@ -1,4 +1,4 @@
-use crate::sig::tbls::{IndexSerializerError, Serializer};
+use crate::poly::Eval;
 use crate::sig::{BlindThresholdScheme, Blinder, Partial, ThresholdSchemeExt};
 
 use thiserror::Error;
@@ -7,14 +7,15 @@ use thiserror::Error;
 // TODO: Can we get rid of this static lifetime bound?
 pub enum BlindThresholdError<E: 'static + std::error::Error> {
     #[error(transparent)]
-    SerializerError(#[from] IndexSerializerError),
-    #[error(transparent)]
     BlinderError(E),
+
+    #[error(transparent)]
+    BincodeError(#[from] bincode::Error),
 }
 
 impl<T> BlindThresholdScheme for T
 where
-    T: 'static + ThresholdSchemeExt + Blinder + Serializer,
+    T: 'static + ThresholdSchemeExt + Blinder,
 {
     type Error = BlindThresholdError<<T as Blinder>::Error>;
 
@@ -22,10 +23,18 @@ where
         t: &Self::Token,
         partial: &Partial,
     ) -> Result<Partial, <Self as BlindThresholdScheme>::Error> {
-        let (index, sig) = Self::extract(partial)?;
+        // deserialize the sig
+        let partial: Eval<Vec<u8>> = bincode::deserialize(partial)?;
+
         let partially_unblinded =
-            Self::unblind(t, &sig).map_err(BlindThresholdError::BlinderError)?;
-        let injected = Self::inject(index, &partially_unblinded);
+            Self::unblind(t, &partial.value).map_err(BlindThresholdError::BlinderError)?;
+
+        let partially_unblinded = Eval {
+            index: partial.index,
+            value: partially_unblinded,
+        };
+
+        let injected = bincode::serialize(&partially_unblinded)?;
 
         Ok(injected)
     }

@@ -11,7 +11,7 @@ pub type PublicPoly<C> = Poly<<C as Curve>::Scalar, <C as Curve>::Point>;
 
 pub type Idx = u32;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Eval<A: Clone> {
     pub value: A,
     pub index: Idx,
