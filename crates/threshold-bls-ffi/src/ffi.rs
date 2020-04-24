@@ -4,9 +4,12 @@ use rand_core::{RngCore, SeedableRng};
 
 use threshold_bls::{
     curve::zexe::PairingCurve as Bls12_377,
-    group::{Element, Encodable, Point},
+    group::{Element, Encodable},
     poly::Poly,
-    sig::{blind::Token, bls::G2Scheme, Blinder, Scheme, SignatureScheme, ThresholdScheme},
+    sig::{
+        blind::Token, bls::G2Scheme, Blinder, Scheme, SignatureScheme, SignatureSchemeExt,
+        ThresholdScheme, ThresholdSchemeExt,
+    },
     Index, Share,
 };
 
@@ -101,16 +104,11 @@ pub extern "C" fn verify(
     signature: *const Buffer,
 ) -> bool {
     let public_key = unsafe { &*public_key };
-
-    // hashes the message
-    let mut msg_hash = Signature::new();
     let message = <&[u8]>::from(unsafe { &*message });
-    msg_hash.map(&message).unwrap();
-    let msg_hash = msg_hash.marshal();
 
     // checks the signature on the message hash
     let signature = <&[u8]>::from(unsafe { &*signature });
-    match <SigScheme as SignatureScheme>::verify(public_key, &msg_hash, signature) {
+    match <SigScheme as SignatureScheme>::verify(public_key, &message, signature) {
         Ok(_) => true,
         Err(_) => false,
     }
@@ -121,10 +119,6 @@ pub extern "C" fn verify(
 ///////////////////////////////////////////////////////////////////////////
 
 /// Signs the message with the provided private key and returns the signature
-///
-/// # Throws
-///
-/// - If signing fails
 #[no_mangle]
 pub extern "C" fn sign(
     private_key: *const PrivateKey,
@@ -135,6 +129,27 @@ pub extern "C" fn sign(
     let message = <&[u8]>::from(unsafe { &*message });
 
     let sig = match SigScheme::sign(&private_key, &message) {
+        Ok(s) => s,
+        Err(_) => return false,
+    };
+
+    unsafe { *signature = Buffer::from(&sig[..]) };
+    std::mem::forget(sig);
+
+    true
+}
+
+/// Signs a *blinded* message with the provided private key and returns the signature
+#[no_mangle]
+pub extern "C" fn sign_blinded_message(
+    private_key: *const PrivateKey,
+    message: *const Buffer,
+    signature: *mut Buffer,
+) -> bool {
+    let private_key = unsafe { &*private_key };
+    let message = <&[u8]>::from(unsafe { &*message });
+
+    let sig = match SigScheme::sign_without_hashing(&private_key, &message) {
         Ok(s) => s,
         Err(_) => return false,
     };
@@ -166,6 +181,27 @@ pub extern "C" fn partial_sign(
     true
 }
 
+/// Signs a *blinded* message with the provided *share* of the private key and returns the
+/// *partial blind* signature.
+#[no_mangle]
+pub extern "C" fn partial_sign_blinded_message(
+    share: *const Share<PrivateKey>,
+    blinded_message: *const Buffer,
+    signature: *mut Buffer,
+) -> bool {
+    let share = unsafe { &*share };
+    let message = unsafe { &*blinded_message };
+    let sig = match SigScheme::partial_sign_without_hashing(share, <&[u8]>::from(message)) {
+        Ok(s) => s,
+        Err(_) => return false,
+    };
+
+    unsafe { *signature = Buffer::from(&sig[..]) };
+    std::mem::forget(sig);
+
+    true
+}
+
 ///////////////////////////////////////////////////////////////////////////
 // Combiner -> Library
 ///////////////////////////////////////////////////////////////////////////
@@ -185,6 +221,26 @@ pub extern "C" fn partial_verify(
     let sig = <&[u8]>::from(unsafe { &*sig });
 
     match SigScheme::partial_verify(&polynomial, blinded_message, sig) {
+        Ok(_) => true,
+        Err(_) => false,
+    }
+}
+
+/// Verifies a partial *blinded* signature against the public key corresponding to the secret shared
+/// polynomial.
+#[no_mangle]
+pub extern "C" fn partial_verify_blind_signature(
+    // TODO: The polynomial does not have a constant length type. Is it safe to not
+    // pass any length parameter?
+    polynomial: *const Poly<PrivateKey, PublicKey>,
+    blinded_message: *const Buffer,
+    sig: *const Buffer,
+) -> bool {
+    let polynomial = unsafe { &*polynomial };
+    let blinded_message = <&[u8]>::from(unsafe { &*blinded_message });
+    let sig = <&[u8]>::from(unsafe { &*sig });
+
+    match SigScheme::partial_verify_without_hashing(&polynomial, blinded_message, sig) {
         Ok(_) => true,
         Err(_) => false,
     }
@@ -462,34 +518,55 @@ mod tests {
     use std::mem::MaybeUninit;
 
     #[test]
-    fn blinded_threshold_ffi() {
+    fn threshold_verify_ffi() {
+        threshold_verify_ffi_should_blind(true);
+        threshold_verify_ffi_should_blind(false);
+    }
+
+    fn threshold_verify_ffi_should_blind(should_blind: bool) {
         let seed = b"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
         let msg = vec![1u8, 2, 3, 4, 6];
         let user_seed = &b"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"[..];
+        let empty_token = Token::new();
+        let partial_sign_fn = if should_blind {
+            partial_sign_blinded_message
+        } else {
+            partial_sign
+        };
+        let partial_verify_fn = if should_blind {
+            partial_verify_blind_signature
+        } else {
+            partial_verify
+        };
 
         let mut keys = MaybeUninit::<*mut Keys>::uninit();
         threshold_keygen(5, 3, &seed[..], keys.as_mut_ptr());
         let keys = unsafe { &*keys.assume_init() };
 
-        // 1. blind the message
-        let mut blinded_message = MaybeUninit::<Buffer>::uninit();
-        let mut blinding_factor = MaybeUninit::<*mut Token<PrivateKey>>::uninit();
-        blind(
-            &Buffer::from(msg.as_ref()),
-            &Buffer::from(user_seed),
-            blinded_message.as_mut_ptr(),
-            blinding_factor.as_mut_ptr(),
-        );
-        let blinded_message = unsafe { blinded_message.assume_init() };
-        let blinding_factor = unsafe { blinding_factor.assume_init() };
+        let (message_to_sign, blinding_factor) = if should_blind {
+            let mut blinded_message = MaybeUninit::<Buffer>::uninit();
+            let mut blinding_factor = MaybeUninit::<*mut Token<PrivateKey>>::uninit();
+            blind(
+                &Buffer::from(msg.as_ref()),
+                &Buffer::from(user_seed),
+                blinded_message.as_mut_ptr(),
+                blinding_factor.as_mut_ptr(),
+            );
+            let blinded_message = unsafe { blinded_message.assume_init() };
+            let blinding_factor = unsafe { &*blinding_factor.assume_init() };
+
+            (blinded_message, blinding_factor)
+        } else {
+            (Buffer::from(&msg[..]), &empty_token)
+        };
 
         // 2. partially sign the blinded message
         let mut sigs = Vec::new();
         for i in 0..3 {
             let mut partial_sig = MaybeUninit::<Buffer>::uninit();
-            let ret = partial_sign(
+            let ret = partial_sign_fn(
                 share_ptr(keys, i),
-                &blinded_message,
+                &message_to_sign,
                 partial_sig.as_mut_ptr(),
             );
             assert!(ret);
@@ -503,7 +580,7 @@ mod tests {
         let mut concatenated = Vec::new();
         for sig in &sigs {
             concatenated.extend_from_slice(<&[u8]>::from(sig));
-            let ret = partial_verify(public_key, &blinded_message, sig);
+            let ret = partial_verify_fn(public_key, &message_to_sign, sig);
             assert!(ret);
         }
         let concatenated = Buffer::from(&concatenated[..]);
@@ -515,56 +592,79 @@ mod tests {
         let asig = unsafe { asig.assume_init() };
 
         // 5. unblind the threshold signature
-        let mut unblinded = MaybeUninit::<Buffer>::uninit();
-        let ret = unblind(&asig, blinding_factor, unblinded.as_mut_ptr());
-        assert!(ret);
-        let unblinded = unsafe { unblinded.assume_init() };
+        let asig = if should_blind {
+            let mut unblinded = MaybeUninit::<Buffer>::uninit();
+            let ret = unblind(&asig, blinding_factor, unblinded.as_mut_ptr());
+            assert!(ret);
+            unsafe { unblinded.assume_init() }
+        } else {
+            asig
+        };
 
         // 6. verify the threshold signature against the public key
         let ret = verify(
             threshold_public_key_ptr(keys),
             &Buffer::from(&msg[..]),
-            &unblinded,
+            &asig,
         );
         assert!(ret);
     }
 
     #[test]
-    fn blinded_ffi() {
+    fn verify_ffi() {
+        verify_ffi_should_blind(true);
+        verify_ffi_should_blind(false);
+    }
+
+    fn verify_ffi_should_blind(should_blind: bool) {
         let seed = b"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
         let msg = vec![1u8, 2, 3, 4, 6];
         let user_seed = &b"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"[..];
+        let empty_token = Token::new();
+
+        let sign_fn = if should_blind {
+            sign_blinded_message
+        } else {
+            sign
+        };
 
         let mut keypair = MaybeUninit::<*mut Keypair>::uninit();
         keygen(&Buffer::from(&seed[..]), keypair.as_mut_ptr());
         let keypair = unsafe { &*keypair.assume_init() };
 
-        // 1. blind the message
-        let mut blinded_message = MaybeUninit::<Buffer>::uninit();
-        let mut blinding_factor = MaybeUninit::<*mut Token<PrivateKey>>::uninit();
-        blind(
-            &Buffer::from(msg.as_ref()),
-            &Buffer::from(user_seed),
-            blinded_message.as_mut_ptr(),
-            blinding_factor.as_mut_ptr(),
-        );
-        let blinded_message = unsafe { blinded_message.assume_init() };
-        let blinding_factor = unsafe { blinding_factor.assume_init() };
+        let (message_to_sign, blinding_factor) = if should_blind {
+            let mut blinded_message = MaybeUninit::<Buffer>::uninit();
+            let mut blinding_factor = MaybeUninit::<*mut Token<PrivateKey>>::uninit();
+            blind(
+                &Buffer::from(msg.as_ref()),
+                &Buffer::from(user_seed),
+                blinded_message.as_mut_ptr(),
+                blinding_factor.as_mut_ptr(),
+            );
+            let blinded_message = unsafe { blinded_message.assume_init() };
+            let blinding_factor = unsafe { &*blinding_factor.assume_init() };
 
-        // 2. sign the blinded message
+            (blinded_message, blinding_factor)
+        } else {
+            (Buffer::from(&msg[..]), &empty_token)
+        };
+
         let mut sig = MaybeUninit::<Buffer>::uninit();
-        let ret = sign(private_key_ptr(keypair), &blinded_message, sig.as_mut_ptr());
+        let ret = sign_fn(private_key_ptr(keypair), &message_to_sign, sig.as_mut_ptr());
         assert!(ret);
         let sig = unsafe { sig.assume_init() };
 
-        // 4. unblind the signature
-        let mut unblinded = MaybeUninit::<Buffer>::uninit();
-        let ret = unblind(&sig, blinding_factor, unblinded.as_mut_ptr());
-        assert!(ret);
-        let unblinded = unsafe { unblinded.assume_init() };
+        let sig = if should_blind {
+            let mut unblinded = MaybeUninit::<Buffer>::uninit();
+            let ret = unblind(&sig, blinding_factor, unblinded.as_mut_ptr());
+            assert!(ret);
 
-        // 4. verify the signature
-        let ret = verify(public_key_ptr(keypair), &Buffer::from(&msg[..]), &unblinded);
+            unsafe { unblinded.assume_init() }
+        } else {
+            sig
+        };
+
+        let ret = verify(public_key_ptr(keypair), &Buffer::from(&msg[..]), &sig);
         assert!(ret);
     }
 

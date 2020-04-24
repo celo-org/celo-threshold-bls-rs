@@ -1,5 +1,5 @@
 use crate::group::{Element, Encodable, Point, Scalar};
-use crate::sig::{BlindScheme, Blinder, SignatureScheme};
+use crate::sig::{BlindScheme, Blinder, SignatureScheme, SignatureSchemeExt};
 use rand::RngCore;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
@@ -46,7 +46,7 @@ impl<S: Scalar> Encodable for Token<S> {
 
 // We implement Blinder for anything that implements Signature scheme, so we also
 // enable the BlindScheme for all these, for convenience
-impl<I> BlindScheme for I where I: SignatureScheme {}
+impl<I> BlindScheme for I where I: SignatureSchemeExt {}
 
 /// The blinder follows the protocol described
 /// in this [paper](https://eprint.iacr.org/2018/733.pdf).
@@ -108,13 +108,12 @@ mod tests {
         let msg = vec![1, 9, 6, 9];
 
         let (token, blinded) = B::blind(&msg, &mut thread_rng());
-        let blinded_sig = B::sign(&private, &blinded).unwrap();
+
+        // signs the blinded message w/o hashing
+        let blinded_sig = B::sign_without_hashing(&private, &blinded).unwrap();
+
         let clear_sig = B::unblind(&token, &blinded_sig).expect("unblind should go well");
 
-        let mut msg_point = B::Signature::new();
-        msg_point.map(&msg).unwrap();
-        let msg_point_bytes = msg_point.marshal();
-
-        B::verify(&public, &msg_point_bytes, &clear_sig).unwrap();
+        B::verify(&public, &msg, &clear_sig).unwrap();
     }
 }

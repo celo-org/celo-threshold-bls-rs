@@ -1,5 +1,5 @@
 use crate::sig::tbls::{IndexSerializerError, Serializer};
-use crate::sig::{BlindThresholdScheme, Blinder, Partial, ThresholdScheme};
+use crate::sig::{BlindThresholdScheme, Blinder, Partial, ThresholdSchemeExt};
 
 use thiserror::Error;
 
@@ -14,7 +14,7 @@ pub enum BlindThresholdError<E: 'static + std::error::Error> {
 
 impl<T> BlindThresholdScheme for T
 where
-    T: 'static + ThresholdScheme + Blinder + Serializer,
+    T: 'static + ThresholdSchemeExt + Blinder + Serializer,
 {
     type Error = BlindThresholdError<<T as Blinder>::Error>;
 
@@ -39,13 +39,10 @@ mod tests {
     #[cfg(feature = "bls12_377")]
     use crate::curve::zexe::PairingCurve as Zexe;
     use crate::sig::bls::{G1Scheme, G2Scheme};
+    use crate::Index;
     use crate::{poly::Poly, Share};
     use rand::thread_rng;
 
-    use crate::{
-        group::{Element, Encodable, Point},
-        Index,
-    };
     fn shares<B: BlindThresholdScheme>(
         n: usize,
         t: usize,
@@ -97,15 +94,10 @@ mod tests {
         // blind the msg
         let (token, blinded) = B::blind(&msg, &mut thread_rng());
 
-        // hash it
-        let mut msg_point = B::Signature::new();
-        msg_point.map(&msg).unwrap();
-        let msg_point_bytes = msg_point.marshal();
-
         // partially sign it
         let partials: Vec<_> = shares
             .iter()
-            .map(|share| B::partial_sign(share, &blinded).unwrap())
+            .map(|share| B::partial_sign_without_hashing(share, &blinded).unwrap())
             .collect();
 
         // unblind each partial sig
@@ -120,6 +112,6 @@ mod tests {
         // aggregate
         let final_sig = B::aggregate(thr, &unblindeds).unwrap();
 
-        B::verify(&public.public_key(), &msg_point_bytes, &final_sig).unwrap();
+        B::verify(&public.public_key(), &msg, &final_sig).unwrap();
     }
 }

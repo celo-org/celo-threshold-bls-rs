@@ -6,9 +6,12 @@ use rand_core::{RngCore, SeedableRng};
 
 use threshold_bls::{
     curve::zexe::PairingCurve as Bls12_377,
-    group::{Element, Encodable, Point},
+    group::{Element, Encodable},
     poly::Poly,
-    sig::{blind::Token, bls::G2Scheme, Blinder, Scheme, SignatureScheme, ThresholdScheme},
+    sig::{
+        blind::Token, bls::G2Scheme, Blinder, Scheme, SignatureScheme, ThresholdScheme,
+        ThresholdSchemeExt,
+    },
     Index, Share,
 };
 
@@ -86,13 +89,8 @@ pub fn verify(public_key_buf: &[u8], message: &[u8], signature: &[u8]) -> Result
         .unmarshal(&public_key_buf)
         .map_err(|err| JsValue::from_str(&format!("could not unmarshal public key {}", err)))?;
 
-    // hashes the message
-    let mut msg_hash = Signature::new();
-    msg_hash.map(&message).unwrap();
-    let msg_hash = msg_hash.marshal();
-
     // checks the signature on the message hash
-    <SigScheme as SignatureScheme>::verify(&public_key, &msg_hash, &signature)
+    <SigScheme as SignatureScheme>::verify(&public_key, &message, &signature)
         .map_err(|err| JsValue::from_str(&format!("signature verification failed: {}", err)))
 }
 
@@ -136,6 +134,26 @@ pub fn partial_sign(share_buf: &[u8], message: &[u8]) -> Result<Vec<u8>> {
         .map_err(|err| JsValue::from_str(&format!("could not partially sign message: {}", err)))
 }
 
+#[wasm_bindgen(js_name = partialSignBlindedMessage)]
+/// Signs the message with the provided **share** of the private key and returns the **partial**
+/// signature.
+///
+/// # Throws
+///
+/// - If signing fails
+///
+/// NOTE: This method must NOT be called with a PrivateKey which is not generated via a
+/// secret sharing scheme.
+pub fn partial_sign_blinded_message(share_buf: &[u8], message: &[u8]) -> Result<Vec<u8>> {
+    let mut share = Share::<PrivateKey>::new(0, PrivateKey::new());
+    share.unmarshal(&share_buf).map_err(|err| {
+        JsValue::from_str(&format!("could not unmarshal private key share {}", err))
+    })?;
+
+    SigScheme::partial_sign_without_hashing(&share, &message)
+        .map_err(|err| JsValue::from_str(&format!("could not partially sign message: {}", err)))
+}
+
 ///////////////////////////////////////////////////////////////////////////
 // Combiner -> Library
 ///////////////////////////////////////////////////////////////////////////
@@ -154,6 +172,27 @@ pub fn partial_verify(polynomial_buf: &[u8], blinded_message: &[u8], sig: &[u8])
         .map_err(|err| JsValue::from_str(&format!("could not unmarshal polynomial {}", err)))?;
 
     SigScheme::partial_verify(&polynomial, blinded_message, sig)
+        .map_err(|err| JsValue::from_str(&format!("could not partially verify message: {}", err)))
+}
+
+#[wasm_bindgen(js_name = partialVerifyBlindSignature)]
+/// Verifies a partial *blind* signature against the public key corresponding to the secret shared
+/// polynomial.
+///
+/// # Throws
+///
+/// - If verification fails
+pub fn partial_verify_blind_signature(
+    polynomial_buf: &[u8],
+    blinded_message: &[u8],
+    sig: &[u8],
+) -> Result<()> {
+    let mut polynomial = Poly::<PrivateKey, PublicKey>::from(vec![]);
+    polynomial
+        .unmarshal(&polynomial_buf)
+        .map_err(|err| JsValue::from_str(&format!("could not unmarshal polynomial {}", err)))?;
+
+    SigScheme::partial_verify_without_hashing(&polynomial, blinded_message, sig)
         .map_err(|err| JsValue::from_str(&format!("could not partially verify message: {}", err)))
 }
 
@@ -333,6 +372,27 @@ mod tests {
     use super::*;
 
     #[test]
+    fn threshold_wasm() {
+        let seed = b"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+        let keys = threshold_keygen(5, 3, &seed[..]);
+
+        let msg = vec![1, 2, 3, 4, 6];
+
+        let sig1 = partial_sign(&keys.get_share(0), &msg).unwrap();
+        let sig2 = partial_sign(&keys.get_share(1), &msg).unwrap();
+        let sig3 = partial_sign(&keys.get_share(2), &msg).unwrap();
+
+        partial_verify(&keys.polynomial(), &msg, &sig1).unwrap();
+        partial_verify(&keys.polynomial(), &msg, &sig2).unwrap();
+        partial_verify(&keys.polynomial(), &msg, &sig3).unwrap();
+
+        let concatenated = [sig1, sig2, sig3].concat();
+        let asig = combine(3, concatenated).unwrap();
+
+        verify(&keys.threshold_public_key(), &msg, &asig).unwrap();
+    }
+
+    #[test]
     fn blinded_threshold_wasm() {
         let seed = b"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
         let keys = threshold_keygen(5, 3, &seed[..]);
@@ -342,13 +402,13 @@ mod tests {
         let blinded_message = blind(msg.clone(), &key[..]);
         let blinded_msg = blinded_message.message.clone();
 
-        let sig1 = partial_sign(&keys.get_share(0), &blinded_msg).unwrap();
-        let sig2 = partial_sign(&keys.get_share(1), &blinded_msg).unwrap();
-        let sig3 = partial_sign(&keys.get_share(2), &blinded_msg).unwrap();
+        let sig1 = partial_sign_blinded_message(&keys.get_share(0), &blinded_msg).unwrap();
+        let sig2 = partial_sign_blinded_message(&keys.get_share(1), &blinded_msg).unwrap();
+        let sig3 = partial_sign_blinded_message(&keys.get_share(2), &blinded_msg).unwrap();
 
-        partial_verify(&keys.polynomial(), &blinded_msg, &sig1).unwrap();
-        partial_verify(&keys.polynomial(), &blinded_msg, &sig2).unwrap();
-        partial_verify(&keys.polynomial(), &blinded_msg, &sig3).unwrap();
+        partial_verify_blind_signature(&keys.polynomial(), &blinded_msg, &sig1).unwrap();
+        partial_verify_blind_signature(&keys.polynomial(), &blinded_msg, &sig2).unwrap();
+        partial_verify_blind_signature(&keys.polynomial(), &blinded_msg, &sig3).unwrap();
 
         let concatenated = [sig1, sig2, sig3].concat();
         let asig = combine(3, concatenated).unwrap();
