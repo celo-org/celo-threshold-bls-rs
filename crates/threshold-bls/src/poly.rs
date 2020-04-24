@@ -1,11 +1,8 @@
 use crate::group::{Curve, Element, Point, Scalar};
-use crate::Encodable;
 use rand_core::RngCore;
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
-use std::convert::TryInto;
-use std::fmt;
-use std::marker::PhantomData;
+use std::{collections::HashMap, fmt, marker::PhantomData};
+use thiserror::Error;
 
 // TODO can't we have trait bounds on type aliases ?
 pub type PrivatePoly<C> = Poly<<C as Curve>::Scalar, <C as Curve>::Scalar>;
@@ -13,16 +10,13 @@ pub type PublicPoly<C> = Poly<<C as Curve>::Scalar, <C as Curve>::Point>;
 
 pub type Idx = u32;
 
-#[derive(Debug, Clone)]
-pub struct Eval<A: Clone> {
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Eval<A> {
     pub value: A,
     pub index: Idx,
 }
 
-impl<A> fmt::Display for Eval<A>
-where
-    A: Element,
-{
+impl<A: fmt::Display> fmt::Display for Eval<A> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{{ idx: {}, value: {} }}", self.index, self.value)
     }
@@ -35,71 +29,22 @@ where
 //  constraint but not in the struct directly.-> phantomdata ?
 //  TODO: make it implement Element trait ;) ?
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(bound = "Var: Serialize + serde::de::DeserializeOwned")]
 pub struct Poly<Var: Scalar, Coeff: Element<Var>> {
     c: Vec<Coeff>,
     phantom: PhantomData<Var>,
 }
 
-use thiserror::Error;
-
 #[derive(Debug, Error)]
-pub enum PolyError<E: Encodable + std::fmt::Debug> {
-    #[error("could not deserialize polynomial length: {0}")]
-    LengthError(#[from] std::array::TryFromSliceError),
-
-    #[error("could not deserialize polynomial coefficient: {0}")]
-    CoefficientError(E::Error),
-
+pub enum PolyError {
     #[error("Invalid recovery: only has {0}/{1} shares")]
     InvalidRecovery(usize, usize),
-}
-
-impl<Var, Coeff> Encodable for Poly<Var, Coeff>
-where
-    Var: Scalar,
-    Coeff: Element<Var> + Encodable,
-{
-    type Error = PolyError<Coeff>;
-
-    // This cannot be known as the Poly is a variable length data structure.
-    fn marshal_len() -> usize {
-        unreachable!()
-    }
-
-    fn marshal(&self) -> Vec<u8> {
-        let mut bytes = self.c.len().to_le_bytes().to_vec();
-        for coeff in &self.c {
-            let coeff_bytes = coeff.marshal();
-            bytes.extend_from_slice(&coeff_bytes);
-        }
-        bytes
-    }
-
-    fn unmarshal(&mut self, data: &[u8]) -> Result<(), Self::Error> {
-        let (int_bytes, rest) = data.split_at(std::mem::size_of::<usize>());
-        let num_coeffs = usize::from_le_bytes(int_bytes.try_into()?);
-
-        let mut coeffs = Vec::new();
-
-        let size = Coeff::marshal_len();
-        for i in 0..num_coeffs {
-            let mut coeff = Coeff::new();
-            coeff
-                .unmarshal(&rest[i * size..(i + 1) * size])
-                .map_err(PolyError::CoefficientError)?;
-            coeffs.push(coeff);
-        }
-
-        self.c = coeffs;
-
-        Ok(())
-    }
 }
 
 impl<X, C> Poly<X, C>
 where
     X: Scalar,
-    C: Element<X> + Encodable,
+    C: Element<X>,
 {
     /// Returns a new polynomial of the given degree where each coefficients is
     /// sampled at random from the given RNG.
@@ -157,7 +102,7 @@ where
         zipped.for_each(|(a, b)| a.add(&b));
     }
 
-    pub fn recover(t: usize, mut shares: Vec<Eval<C>>) -> Result<C, PolyError<C>> {
+    pub fn recover(t: usize, mut shares: Vec<Eval<C>>) -> Result<C, PolyError> {
         if shares.len() < t {
             return Err(PolyError::InvalidRecovery(shares.len(), t));
         }
@@ -199,7 +144,7 @@ where
         Ok(acc)
     }
 
-    pub fn full_recover(t: usize, mut shares: Vec<Eval<C>>) -> Result<Self, PolyError<C>> {
+    pub fn full_recover(t: usize, mut shares: Vec<Eval<C>>) -> Result<Self, PolyError> {
         if shares.len() < t {
             return Err(PolyError::InvalidRecovery(shares.len(), t));
         }
@@ -354,7 +299,7 @@ impl<X: Scalar> Poly<X, X> {
 impl<X, Y> fmt::Display for Poly<X, Y>
 where
     X: Scalar,
-    Y: Element<X> + Encodable,
+    Y: Element<X>,
 {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         let s = self
@@ -387,10 +332,9 @@ pub mod tests {
     fn serialization() {
         let p = Poly::<Sc, Sc>::new(10);
 
-        let ser = p.marshal();
+        let ser = bincode::serialize(&p).unwrap();
 
-        let mut de = Poly::<Sc, Sc>::new(0);
-        de.unmarshal(&ser).unwrap();
+        let de: Poly<Sc, Sc> = bincode::deserialize(&ser).unwrap();
 
         assert_eq!(p, de);
     }

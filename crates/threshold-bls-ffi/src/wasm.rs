@@ -5,20 +5,13 @@ use rand_chacha::ChaChaRng;
 use rand_core::{RngCore, SeedableRng};
 
 use threshold_bls::{
-    curve::zexe::PairingCurve as Bls12_377,
-    group::{Element, Encodable},
     poly::Poly,
-    sig::{
-        blind::Token, bls::G2Scheme, Blinder, Scheme, SignatureScheme, ThresholdScheme,
-        ThresholdSchemeExt,
-    },
+    sig::{blind::Token, Blinder, Scheme, SignatureScheme, ThresholdScheme, ThresholdSchemeExt},
     Index, Share,
 };
 
-type SigScheme = G2Scheme<Bls12_377>;
-type PublicKey = <SigScheme as Scheme>::Public;
-type PrivateKey = <SigScheme as Scheme>::Private;
-type Signature = <SigScheme as Scheme>::Signature;
+use crate::*;
+
 type Result<T> = std::result::Result<T, JsValue>;
 
 ///////////////////////////////////////////////////////////////////////////
@@ -61,11 +54,9 @@ pub fn blind(message: Vec<u8>, seed: &[u8]) -> BlindedMessage {
 ///
 /// - If unblinding fails.
 pub fn unblind(blinded_signature: &[u8], blinding_factor_buf: &[u8]) -> Result<Vec<u8>> {
-    let mut blinding_factor = Token::<PrivateKey>::new();
-    blinding_factor
-        .unmarshal(blinding_factor_buf)
-        .map_err(|err| {
-            JsValue::from_str(&format!("could not unmarshal blinding factor {}", err))
+    let blinding_factor: Token<PrivateKey> =
+        bincode::deserialize(&blinding_factor_buf).map_err(|err| {
+            JsValue::from_str(&format!("could not deserialize blinding factor {}", err))
         })?;
 
     SigScheme::unblind(&blinding_factor, blinded_signature)
@@ -84,10 +75,8 @@ pub fn unblind(blinded_signature: &[u8], blinding_factor_buf: &[u8]) -> Result<V
 ///
 /// - If verification fails
 pub fn verify(public_key_buf: &[u8], message: &[u8], signature: &[u8]) -> Result<()> {
-    let mut public_key = PublicKey::new();
-    public_key
-        .unmarshal(&public_key_buf)
-        .map_err(|err| JsValue::from_str(&format!("could not unmarshal public key {}", err)))?;
+    let public_key: PublicKey = bincode::deserialize(&public_key_buf)
+        .map_err(|err| JsValue::from_str(&format!("could not deserialize public key {}", err)))?;
 
     // checks the signature on the message hash
     <SigScheme as SignatureScheme>::verify(&public_key, &message, &signature)
@@ -105,10 +94,8 @@ pub fn verify(public_key_buf: &[u8], message: &[u8], signature: &[u8]) -> Result
 ///
 /// - If signing fails
 pub fn sign(private_key_buf: &[u8], message: &[u8]) -> Result<Vec<u8>> {
-    let mut private_key = PrivateKey::new();
-    private_key
-        .unmarshal(&private_key_buf)
-        .map_err(|err| JsValue::from_str(&format!("could not unmarshal private key {}", err)))?;
+    let private_key: PrivateKey = bincode::deserialize(&private_key_buf)
+        .map_err(|err| JsValue::from_str(&format!("could not deserialize private key {}", err)))?;
 
     SigScheme::sign(&private_key, &message)
         .map_err(|err| JsValue::from_str(&format!("could not sign message: {}", err)))
@@ -125,9 +112,8 @@ pub fn sign(private_key_buf: &[u8], message: &[u8]) -> Result<Vec<u8>> {
 /// NOTE: This method must NOT be called with a PrivateKey which is not generated via a
 /// secret sharing scheme.
 pub fn partial_sign(share_buf: &[u8], message: &[u8]) -> Result<Vec<u8>> {
-    let mut share = Share::<PrivateKey>::new(0, PrivateKey::new());
-    share.unmarshal(&share_buf).map_err(|err| {
-        JsValue::from_str(&format!("could not unmarshal private key share {}", err))
+    let share: Share<PrivateKey> = bincode::deserialize(&share_buf).map_err(|err| {
+        JsValue::from_str(&format!("could not deserialize private key share {}", err))
     })?;
 
     SigScheme::partial_sign(&share, &message)
@@ -145,9 +131,8 @@ pub fn partial_sign(share_buf: &[u8], message: &[u8]) -> Result<Vec<u8>> {
 /// NOTE: This method must NOT be called with a PrivateKey which is not generated via a
 /// secret sharing scheme.
 pub fn partial_sign_blinded_message(share_buf: &[u8], message: &[u8]) -> Result<Vec<u8>> {
-    let mut share = Share::<PrivateKey>::new(0, PrivateKey::new());
-    share.unmarshal(&share_buf).map_err(|err| {
-        JsValue::from_str(&format!("could not unmarshal private key share {}", err))
+    let share: Share<PrivateKey> = bincode::deserialize(&share_buf).map_err(|err| {
+        JsValue::from_str(&format!("could not deserialize private key share {}", err))
     })?;
 
     SigScheme::partial_sign_without_hashing(&share, &message)
@@ -166,10 +151,8 @@ pub fn partial_sign_blinded_message(share_buf: &[u8], message: &[u8]) -> Result<
 ///
 /// - If verification fails
 pub fn partial_verify(polynomial_buf: &[u8], blinded_message: &[u8], sig: &[u8]) -> Result<()> {
-    let mut polynomial = Poly::<PrivateKey, PublicKey>::from(vec![]);
-    polynomial
-        .unmarshal(&polynomial_buf)
-        .map_err(|err| JsValue::from_str(&format!("could not unmarshal polynomial {}", err)))?;
+    let polynomial: Poly<PrivateKey, PublicKey> = bincode::deserialize(&polynomial_buf)
+        .map_err(|err| JsValue::from_str(&format!("could not deserialize polynomial {}", err)))?;
 
     SigScheme::partial_verify(&polynomial, blinded_message, sig)
         .map_err(|err| JsValue::from_str(&format!("could not partially verify message: {}", err)))
@@ -187,10 +170,8 @@ pub fn partial_verify_blind_signature(
     blinded_message: &[u8],
     sig: &[u8],
 ) -> Result<()> {
-    let mut polynomial = Poly::<PrivateKey, PublicKey>::from(vec![]);
-    polynomial
-        .unmarshal(&polynomial_buf)
-        .map_err(|err| JsValue::from_str(&format!("could not unmarshal polynomial {}", err)))?;
+    let polynomial: Poly<PrivateKey, PublicKey> = bincode::deserialize(&polynomial_buf)
+        .map_err(|err| JsValue::from_str(&format!("could not deserialize polynomial {}", err)))?;
 
     SigScheme::partial_verify_without_hashing(&polynomial, blinded_message, sig)
         .map_err(|err| JsValue::from_str(&format!("could not partially verify message: {}", err)))
@@ -223,7 +204,7 @@ pub fn partial_verify_blind_signature(
 pub fn combine(threshold: usize, signatures: Vec<u8>) -> Result<Vec<u8>> {
     // break the flattened vector to a Vec<Vec<u8>> where each element is a serialized signature
     let sigs = signatures
-        .chunks(Signature::marshal_len() + std::mem::size_of::<Index>())
+        .chunks(PARTIAL_SIG_LENGTH)
         .map(|chunk| chunk.to_vec())
         .collect::<Vec<Vec<u8>>>();
 
@@ -283,7 +264,7 @@ impl BlindedMessage {
 
     #[wasm_bindgen(getter, js_name = blindingFactor)]
     pub fn blinding_factor(&self) -> Vec<u8> {
-        self.blinding_factor.marshal()
+        bincode::serialize(&self.blinding_factor).expect("could not serialize blinding factor")
     }
 }
 
@@ -303,12 +284,12 @@ pub struct Keypair {
 impl Keypair {
     #[wasm_bindgen(getter, js_name = privateKey)]
     pub fn private_key(&self) -> Vec<u8> {
-        self.private.marshal()
+        bincode::serialize(&self.private).expect("could not serialize private key")
     }
 
     #[wasm_bindgen(getter, js_name = publicKey)]
     pub fn public_key(&self) -> Vec<u8> {
-        self.public.marshal()
+        bincode::serialize(&self.public).expect("could not serialize public key")
     }
 }
 
@@ -336,7 +317,7 @@ pub struct Keys {
 impl Keys {
     #[wasm_bindgen(js_name = getShare)]
     pub fn get_share(&self, index: usize) -> Vec<u8> {
-        self.shares[index].marshal()
+        bincode::serialize(&self.shares[index]).expect("could not serialize share")
     }
 
     #[wasm_bindgen(js_name = numShares)]
@@ -346,12 +327,13 @@ impl Keys {
 
     #[wasm_bindgen(getter, js_name = polynomial)]
     pub fn polynomial(&self) -> Vec<u8> {
-        self.polynomial.marshal()
+        bincode::serialize(&self.polynomial).expect("could not serialize polynomial")
     }
 
     #[wasm_bindgen(getter, js_name = thresholdPublicKey)]
     pub fn threshold_public_key(&self) -> Vec<u8> {
-        self.polynomial.public_key().marshal()
+        bincode::serialize(&self.polynomial.public_key())
+            .expect("could not serialize threshold public key")
     }
 }
 

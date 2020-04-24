@@ -1,4 +1,4 @@
-use crate::group::{Curve, Element, Encodable};
+use crate::group::{Curve, Element};
 use chacha20poly1305::{
     aead,
     aead::{Aead, Error as AError, NewAead},
@@ -86,10 +86,7 @@ pub fn encrypt_with<C: Curve>(
     to: &C::Point,
     msg: &[u8],
     mut rng: &mut dyn RngCore,
-) -> EciesCipher<C>
-where
-    C::Point: Encodable,
-{
+) -> EciesCipher<C> {
     let mut eph_secret = C::Scalar::new();
     eph_secret.pick(&mut rng);
     let mut eph_public = C::Point::one();
@@ -97,7 +94,9 @@ where
     // dh = eph(yG) = eph * public
     let mut dh = to.clone();
     dh.mul(&eph_secret);
-    let cipher = encrypt_data(&dh.marshal(), msg);
+
+    let serialized = bincode::serialize(&dh).expect("serialization should not fail");
+    let cipher = encrypt_data(&serialized, msg);
     EciesCipher {
         aead: cipher,
         ephemereal: eph_public,
@@ -107,20 +106,15 @@ where
 pub fn decrypt<C: Curve>(
     private: &C::Scalar,
     cipher: &EciesCipher<C>,
-) -> Result<Vec<u8>, EciesError>
-where
-    C::Point: Encodable,
-{
+) -> Result<Vec<u8>, EciesError> {
     // dh = private (eph * G) = private * ephPublic
     let mut dh = cipher.ephemereal.clone();
     dh.mul(private);
-    decrypt_data(&dh.marshal(), &cipher.aead)
+    let serialized = bincode::serialize(&dh).expect("serialization should not fail");
+    decrypt_data(&serialized, &cipher.aead)
 }
 
-pub fn encrypt<C: Curve>(to: &C::Point, msg: &[u8]) -> EciesCipher<C>
-where
-    C::Point: Encodable,
-{
+pub fn encrypt<C: Curve>(to: &C::Point, msg: &[u8]) -> EciesCipher<C> {
     use rand::prelude::*;
     encrypt_with(to, msg, &mut thread_rng())
 }

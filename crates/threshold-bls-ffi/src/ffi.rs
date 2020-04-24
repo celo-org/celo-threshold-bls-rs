@@ -2,23 +2,19 @@
 use rand_chacha::ChaChaRng;
 use rand_core::{RngCore, SeedableRng};
 
+use serde::{de::DeserializeOwned, Serialize};
 use threshold_bls::{
-    curve::zexe::PairingCurve as Bls12_377,
-    group::{Element, Encodable},
     poly::Poly,
     sig::{
-        blind::Token, bls::G2Scheme, Blinder, Scheme, SignatureScheme, SignatureSchemeExt,
-        ThresholdScheme, ThresholdSchemeExt,
+        blind::Token, Blinder, Scheme, SignatureScheme, SignatureSchemeExt, ThresholdScheme,
+        ThresholdSchemeExt,
     },
     Index, Share,
 };
 
 use bls_crypto::ffi::Buffer;
 
-type SigScheme = G2Scheme<Bls12_377>;
-type PublicKey = <SigScheme as Scheme>::Public;
-type PrivateKey = <SigScheme as Scheme>::Private;
-type Signature = <SigScheme as Scheme>::Signature;
+use crate::*;
 
 ///////////////////////////////////////////////////////////////////////////
 // User -> Library
@@ -255,8 +251,7 @@ pub extern "C" fn combine(threshold: usize, signatures: *const Buffer, asig: *mu
     // split the flattened vector to a Vec<Vec<u8>> where each element is a serialized signature
     let signatures = <&[u8]>::from(unsafe { &*signatures });
     let sigs = signatures
-        // Each partial sig also includes an index
-        .chunks(Signature::marshal_len() + std::mem::size_of::<Index>())
+        .chunks(PARTIAL_SIG_LENGTH)
         .map(|chunk| chunk.to_vec())
         .collect::<Vec<Vec<u8>>>();
 
@@ -277,8 +272,7 @@ pub extern "C" fn combine(threshold: usize, signatures: *const Buffer, asig: *mu
 
 #[no_mangle]
 pub extern "C" fn deserialize_pubkey(pubkey_buf: *const u8, pubkey: *mut *mut PublicKey) -> bool {
-    let obj = PublicKey::new();
-    deserialize(pubkey_buf, pubkey, obj)
+    deserialize(pubkey_buf, PUBKEY_LEN, pubkey)
 }
 
 #[no_mangle]
@@ -286,14 +280,12 @@ pub extern "C" fn deserialize_privkey(
     privkey_buf: *const u8,
     privkey: *mut *mut PrivateKey,
 ) -> bool {
-    let obj = PrivateKey::new();
-    deserialize(privkey_buf, privkey, obj)
+    deserialize(privkey_buf, PRIVKEY_LEN, privkey)
 }
 
 #[no_mangle]
 pub extern "C" fn deserialize_sig(sig_buf: *const u8, sig: *mut *mut Signature) -> bool {
-    let obj = Signature::new();
-    deserialize(sig_buf, sig, obj)
+    deserialize(sig_buf, SIGNATURE_LEN, sig)
 }
 
 #[no_mangle]
@@ -311,21 +303,23 @@ pub extern "C" fn serialize_sig(sig: *const Signature, sig_buf: *mut *mut u8) {
     serialize(sig, sig_buf)
 }
 
-fn deserialize<T: Encodable>(in_buf: *const u8, out: *mut *mut T, mut obj: T) -> bool {
-    let buf = unsafe { std::slice::from_raw_parts(in_buf, T::marshal_len()) };
+fn deserialize<T: DeserializeOwned>(in_buf: *const u8, len: usize, out: *mut *mut T) -> bool {
+    let buf = unsafe { std::slice::from_raw_parts(in_buf, len) };
 
-    if let Err(_) = obj.unmarshal(&buf) {
+    let obj = if let Ok(res) = bincode::deserialize(&buf) {
+        res
+    } else {
         return false;
-    }
+    };
 
     unsafe { *out = Box::into_raw(Box::new(obj)) };
 
     true
 }
 
-fn serialize<T: Encodable>(in_obj: *const T, out_bytes: *mut *mut u8) {
+fn serialize<T: Serialize>(in_obj: *const T, out_bytes: *mut *mut u8) {
     let obj = unsafe { &*in_obj };
-    let mut marshalled = obj.marshal();
+    let mut marshalled = bincode::serialize(obj).expect("serialization should not fail");
 
     unsafe {
         *out_bytes = marshalled.as_mut_ptr();
@@ -539,8 +533,9 @@ mod tests {
             partial_verify
         };
 
+        let (n, t) = (5, 3);
         let mut keys = MaybeUninit::<*mut Keys>::uninit();
-        threshold_keygen(5, 3, &seed[..], keys.as_mut_ptr());
+        threshold_keygen(n, t, &seed[..], keys.as_mut_ptr());
         let keys = unsafe { &*keys.assume_init() };
 
         let (message_to_sign, blinding_factor) = if should_blind {
@@ -562,7 +557,7 @@ mod tests {
 
         // 2. partially sign the blinded message
         let mut sigs = Vec::new();
-        for i in 0..3 {
+        for i in 0..t {
             let mut partial_sig = MaybeUninit::<Buffer>::uninit();
             let ret = partial_sign_fn(
                 share_ptr(keys, i),
@@ -579,7 +574,8 @@ mod tests {
         let public_key = polynomial_ptr(keys);
         let mut concatenated = Vec::new();
         for sig in &sigs {
-            concatenated.extend_from_slice(<&[u8]>::from(sig));
+            let sig_slice = <&[u8]>::from(sig);
+            concatenated.extend_from_slice(sig_slice);
             let ret = partial_verify_fn(public_key, &message_to_sign, sig);
             assert!(ret);
         }
@@ -587,7 +583,7 @@ mod tests {
 
         // 4. generate the threshold signature
         let mut asig = MaybeUninit::<Buffer>::uninit();
-        let ret = combine(3, &concatenated, asig.as_mut_ptr());
+        let ret = combine(t, &concatenated, asig.as_mut_ptr());
         assert!(ret);
         let asig = unsafe { asig.assume_init() };
 
@@ -678,18 +674,17 @@ mod tests {
 
         let private_key_ptr = private_key_ptr(keypair);
         let private_key = unsafe { &*private_key_ptr };
-        let marshalled = private_key.marshal();
+        let marshalled = bincode::serialize(private_key).unwrap();
 
         let mut privkey_buf = MaybeUninit::<*mut u8>::uninit();
 
         serialize_privkey(private_key_ptr, privkey_buf.as_mut_ptr());
 
         let privkey_buf = unsafe { privkey_buf.assume_init() };
-        let message = unsafe { std::slice::from_raw_parts(privkey_buf, PrivateKey::marshal_len()) };
+        let message = unsafe { std::slice::from_raw_parts(privkey_buf, PRIVKEY_LEN) };
         assert_eq!(marshalled, message);
 
-        let mut unmarshalled = PrivateKey::new();
-        unmarshalled.unmarshal(&message).unwrap();
+        let unmarshalled: PrivateKey = bincode::deserialize(&message).unwrap();
         assert_eq!(&unmarshalled, private_key);
 
         let mut de = MaybeUninit::<*mut PrivateKey>::uninit();
@@ -710,7 +705,7 @@ mod tests {
         let public_key_ptr = public_key_ptr(keypair);
         let public_key = unsafe { &*public_key_ptr };
 
-        let marshalled = public_key.marshal();
+        let marshalled = bincode::serialize(public_key).unwrap();
 
         let mut pubkey_buf = MaybeUninit::<*mut u8>::uninit();
 
@@ -718,11 +713,10 @@ mod tests {
 
         let pubkey_buf = unsafe { pubkey_buf.assume_init() };
         // the serialized result
-        let message = unsafe { std::slice::from_raw_parts(pubkey_buf, PublicKey::marshal_len()) };
+        let message = unsafe { std::slice::from_raw_parts(pubkey_buf, PUBKEY_LEN) };
         assert_eq!(marshalled, message);
 
-        let mut unmarshalled = PublicKey::new();
-        unmarshalled.unmarshal(&message).unwrap();
+        let unmarshalled: PublicKey = bincode::deserialize(&message).unwrap();
         assert_eq!(&unmarshalled, public_key);
 
         let mut de = MaybeUninit::<*mut PublicKey>::uninit();

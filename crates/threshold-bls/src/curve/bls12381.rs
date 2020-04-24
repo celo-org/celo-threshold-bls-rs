@@ -1,11 +1,7 @@
-use crate::group::{
-    Curve as C, CurveFrom as CF, Element, Encodable, PairingCurve as PC, Point, Scalar as Sc,
-};
-use ff::{Field, PrimeField, PrimeFieldRepr};
-use groupy::{CurveAffine, CurveProjective, EncodedPoint};
-use paired::bls12_381::{
-    Bls12, Fq12, Fr, FrRepr, G1Compressed, G2Compressed, G1 as PG1, G2 as PG2,
-};
+use crate::group::{Curve as C, CurveFrom as CF, Element, PairingCurve as PC, Point, Scalar as Sc};
+use ff::{Field, PrimeField};
+use groupy::CurveProjective;
+use paired::bls12_381::{Bls12, Fq12, Fr, FrRepr, G1 as PG1, G2 as PG2};
 use paired::Engine;
 use rand_core::RngCore;
 use std::result::Result;
@@ -48,32 +44,6 @@ impl Element<Scalar> for Scalar {
     }
 }
 
-impl Encodable for Scalar {
-    type Error = BellmanError;
-
-    fn marshal_len() -> usize {
-        32
-    }
-
-    fn marshal(&self) -> Vec<u8> {
-        let repr = self.into_repr();
-        let mut out = Vec::with_capacity((repr.num_bits() / 8) as usize);
-        repr.write_le(&mut out)
-            .expect("writing to buff should not fail");
-        out
-    }
-
-    fn unmarshal(&mut self, data: &[u8]) -> Result<(), BellmanError> {
-        if data.len() != 32 {
-            return Err(BellmanError::InvalidLength(data.len(), 32));
-        }
-        let mut out = FrRepr::default();
-        out.read_le(data)?;
-        *self = Fr::from_repr(out)?.into();
-        Ok(())
-    }
-}
-
 /// Implementation of Scalar using field elements used in BLS12-381
 impl Sc for Scalar {
     fn set_int(&mut self, i: u64) {
@@ -110,59 +80,6 @@ impl Element<Scalar> for G1 {
     }
     fn mul(&mut self, mul: &Scalar) {
         self.mul_assign(FrRepr::from(*mul))
-    }
-}
-
-impl Encodable for G1 {
-    type Error = BellmanError;
-
-    fn marshal_len() -> usize {
-        48
-    }
-    fn marshal(&self) -> Vec<u8> {
-        let c = self.into_affine().into_compressed();
-        let out = c.as_ref().clone();
-        out.to_vec()
-    }
-    fn unmarshal(&mut self, data: &[u8]) -> Result<(), BellmanError> {
-        if data.len() != Self::marshal_len() {
-            return Err(BellmanError::InvalidLength(data.len(), Self::marshal_len()));
-        }
-        let mut c = G1Compressed::empty();
-        c.as_mut().copy_from_slice(data);
-
-        // Is there a better way to go from G1Compressed to G1?
-        let affine = c.into_affine()?;
-        *self = affine.into_projective();
-
-        Ok(())
-    }
-}
-
-impl Encodable for G2 {
-    type Error = BellmanError;
-
-    fn marshal_len() -> usize {
-        96
-    }
-
-    fn marshal(&self) -> Vec<u8> {
-        let c = self.into_affine().into_compressed();
-        let out = c.as_ref().clone();
-        out.to_vec()
-    }
-    fn unmarshal(&mut self, data: &[u8]) -> Result<(), BellmanError> {
-        if data.len() != Self::marshal_len() {
-            return Err(BellmanError::InvalidLength(data.len(), Self::marshal_len()));
-        }
-
-        let mut c = G2Compressed::empty();
-        // TODO this can panic ! (when?)
-        c.as_mut().copy_from_slice(data);
-        let affine = c.into_affine()?;
-        *self = affine.into_projective();
-
-        Ok(())
     }
 }
 

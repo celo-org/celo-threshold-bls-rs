@@ -1,4 +1,4 @@
-use crate::group::{Curve, CurveFrom, Element, Encodable, PairingCurve as PC, Point, Scalar as Sc};
+use crate::group::{Curve, CurveFrom, Element, PairingCurve as PC, Point, Scalar as Sc};
 use algebra::{
     bls12_377 as zexe,
     curves::{AffineCurve, PairingEngine, ProjectiveCurve},
@@ -12,13 +12,17 @@ use bls_crypto::{
     BLSError, SIG_DOMAIN,
 };
 use rand_core::RngCore;
-use serde::Serialize;
 use serde::{
-    de::Error as DeserializeError, ser::Error as SerializationError, Deserialize, Deserializer,
-    Serializer,
+    de::{Error as DeserializeError, SeqAccess, Visitor},
+    ser::{Error as SerializationError, SerializeTuple},
+    Deserialize, Deserializer, Serialize, Serializer,
 };
-use std::fmt;
-use std::ops::{AddAssign, MulAssign, Neg, SubAssign};
+use std::{
+    fmt,
+    marker::PhantomData,
+    ops::{AddAssign, MulAssign, Neg, SubAssign},
+};
+
 use thiserror::Error;
 
 #[derive(Debug, Error)]
@@ -39,7 +43,6 @@ pub struct Scalar(
 );
 
 type ZG1 = <zexe::Bls12_377 as PairingEngine>::G1Projective;
-type ZG1A = <zexe::Bls12_377 as PairingEngine>::G1Affine;
 
 #[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
 pub struct G1(
@@ -49,7 +52,6 @@ pub struct G1(
 );
 
 type ZG2 = <zexe::Bls12_377 as PairingEngine>::G2Projective;
-type ZG2A = <zexe::Bls12_377 as PairingEngine>::G2Affine;
 
 #[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
 pub struct G2(
@@ -80,27 +82,6 @@ impl Element<Scalar> for Scalar {
     }
     fn pick<R: RngCore>(&mut self, mut rng: &mut R) {
         *self = Self(zexe::Fr::rand(&mut rng))
-    }
-}
-
-impl Encodable for Scalar {
-    type Error = ZexeError;
-
-    fn marshal_len() -> usize {
-        zexe::Fr::SERIALIZED_SIZE
-    }
-
-    fn marshal(&self) -> Vec<u8> {
-        let mut out = Vec::with_capacity(Self::marshal_len());
-        self.0
-            .serialize(&mut out)
-            .expect("writing to buff should not fail");
-        out
-    }
-
-    fn unmarshal(&mut self, data: &[u8]) -> Result<(), ZexeError> {
-        self.0 = zexe::Fr::deserialize(&mut data.as_ref())?;
-        Ok(())
     }
 }
 
@@ -149,28 +130,6 @@ impl Element<Scalar> for G1 {
     }
 }
 
-impl Encodable for G1 {
-    type Error = ZexeError;
-
-    fn marshal_len() -> usize {
-        ZG1A::SERIALIZED_SIZE
-    }
-
-    fn marshal(&self) -> Vec<u8> {
-        let mut out = Vec::with_capacity(Self::marshal_len());
-        self.0
-            .into_affine()
-            .serialize(&mut out)
-            .expect("writing to vector should not fail");
-        out
-    }
-
-    fn unmarshal(&mut self, data: &[u8]) -> Result<(), ZexeError> {
-        self.0 = ZG1A::deserialize(&mut data.as_ref())?.into_projective();
-        Ok(())
-    }
-}
-
 /// Implementation of Point using G1 from BLS12-377
 impl Point<Scalar> for G1 {
     type Error = ZexeError;
@@ -212,28 +171,6 @@ impl Element<Scalar> for G2 {
 
     fn mul(&mut self, mul: &Scalar) {
         self.0.mul_assign(mul.0)
-    }
-}
-
-impl Encodable for G2 {
-    type Error = ZexeError;
-
-    fn marshal_len() -> usize {
-        ZG2A::SERIALIZED_SIZE
-    }
-
-    fn marshal(&self) -> Vec<u8> {
-        let mut out = Vec::with_capacity(Self::marshal_len());
-        self.0
-            .into_affine()
-            .serialize(&mut out)
-            .expect("writing to vector should not fail");
-        out
-    }
-
-    fn unmarshal(&mut self, data: &[u8]) -> Result<(), ZexeError> {
-        self.0 = ZG2A::deserialize(&mut data.as_ref())?.into_projective();
-        Ok(())
     }
 }
 
@@ -304,15 +241,45 @@ impl PC for PairingCurve {
     }
 }
 
-// Serde implementations
+// Serde implementations (ideally, these should be upstreamed to Zexe)
 
 fn deserialize_field<'de, D, C>(deserializer: D) -> Result<C, D::Error>
 where
     D: Deserializer<'de>,
-    C: CanonicalDeserialize,
+    C: CanonicalDeserialize + ConstantSerializedSize,
 {
-    let bytes = Vec::<u8>::deserialize(deserializer)?;
-    C::deserialize(&mut &bytes[..]).map_err(|err| DeserializeError::custom(err))
+    struct FieldVisitor<C>(PhantomData<C>);
+
+    impl<'de, C> Visitor<'de> for FieldVisitor<C>
+    where
+        C: CanonicalDeserialize + ConstantSerializedSize,
+    {
+        type Value = C;
+
+        fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+            formatter.write_str("a valid group element")
+        }
+
+        fn visit_seq<S>(self, mut seq: S) -> Result<C, S::Error>
+        where
+            S: SeqAccess<'de>,
+        {
+            let len = C::SERIALIZED_SIZE;
+            let bytes: Vec<u8> = (0..len)
+                .map(|_| {
+                    seq.next_element()?
+                        .ok_or(DeserializeError::custom("could not read bytes"))
+                })
+                .collect::<Result<Vec<_>, _>>()?;
+
+            let res =
+                C::deserialize(&mut &bytes[..]).map_err(|err| DeserializeError::custom(err))?;
+            Ok(res)
+        }
+    }
+
+    let visitor = FieldVisitor(PhantomData);
+    deserializer.deserialize_tuple(C::SERIALIZED_SIZE, visitor)
 }
 
 fn serialize_field<S, C>(c: &C, s: S) -> Result<S::Ok, S::Error>
@@ -320,22 +287,57 @@ where
     S: Serializer,
     C: CanonicalSerialize,
 {
-    let mut bytes = Vec::with_capacity(c.serialized_size());
+    let len = c.serialized_size();
+    let mut bytes = Vec::with_capacity(len);
     c.serialize(&mut bytes)
         .map_err(|err| SerializationError::custom(err))?;
-    s.serialize_bytes(&bytes)
+
+    let mut tup = s.serialize_tuple(len)?;
+    for byte in &bytes {
+        tup.serialize_element(byte)?;
+    }
+    tup.end()
 }
 
 fn deserialize_group<'de, D, C>(deserializer: D) -> Result<C, D::Error>
 where
     D: Deserializer<'de>,
     C: ProjectiveCurve,
-    C::Affine: CanonicalDeserialize,
+    C::Affine: CanonicalDeserialize + ConstantSerializedSize,
 {
-    let bytes = Vec::<u8>::deserialize(deserializer)?;
-    let affine =
-        C::Affine::deserialize(&mut &bytes[..]).map_err(|err| DeserializeError::custom(err))?;
-    Ok(affine.into_projective())
+    struct GroupVisitor<C>(PhantomData<C>);
+
+    impl<'de, C> Visitor<'de> for GroupVisitor<C>
+    where
+        C: ProjectiveCurve,
+        C::Affine: CanonicalDeserialize + ConstantSerializedSize,
+    {
+        type Value = C;
+
+        fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+            formatter.write_str("a valid group element")
+        }
+
+        fn visit_seq<S>(self, mut seq: S) -> Result<C, S::Error>
+        where
+            S: SeqAccess<'de>,
+        {
+            let len = C::Affine::SERIALIZED_SIZE;
+            let bytes: Vec<u8> = (0..len)
+                .map(|_| {
+                    seq.next_element()?
+                        .ok_or(DeserializeError::custom("could not read bytes"))
+                })
+                .collect::<Result<Vec<_>, _>>()?;
+
+            let affine = C::Affine::deserialize(&mut &bytes[..])
+                .map_err(|err| DeserializeError::custom(err))?;
+            Ok(affine.into_projective())
+        }
+    }
+
+    let visitor = GroupVisitor(PhantomData);
+    deserializer.deserialize_tuple(C::Affine::SERIALIZED_SIZE, visitor)
 }
 
 fn serialize_group<S, C>(c: &C, s: S) -> Result<S::Ok, S::Error>
@@ -345,11 +347,17 @@ where
     C::Affine: CanonicalSerialize,
 {
     let affine = c.into_affine();
-    let mut bytes = Vec::with_capacity(affine.serialized_size());
+    let len = affine.serialized_size();
+    let mut bytes = Vec::with_capacity(len);
     affine
         .serialize(&mut bytes)
         .map_err(|err| SerializationError::custom(err))?;
-    s.serialize_bytes(&bytes)
+
+    let mut tup = s.serialize_tuple(len)?;
+    for byte in &bytes {
+        tup.serialize_element(byte)?;
+    }
+    tup.end()
 }
 
 #[cfg(test)]
@@ -364,9 +372,36 @@ mod tests {
     assert_impl_all!(Scalar: Serialize, DeserializeOwned, Clone);
 
     #[test]
-    fn size377() {
-        println!("scalar len: {}", Scalar::one().marshal().len());
-        println!("g1 len: {}", G1::one().marshal().len());
-        println!("g2 len: {}", G2::one().marshal().len());
+    fn serialize_group() {
+        serialize_group_test::<G1>(48);
+        serialize_group_test::<G2>(96);
+    }
+
+    fn serialize_group_test<E: Element<Scalar>>(size: usize) {
+        let rng = &mut rand::thread_rng();
+        let mut sig = E::new();
+        sig.pick(rng);
+        let ser = bincode::serialize(&sig).unwrap();
+        assert_eq!(ser.len(), size);
+
+        let de: E = bincode::deserialize(&ser).unwrap();
+        assert_eq!(de, sig);
+    }
+
+    #[test]
+    fn serialize_field() {
+        serialize_field_test::<GT>(576);
+        serialize_field_test::<Scalar>(32);
+    }
+
+    fn serialize_field_test<E: Element>(size: usize) {
+        let rng = &mut rand::thread_rng();
+        let mut sig = E::new();
+        sig.pick(rng);
+        let ser = bincode::serialize(&sig).unwrap();
+        assert_eq!(ser.len(), size);
+
+        let de: E = bincode::deserialize(&ser).unwrap();
+        assert_eq!(de, sig);
     }
 }

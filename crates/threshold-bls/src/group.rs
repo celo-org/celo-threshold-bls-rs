@@ -1,7 +1,7 @@
 //! Traits for operating on Groups and Elliptic Curves.
 
 use rand_core::RngCore;
-use serde::{de::DeserializeOwned, Serialize};
+use serde::{Deserialize, Serialize};
 use std::fmt::{Debug, Display};
 use std::marker::PhantomData;
 
@@ -9,7 +9,9 @@ use std::marker::PhantomData;
 /// which is also equipped with a multiplication transformation.
 /// Two implementations are for Scalar which forms a ring so RHS is the same
 /// and Point which can be multiplied by a scalar of its prime field.
-pub trait Element<RHS = Self>: Clone + Display + Debug + Eq {
+pub trait Element<RHS = Self>:
+    Clone + Display + Debug + Eq + Serialize + for<'a> Deserialize<'a>
+{
     /// new MUST return the zero element of the group.
     fn new() -> Self;
     fn one() -> Self;
@@ -23,7 +25,7 @@ pub trait Element<RHS = Self>: Clone + Display + Debug + Eq {
 
 /// Scalar can be multiplied by only a Scalar, no other elements.
 // TODO: is that truly enforced by Rust ?
-pub trait Scalar: Element + Encodable {
+pub trait Scalar: Element {
     fn set_int(&mut self, i: u64);
     fn inverse(&self) -> Option<Self>;
     fn negate(&mut self);
@@ -32,7 +34,7 @@ pub trait Scalar: Element + Encodable {
 }
 
 /// Basic point functionality that can be multiplied by a scalar
-pub trait Point<A: Scalar>: Element<A> + Encodable {
+pub trait Point<A: Scalar>: Element<A> {
     type Error: Debug;
 
     fn map(&mut self, data: &[u8]) -> Result<(), <Self as Point<A>>::Error>;
@@ -59,8 +61,8 @@ pub trait Curve: Clone + Debug {
 
 pub trait PairingCurve: Debug {
     type Scalar: Scalar;
-    type G1: Point<Self::Scalar> + Encodable;
-    type G2: Point<Self::Scalar> + Encodable;
+    type G1: Point<Self::Scalar>;
+    type G2: Point<Self::Scalar>;
     type GT: Element;
 
     fn pair(a: &Self::G1, b: &Self::G2) -> Self::GT;
@@ -83,11 +85,3 @@ where
 
 pub type G1Curve<C> = CurveFrom<<C as PairingCurve>::Scalar, <C as PairingCurve>::G1>;
 pub type G2Curve<C> = CurveFrom<<C as PairingCurve>::Scalar, <C as PairingCurve>::G2>;
-
-pub trait Encodable: Serialize + DeserializeOwned {
-    type Error: std::error::Error;
-
-    fn marshal_len() -> usize;
-    fn marshal(&self) -> Vec<u8>;
-    fn unmarshal(&mut self, data: &[u8]) -> Result<(), Self::Error>;
-}
