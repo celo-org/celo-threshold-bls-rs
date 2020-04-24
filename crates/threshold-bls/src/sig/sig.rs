@@ -1,7 +1,8 @@
-use crate::group::{Element, Encodable, Point, Scalar};
+use crate::group::{Element, Point, Scalar};
 use crate::poly::Poly;
 use crate::Share;
 use rand_core::RngCore;
+use serde::{de::DeserializeOwned, Serialize};
 use std::{error::Error, fmt::Debug};
 
 /// The `Scheme` trait contains the basic information of the groups over
@@ -15,9 +16,9 @@ pub trait Scheme: Debug {
     type Private: Scalar;
     /// `Public` represents the group over which the public keys are
     /// represented.
-    type Public: Point<Self::Private> + Encodable;
+    type Public: Point<Self::Private> + Serialize + DeserializeOwned;
     /// `Signature` represents the group over which the signatures are reresented.
-    type Signature: Point<Self::Private> + Encodable;
+    type Signature: Point<Self::Private> + Serialize + DeserializeOwned;
 
     /// Returns a new fresh keypair usable by the scheme.
     fn keypair<R: RngCore>(rng: &mut R) -> (Self::Private, Self::Public) {
@@ -37,7 +38,7 @@ pub trait Scheme: Debug {
 ///  # #[cfg(feature = "bls12_381")]
 ///  # {
 ///  use rand::prelude::*;
-///  use threshold_bls::{sig::{SignatureScheme,Scheme}, Element, Encodable, Point};
+///  use threshold_bls::{sig::{SignatureScheme,Scheme}, Element, Point};
 ///  use threshold_bls::curve::bls12381::PairingCurve as PC;
 ///  // import BLS signatures with public keys over G2
 ///  use threshold_bls::sig::bls::G2Scheme;
@@ -76,7 +77,7 @@ pub trait SignatureSchemeExt: SignatureScheme {
 /// not to be used alone but in combination with a signature scheme or a
 /// threshold scheme.
 pub trait Blinder {
-    type Token: Encodable;
+    type Token: Serialize + DeserializeOwned;
     type Error: Error;
 
     fn blind<R: RngCore>(msg: &[u8], rng: &mut R) -> (Self::Token, Vec<u8>);

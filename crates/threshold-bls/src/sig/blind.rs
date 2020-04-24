@@ -1,4 +1,4 @@
-use crate::group::{Element, Encodable, Point, Scalar};
+use crate::group::{Element, Point, Scalar};
 use crate::sig::{BlindScheme, Blinder, SignatureScheme, SignatureSchemeExt};
 use rand::RngCore;
 use serde::{Deserialize, Serialize};
@@ -6,14 +6,14 @@ use thiserror::Error;
 
 /// BlindError are a type of errors that blind signature scheme can return.
 #[derive(Debug, Error)]
-pub enum BlinderError<E: Encodable + std::fmt::Debug> {
+pub enum BlinderError {
     /// InvalidToken is thrown out when the token used to unblind can not be
     /// inversed. This error should not happen if you use the Token that was
     /// returned by the blind operation.
     #[error("invalid token")]
     InvalidToken,
-    #[error("could not deserialize scalar: {0}")]
-    EncodableError(E::Error),
+    #[error("could not deserialize: {0}")]
+    BincodeError(#[from] bincode::Error),
 }
 
 /// Blinding a message before requesting a signature requires the usage of a
@@ -30,20 +30,6 @@ impl<S: Scalar> Token<S> {
     }
 }
 
-impl<S: Scalar> Encodable for Token<S> {
-    type Error = <S as Encodable>::Error;
-
-    fn marshal_len() -> usize {
-        <S as Encodable>::marshal_len()
-    }
-    fn marshal(&self) -> Vec<u8> {
-        self.0.marshal()
-    }
-    fn unmarshal(&mut self, data: &[u8]) -> Result<(), Self::Error> {
-        self.0.unmarshal(data)
-    }
-}
-
 // We implement Blinder for anything that implements Signature scheme, so we also
 // enable the BlindScheme for all these, for convenience
 impl<I> BlindScheme for I where I: SignatureSchemeExt {}
@@ -52,7 +38,7 @@ impl<I> BlindScheme for I where I: SignatureSchemeExt {}
 /// in this [paper](https://eprint.iacr.org/2018/733.pdf).
 impl<I: SignatureScheme> Blinder for I {
     type Token = Token<I::Private>;
-    type Error = BlinderError<I::Signature>;
+    type Error = BlinderError;
 
     fn blind<R: RngCore>(msg: &[u8], rng: &mut R) -> (Self::Token, Vec<u8>) {
         let mut r = I::Private::new();
@@ -65,24 +51,24 @@ impl<I: SignatureScheme> Blinder for I {
         h.map(msg).expect("could not map to the group");
         h.mul(&r);
 
-        (Token(r), h.marshal())
+        let serialized = bincode::serialize(&h).expect("serialization should not fail");
+        (Token(r), serialized)
     }
 
     fn unblind(t: &Self::Token, sigbuff: &[u8]) -> Result<Vec<u8>, Self::Error> {
-        let mut sig = I::Signature::new();
-        sig.unmarshal(sigbuff)
-            .map_err(BlinderError::EncodableError)?;
+        let mut sig: I::Signature = bincode::deserialize(sigbuff)?;
 
         // r^-1 * ( r * H(m)^x) = H(m)^x
         let ri = t.0.inverse().ok_or(BlinderError::InvalidToken)?;
         sig.mul(&ri);
 
-        Ok(sig.marshal())
+        let serialized = bincode::serialize(&sig)?;
+        Ok(serialized)
     }
 }
 
 #[cfg(test)]
-#[cfg(feature = "bls12_381")]
+// #[cfg(feature = "bls12_381")]
 mod tests {
     use super::*;
     use crate::curve::bls12381::PairingCurve as PCurve;

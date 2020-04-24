@@ -1,5 +1,4 @@
 //! Implements Threshold Signatures for all Signature Scheme implementers
-use crate::group::{Element, Encodable};
 use crate::poly::{Eval, Poly, PolyError};
 use crate::sig::{
     Partial, SignatureScheme, SignatureSchemeExt, ThresholdScheme, ThresholdSchemeExt,
@@ -19,7 +18,7 @@ pub enum IndexSerializerError {
 #[derive(Debug, Error)]
 pub enum ThresholdError<I: SignatureScheme> {
     #[error("could not recover public key: {0}")]
-    PolyError(PolyError<I::Signature>),
+    PolyError(PolyError),
 
     #[error(transparent)]
     IndexError(#[from] IndexSerializerError),
@@ -82,25 +81,20 @@ impl<I: SignatureScheme> ThresholdScheme for I {
             .map(|s| extract_index(s))
             .filter_map(Result::ok)
             .map(|(idx, bls_sig)| {
-                let mut p = Self::Signature::one();
-                match p.unmarshal(&bls_sig) {
-                    Ok(_) => Ok(Eval {
-                        value: p,
-                        index: idx,
-                    }),
-                    Err(e) => {
-                        println!("error unmarshalling signature when aggregating: buff {:?} \n\t err ->  {:?}", bls_sig.len() ,e);
-                        Err(e)
-                    }
+                let p: Self::Signature =
+                    bincode::deserialize(&bls_sig).expect("could not deserialize");
+                Eval {
+                    value: p,
+                    index: idx,
                 }
             })
-            .filter_map(Result::ok)
+            // .filter_map(Result::ok)
             .collect();
 
         let recovered_sig =
             Poly::<Self::Private, Self::Signature>::recover(threshold, valid_partials)
                 .map_err(ThresholdError::PolyError)?;
-        Ok(recovered_sig.marshal())
+        Ok(bincode::serialize(&recovered_sig).expect("could not serialize"))
     }
 
     fn verify(public: &Self::Public, msg: &[u8], sig: &[u8]) -> Result<(), Self::Error> {

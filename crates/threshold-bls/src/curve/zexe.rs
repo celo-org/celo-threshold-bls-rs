@@ -1,10 +1,10 @@
-use crate::group::{Curve, CurveFrom, Element, Encodable, PairingCurve as PC, Point, Scalar as Sc};
+use crate::group::{Curve, CurveFrom, Element, PairingCurve as PC, Point, Scalar as Sc};
 use algebra::{
     bls12_377 as zexe,
     curves::{AffineCurve, PairingEngine, ProjectiveCurve},
     fields::Field,
     prelude::{One, UniformRand, Zero},
-    CanonicalDeserialize, CanonicalSerialize, ConstantSerializedSize,
+    CanonicalDeserialize, CanonicalSerialize,
 };
 use bls_crypto::{
     hash_to_curve::{try_and_increment::TryAndIncrement, HashToCurve},
@@ -39,7 +39,6 @@ pub struct Scalar(
 );
 
 type ZG1 = <zexe::Bls12_377 as PairingEngine>::G1Projective;
-type ZG1A = <zexe::Bls12_377 as PairingEngine>::G1Affine;
 
 #[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
 pub struct G1(
@@ -49,7 +48,6 @@ pub struct G1(
 );
 
 type ZG2 = <zexe::Bls12_377 as PairingEngine>::G2Projective;
-type ZG2A = <zexe::Bls12_377 as PairingEngine>::G2Affine;
 
 #[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
 pub struct G2(
@@ -80,27 +78,6 @@ impl Element<Scalar> for Scalar {
     }
     fn pick<R: RngCore>(&mut self, mut rng: &mut R) {
         *self = Self(zexe::Fr::rand(&mut rng))
-    }
-}
-
-impl Encodable for Scalar {
-    type Error = ZexeError;
-
-    fn marshal_len() -> usize {
-        zexe::Fr::SERIALIZED_SIZE
-    }
-
-    fn marshal(&self) -> Vec<u8> {
-        let mut out = Vec::with_capacity(Self::marshal_len());
-        self.0
-            .serialize(&mut out)
-            .expect("writing to buff should not fail");
-        out
-    }
-
-    fn unmarshal(&mut self, data: &[u8]) -> Result<(), ZexeError> {
-        self.0 = zexe::Fr::deserialize(&mut data.as_ref())?;
-        Ok(())
     }
 }
 
@@ -149,28 +126,6 @@ impl Element<Scalar> for G1 {
     }
 }
 
-impl Encodable for G1 {
-    type Error = ZexeError;
-
-    fn marshal_len() -> usize {
-        ZG1A::SERIALIZED_SIZE
-    }
-
-    fn marshal(&self) -> Vec<u8> {
-        let mut out = Vec::with_capacity(Self::marshal_len());
-        self.0
-            .into_affine()
-            .serialize(&mut out)
-            .expect("writing to vector should not fail");
-        out
-    }
-
-    fn unmarshal(&mut self, data: &[u8]) -> Result<(), ZexeError> {
-        self.0 = ZG1A::deserialize(&mut data.as_ref())?.into_projective();
-        Ok(())
-    }
-}
-
 /// Implementation of Point using G1 from BLS12-377
 impl Point<Scalar> for G1 {
     type Error = ZexeError;
@@ -212,28 +167,6 @@ impl Element<Scalar> for G2 {
 
     fn mul(&mut self, mul: &Scalar) {
         self.0.mul_assign(mul.0)
-    }
-}
-
-impl Encodable for G2 {
-    type Error = ZexeError;
-
-    fn marshal_len() -> usize {
-        ZG2A::SERIALIZED_SIZE
-    }
-
-    fn marshal(&self) -> Vec<u8> {
-        let mut out = Vec::with_capacity(Self::marshal_len());
-        self.0
-            .into_affine()
-            .serialize(&mut out)
-            .expect("writing to vector should not fail");
-        out
-    }
-
-    fn unmarshal(&mut self, data: &[u8]) -> Result<(), ZexeError> {
-        self.0 = ZG2A::deserialize(&mut data.as_ref())?.into_projective();
-        Ok(())
     }
 }
 
@@ -362,11 +295,4 @@ mod tests {
     assert_impl_all!(G2: Serialize, DeserializeOwned, Clone);
     assert_impl_all!(GT: Serialize, DeserializeOwned, Clone);
     assert_impl_all!(Scalar: Serialize, DeserializeOwned, Clone);
-
-    #[test]
-    fn size377() {
-        println!("scalar len: {}", Scalar::one().marshal().len());
-        println!("g1 len: {}", G1::one().marshal().len());
-        println!("g2 len: {}", G2::one().marshal().len());
-    }
 }

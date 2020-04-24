@@ -1,21 +1,21 @@
-use crate::group::{Element, Encodable, PairingCurve, Point};
+use crate::group::{Element, PairingCurve, Point};
 use crate::sig::{Scheme, SignatureScheme, SignatureSchemeExt};
 use std::{fmt::Debug, marker::PhantomData};
 use thiserror::Error;
 
 /// BLSError are thrown out when using the BLS signature scheme.
 #[derive(Debug, Error)]
-pub enum BLSError<E: Encodable + Debug> {
+pub enum BLSError {
     /// InvalidSig is raised when the validation routine of the BLS algorithm
     /// does not finish successfully,i.e. it is an invalid signature.
     #[error("invalid signature")]
     InvalidSig,
 
-    #[error("could not decode data: {0}")]
-    EncodableError(E::Error),
-
     #[error("could not hash to curve")]
     HashingError,
+
+    #[error("could not deserialize: {0}")]
+    DeserializationError(#[from] bincode::Error),
 }
 
 // private module workaround to avoid leaking a private
@@ -33,16 +33,19 @@ mod common {
             private: &Self::Private,
             msg: &[u8],
             should_hash: bool,
-        ) -> Result<Vec<u8>, BLSError<Self::Signature>> {
-            let mut h = Self::Signature::new();
-            if should_hash {
+        ) -> Result<Vec<u8>, BLSError> {
+            let mut h = if should_hash {
+                let mut h = Self::Signature::new();
                 h.map(msg).map_err(|_| BLSError::HashingError)?;
+                h
             } else {
-                h.unmarshal(msg).map_err(BLSError::EncodableError)?;
-            }
+                bincode::deserialize_from(msg)?
+            };
+
             h.mul(private);
 
-            Ok(h.marshal())
+            let serialized = bincode::serialize(&h)?;
+            Ok(serialized)
         }
 
         fn internal_verify(
@@ -50,16 +53,16 @@ mod common {
             msg: &[u8],
             sig_bytes: &[u8],
             should_hash: bool,
-        ) -> Result<(), BLSError<Self::Signature>> {
-            let mut sig = Self::Signature::new();
-            sig.unmarshal(sig_bytes).map_err(BLSError::EncodableError)?;
+        ) -> Result<(), BLSError> {
+            let sig: Self::Signature = bincode::deserialize_from(sig_bytes)?;
 
-            let mut h = Self::Signature::new();
-            if should_hash {
+            let h = if should_hash {
+                let mut h = Self::Signature::new();
                 h.map(msg).map_err(|_| BLSError::HashingError)?;
+                h
             } else {
-                h.unmarshal(msg).map_err(BLSError::EncodableError)?;
-            }
+                bincode::deserialize_from(msg)?
+            };
 
             let success = Self::final_exp(public, &sig, &h);
             if !success {
@@ -77,7 +80,7 @@ mod common {
     where
         T: BLSScheme,
     {
-        type Error = BLSError<T::Signature>;
+        type Error = BLSError;
 
         fn sign(private: &Self::Private, msg: &[u8]) -> Result<Vec<u8>, Self::Error> {
             T::internal_sign(private, msg, true)
