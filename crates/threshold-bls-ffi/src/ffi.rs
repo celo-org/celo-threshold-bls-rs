@@ -208,7 +208,7 @@ pub extern "C" fn partial_sign_blinded_message(
 pub extern "C" fn partial_verify(
     // TODO: The polynomial does not have a constant length type. Is it safe to not
     // pass any length parameter?
-    polynomial: *const Poly<PrivateKey, PublicKey>,
+    polynomial: *const Poly<PublicKey>,
     blinded_message: *const Buffer,
     sig: *const Buffer,
 ) -> bool {
@@ -228,7 +228,7 @@ pub extern "C" fn partial_verify(
 pub extern "C" fn partial_verify_blind_signature(
     // TODO: The polynomial does not have a constant length type. Is it safe to not
     // pass any length parameter?
-    polynomial: *const Poly<PrivateKey, PublicKey>,
+    polynomial: *const Poly<PublicKey>,
     blinded_message: *const Buffer,
     sig: *const Buffer,
 ) -> bool {
@@ -394,7 +394,7 @@ pub extern "C" fn destroy_sig(signature: *mut Signature) {
 #[no_mangle]
 pub extern "C" fn threshold_keygen(n: usize, t: usize, seed: &[u8], keys: *mut *mut Keys) {
     let mut rng = get_rng(seed);
-    let private = Poly::<PrivateKey, PrivateKey>::new_from(t - 1, &mut rng);
+    let private = Poly::<PrivateKey>::new_from(t - 1, &mut rng);
     let shares = (0..n)
         .map(|i| private.eval(i as Index))
         .map(|e| Share {
@@ -448,8 +448,8 @@ pub extern "C" fn num_shares(keys: *const Keys) -> usize {
 
 /// Gets a pointer to the polynomial corresponding to the provided `Keys` pointer
 #[no_mangle]
-pub extern "C" fn polynomial_ptr(keys: *const Keys) -> *const Poly<PrivateKey, PublicKey> {
-    &unsafe { &*keys }.polynomial as *const Poly<PrivateKey, PublicKey>
+pub extern "C" fn polynomial_ptr(keys: *const Keys) -> *const Poly<PublicKey> {
+    &unsafe { &*keys }.polynomial as *const Poly<PublicKey>
 }
 
 /// Gets a pointer to the threshold public key corresponding to the provided `Keys` pointer
@@ -474,7 +474,7 @@ pub extern "C" fn private_key_ptr(keypair: *const Keypair) -> *const PrivateKey 
 #[derive(Debug, Clone)]
 pub struct Keys {
     shares: Vec<Share<PrivateKey>>,
-    polynomial: Poly<PrivateKey, PublicKey>,
+    polynomial: Poly<PublicKey>,
     threshold_public_key: PublicKey,
     pub t: usize,
     pub n: usize,

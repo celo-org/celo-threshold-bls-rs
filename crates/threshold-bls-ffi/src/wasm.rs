@@ -151,7 +151,7 @@ pub fn partial_sign_blinded_message(share_buf: &[u8], message: &[u8]) -> Result<
 ///
 /// - If verification fails
 pub fn partial_verify(polynomial_buf: &[u8], blinded_message: &[u8], sig: &[u8]) -> Result<()> {
-    let polynomial: Poly<PrivateKey, PublicKey> = bincode::deserialize(&polynomial_buf)
+    let polynomial: Poly<PublicKey> = bincode::deserialize(&polynomial_buf)
         .map_err(|err| JsValue::from_str(&format!("could not deserialize polynomial {}", err)))?;
 
     SigScheme::partial_verify(&polynomial, blinded_message, sig)
@@ -170,7 +170,7 @@ pub fn partial_verify_blind_signature(
     blinded_message: &[u8],
     sig: &[u8],
 ) -> Result<()> {
-    let polynomial: Poly<PrivateKey, PublicKey> = bincode::deserialize(&polynomial_buf)
+    let polynomial: Poly<PublicKey> = bincode::deserialize(&polynomial_buf)
         .map_err(|err| JsValue::from_str(&format!("could not deserialize polynomial {}", err)))?;
 
     SigScheme::partial_verify_without_hashing(&polynomial, blinded_message, sig)
@@ -227,7 +227,7 @@ pub fn combine(threshold: usize, signatures: Vec<u8>) -> Result<Vec<u8>> {
 /// The seed MUST be at least 32 bytes long
 pub fn threshold_keygen(n: usize, t: usize, seed: &[u8]) -> Keys {
     let mut rng = get_rng(seed);
-    let private = Poly::<PrivateKey, PrivateKey>::new_from(t - 1, &mut rng);
+    let private = Poly::<PrivateKey>::new_from(t - 1, &mut rng);
     let shares = (0..n)
         .map(|i| private.eval(i as Index))
         .map(|e| Share {
@@ -308,7 +308,7 @@ pub fn keygen(seed: Vec<u8>) -> Keypair {
 #[wasm_bindgen]
 pub struct Keys {
     shares: Vec<Share<PrivateKey>>,
-    polynomial: Poly<PrivateKey, PublicKey>,
+    polynomial: Poly<PublicKey>,
     pub t: usize,
     pub n: usize,
 }

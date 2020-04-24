@@ -10,10 +10,7 @@ use dkg_core::{
     },
 };
 
-use threshold_bls::{
-    group::{Curve, Point},
-    sig::Scheme,
-};
+use threshold_bls::{group::Curve, sig::Scheme};
 
 pub fn keygen<S, R>(opts: NewOpts, mut rng: R) -> CLIResult<()>
 where
@@ -38,7 +35,6 @@ where
     C: Curve,
     // We need to bind the Curve's Point and Scalars to the Scheme
     S: Scheme<Public = <C as Curve>::Point, Private = <C as Curve>::Scalar>,
-    <S as Scheme>::Signature: Point<<C as Curve>::Scalar>,
 {
     let private_key_file = File::open(opts.private_key)?;
     let pk: S::Private = bincode::deserialize_from(private_key_file)?;

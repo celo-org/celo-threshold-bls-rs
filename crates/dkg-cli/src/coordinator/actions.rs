@@ -2,11 +2,7 @@ use super::opts::{CombineOpts, SetupOpts};
 use crate::CLIResult;
 use dkg_core::node::NodeError;
 use dkg_core::primitives::{Group, Node};
-use threshold_bls::{
-    group::{Curve, Point},
-    sig::Scheme,
-    Index,
-};
+use threshold_bls::{group::Curve, sig::Scheme, Index};
 
 use glob::glob;
 use serde::{de::DeserializeOwned, Serialize};
@@ -18,8 +14,6 @@ where
     C: Curve,
     // We need to bind the Curve's Point and Scalars to the Scheme
     S: Scheme<Public = <C as Curve>::Point, Private = <C as Curve>::Scalar>,
-    <C as Curve>::Point: Point<S::Private>,
-    <S as Scheme>::Signature: Point<<C as Curve>::Scalar>,
 {
     let mut nodes = Vec::new();
 

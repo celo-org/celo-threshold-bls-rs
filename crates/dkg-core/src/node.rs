@@ -143,7 +143,6 @@ mod tests {
     use threshold_bls::{
         curve::bls12381::{self, PairingCurve as BLS12_381},
         curve::zexe::{self as bls12_377, PairingCurve as BLS12_377},
-        group::Point,
         sig::{
             bls::{G1Scheme, G2Scheme},
             BlindThresholdScheme, Scheme,
@@ -167,8 +166,6 @@ mod tests {
         // We need to bind the Curve's Point and Scalars to the Scheme
         S: Scheme<Public = <C as Curve>::Point, Private = <C as Curve>::Scalar>
             + BlindThresholdScheme,
-        <C as Curve>::Point: Point<S::Private>,
-        <S as Scheme>::Signature: Point<<C as Curve>::Scalar>,
     {
         let msg = rand::random::<[u8; 32]>().to_vec();
 
@@ -202,8 +199,6 @@ mod tests {
         C: Curve,
         // We need to bind the Curve's Point and Scalars to the Scheme
         S: Scheme<Public = <C as Curve>::Point, Private = <C as Curve>::Scalar>,
-        <C as Curve>::Point: Point<S::Private>,
-        <S as Scheme>::Signature: Point<<C as Curve>::Scalar>,
     {
         let rng = &mut rand::thread_rng();
 
@@ -360,8 +355,6 @@ mod tests {
         C: Curve,
         // We need to bind the Curve's Point and Scalars to the Scheme
         S: Scheme<Public = <C as Curve>::Point, Private = <C as Curve>::Scalar>,
-        <C as Curve>::Point: Point<S::Private>,
-        <S as Scheme>::Signature: Point<<C as Curve>::Scalar>,
     {
         // generate a keypair per participant
         let keypairs = (0..n).map(|_| S::keypair(rng)).collect::<Vec<_>>();
