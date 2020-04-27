@@ -147,7 +147,7 @@ impl Point for G1 {
     fn map(&mut self, data: &[u8]) -> Result<(), ZexeError> {
         let hasher = TryAndIncrement::new(&DirectHasher);
 
-        let hash = hasher.hash(SIG_DOMAIN, data, &vec![])?;
+        let hash = hasher.hash(SIG_DOMAIN, data, &[])?;
 
         *self = Self(hash);
 
@@ -193,7 +193,7 @@ impl Point for G2 {
     fn map(&mut self, data: &[u8]) -> Result<(), ZexeError> {
         let hasher = TryAndIncrement::new(&DirectHasher);
 
-        let hash = hasher.hash(SIG_DOMAIN, data, &vec![])?;
+        let hash = hasher.hash(SIG_DOMAIN, data, &[])?;
         *self = Self(hash);
 
         Ok(())
@@ -282,12 +282,11 @@ where
             let bytes: Vec<u8> = (0..len)
                 .map(|_| {
                     seq.next_element()?
-                        .ok_or(DeserializeError::custom("could not read bytes"))
+                        .ok_or_else(|| DeserializeError::custom("could not read bytes"))
                 })
                 .collect::<Result<Vec<_>, _>>()?;
 
-            let res =
-                C::deserialize(&mut &bytes[..]).map_err(|err| DeserializeError::custom(err))?;
+            let res = C::deserialize(&mut &bytes[..]).map_err(DeserializeError::custom)?;
             Ok(res)
         }
     }
@@ -304,7 +303,7 @@ where
     let len = c.serialized_size();
     let mut bytes = Vec::with_capacity(len);
     c.serialize(&mut bytes)
-        .map_err(|err| SerializationError::custom(err))?;
+        .map_err(SerializationError::custom)?;
 
     let mut tup = s.serialize_tuple(len)?;
     for byte in &bytes {
@@ -340,12 +339,12 @@ where
             let bytes: Vec<u8> = (0..len)
                 .map(|_| {
                     seq.next_element()?
-                        .ok_or(DeserializeError::custom("could not read bytes"))
+                        .ok_or_else(|| DeserializeError::custom("could not read bytes"))
                 })
                 .collect::<Result<Vec<_>, _>>()?;
 
-            let affine = C::Affine::deserialize(&mut &bytes[..])
-                .map_err(|err| DeserializeError::custom(err))?;
+            let affine =
+                C::Affine::deserialize(&mut &bytes[..]).map_err(DeserializeError::custom)?;
             Ok(affine.into_projective())
         }
     }
@@ -365,7 +364,7 @@ where
     let mut bytes = Vec::with_capacity(len);
     affine
         .serialize(&mut bytes)
-        .map_err(|err| SerializationError::custom(err))?;
+        .map_err(SerializationError::custom)?;
 
     let mut tup = s.serialize_tuple(len)?;
     for byte in &bytes {

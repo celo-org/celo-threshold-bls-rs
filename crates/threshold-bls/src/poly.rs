@@ -405,7 +405,7 @@ pub mod tests {
         let p2 = Poly::<Sc>::new(d);
         let mut p3 = p1.clone();
         p3.add(&p2);
-        let mut exp = p1.c[0].clone();
+        let mut exp = p1.c[0];
         exp.add(&p2.c[0]);
         assert_eq!(exp, p3.c[0]);
     }
@@ -422,18 +422,18 @@ pub mod tests {
         //                   l1            l2                l3
         // f3 = f1 * f2 = (c0*d0) + (c0*d1 + d0*c1) * x + (c1*d1) * x^2
         // f3(1) = l1 + l2 + l3
-        let mut l1 = p1.c[0].clone();
+        let mut l1 = p1.c[0];
         l1.mul(&p2.c[0]);
         // c0 * d1
-        let mut l21 = p1.c[0].clone();
+        let mut l21 = p1.c[0];
         l21.mul(&p2.c[1]);
         // d0 * c1
-        let mut l22 = p1.c[1].clone();
+        let mut l22 = p1.c[1];
         l22.mul(&p2.c[0]);
         let mut l2 = Sc::new();
         l2.add(&l21);
         l2.add(&l22);
-        let mut l3 = p1.c[1].clone();
+        let mut l3 = p1.c[1];
         l3.mul(&p2.c[1]);
         let mut total = Sc::new();
         total.add(&l1);
@@ -448,7 +448,7 @@ pub mod tests {
         let rd = Sc::rand(&mut thread_rng());
         let p = Poly::<Sc>::new_neg_constant(&rd);
         let res = p.eval(0);
-        let mut exp = rd.clone();
+        let mut exp = rd;
         // -rd
         exp.negate();
         // 1 - rd
@@ -460,7 +460,7 @@ pub mod tests {
     fn commit() {
         let secret = Poly::<Sc>::new(5);
         let commitment = secret.commit::<G1>();
-        let first = secret.c[0].clone();
+        let first = secret.c[0];
         let mut p = G1::one();
         p.mul(&first);
         // TODO make polynomial implement equal

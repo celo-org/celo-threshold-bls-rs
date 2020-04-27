@@ -21,7 +21,7 @@ where
 
     fn unblind_partial(
         t: &Self::Token,
-        partial: &Partial,
+        partial: &[u8],
     ) -> Result<Partial, <Self as BlindThresholdScheme>::Error> {
         // deserialize the sig
         let partial: Eval<Vec<u8>> = bincode::deserialize(partial)?;
@@ -112,10 +112,7 @@ mod tests {
         // unblind each partial sig
         let unblindeds: Vec<_> = partials
             .iter()
-            .map(|p| {
-                let ret = B::unblind_partial(&token, p).unwrap();
-                ret
-            })
+            .map(|p| B::unblind_partial(&token, p).unwrap())
             .collect();
 
         // aggregate

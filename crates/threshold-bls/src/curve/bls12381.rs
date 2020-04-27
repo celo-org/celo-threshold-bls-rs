@@ -195,9 +195,9 @@ mod tests {
     #[test]
     fn basic_group() {
         let s = Scalar::rand(&mut thread_rng());
-        let mut e1 = s.clone();
-        let e2 = s.clone();
-        let mut s2 = s.clone();
+        let mut e1 = s;
+        let e2 = s;
+        let mut s2 = s;
         s2.add(&s);
         s2.mul(&s);
         add_two(&mut e1, &e2);

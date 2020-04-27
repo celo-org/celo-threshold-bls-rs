@@ -67,7 +67,7 @@ impl<I: SignatureScheme> Blinder for I {
 }
 
 #[cfg(test)]
-// #[cfg(feature = "bls12_381")]
+#[cfg(feature = "bls12_381")]
 mod tests {
     use super::*;
     use crate::curve::bls12381::PairingCurve as PCurve;

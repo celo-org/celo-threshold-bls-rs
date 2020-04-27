@@ -324,7 +324,7 @@ mod tests {
             })
             .collect::<Vec<_>>();
 
-        let justifications = board.justifs.clone();
+        let justifications = board.justifs;
 
         let outputs = phase3s
             .into_iter()

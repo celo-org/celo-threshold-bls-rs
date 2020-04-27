@@ -82,7 +82,7 @@ impl StatusMatrix {
 impl fmt::Display for StatusMatrix {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         for (dealer, shares) in self.0.iter().enumerate() {
-            match write!(f, "-> dealer {}: {:?}\n", dealer, shares) {
+            match writeln!(f, "-> dealer {}: {:?}", dealer, shares) {
                 Ok(()) => continue,
                 Err(e) => return Err(e),
             }
@@ -138,6 +138,10 @@ where
 
     pub fn len(&self) -> usize {
         self.nodes.len()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.nodes.is_empty()
     }
 
     pub fn index(&self, public: &C::Point) -> Option<ID> {
@@ -274,11 +278,11 @@ impl From<bool> for Status {
 }
 
 impl Status {
-    fn to_bool(&self) -> bool {
+    fn to_bool(self) -> bool {
         self.is_success()
     }
 
-    fn is_success(&self) -> bool {
+    fn is_success(self) -> bool {
         match self {
             Status::Success => true,
             Status::Complaint => false,
@@ -343,13 +347,13 @@ where
                 let secret = PrivatePoly::<C>::new_from(group.threshold - 1, rng);
                 let public = secret.commit::<C::Point>();
                 let info = DKGInfo {
-                    private_key: private_key,
+                    private_key,
                     index: idx,
-                    group: group,
-                    secret: secret,
-                    public: public,
+                    group,
+                    secret,
+                    public,
                 };
-                Ok(DKG { info: info })
+                Ok(DKG { info })
             }
             None => Err(DKGError::PublicKeyNotFound),
         }
@@ -411,20 +415,25 @@ where
         // true means we suppose every missing responses is a success at the end of
         // the period. Hence we only need to get & broadcast the complaints.
         // See DKGWaitingResponse::new for more information.
-        let myidx = self.info.index.clone();
+        let myidx = self.info.index;
+
         let (newdkg, bundle) = self.process_shares_get_all(bundles)?;
+
         let complaints: Vec<_> = bundle
             .responses
             .into_iter()
             .filter(|r| !r.status.is_success())
             .collect();
-        let mut bundle: Option<BundledResponses> = None;
-        if complaints.len() > 0 {
-            bundle = Some(BundledResponses {
+
+        let bundle = if !complaints.is_empty() {
+            Some(BundledResponses {
                 responses: complaints,
                 share_idx: myidx,
-            });
-        }
+            })
+        } else {
+            None
+        };
+
         Ok((newdkg, bundle))
     }
 
@@ -489,19 +498,19 @@ where
             // NOTE: this implementation stops at the first one.
             // TODO: should it return an error if multiple shares are for my idx?
             //       -> probably yes
-            let s = bundle.shares.iter().find(|s| s.share_idx == my_idx);
-            if let None = s {
+            if let Some(my_share) = bundle.shares.iter().find(|s| s.share_idx == my_idx) {
+                match self.try_share(bundle.dealer_idx, &bundle.public, my_share) {
+                    Ok(share) => ok.push((bundle.dealer_idx, &bundle.public, share)),
+                    Err(err) => {
+                        eprintln!("Could not share: {}", err);
+                    }
+                }
+            } else {
                 // (b) reporting
                 continue;
             }
-            match self.try_share(bundle.dealer_idx, &bundle.public, s.unwrap()) {
-                Ok(share) => ok.push((bundle.dealer_idx, &bundle.public, share)),
-                Err(_) => {
-                    // XXX find a way to report error, even though the function
-                    // might return OK ? logger ?
-                }
-            }
         }
+
         // thr - 1 because I have my own shares
         if ok.len() < thr - 1 {
             return Err(DKGError::NotEnoughValidShares(ok.len(), thr));
@@ -527,7 +536,7 @@ where
             .collect();
         let bundle = BundledResponses {
             share_idx: my_idx,
-            responses: responses,
+            responses,
         };
         let new_dkg =
             DKGWaitingResponse::new(self.info, fshare, fpub, statuses, public_polynomials);
@@ -604,6 +613,7 @@ where
 
     /// Check:
     /// - no more than
+    #[allow(clippy::type_complexity)]
     pub fn process_responses(
         self,
         responses: &[BundledResponses],
@@ -625,7 +635,7 @@ where
                 // complaint at all
                 qual: self.info.group.clone(),
                 public: self.dist_pub,
-                share: share,
+                share,
             });
         }
 
@@ -658,7 +668,7 @@ where
             info: self.info,
             dist_share: self.dist_share,
             dist_pub: self.dist_pub,
-            statuses: statuses,
+            statuses,
             publics: self.publics,
         };
         Err((dkg, ret_justif))
@@ -760,11 +770,11 @@ where
             .info
             .group
             .nodes
-            .iter()
+            .into_iter()
             .filter(|n| qual_indices.contains(&(n.0 as usize)))
-            .map(|n| n.clone())
             .collect();
         let group = Group::<C>::new(qual_nodes, thr)?;
+
         // add all good shares and public poly together
         add_share.add(&self.dist_share);
         add_public.add(&self.dist_pub);
@@ -821,25 +831,35 @@ struct ShareError {
     error: ShareErrorType,
 }
 
+impl fmt::Display for ShareError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        writeln!(f, "ShareError(dealer: {}): {}", self.dealer_idx, self.error)
+    }
+}
+
 impl ShareError {
     fn from(dealer_idx: ID, error: ShareErrorType) -> Self {
         Self { dealer_idx, error }
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Error)]
+#[allow(clippy::enum_variant_names)]
 enum ShareErrorType {
     /// InvalidCipherText returns the error raised when decrypting the encrypted
     /// share.
+    #[error("Invalid ciphertext")]
     InvalidCiphertext(ecies::EciesError),
     /// InvalidShare is raised when the share does not corresponds to the public
     /// polynomial associated.
+    #[error("Share does not match associated public polynomial")]
     InvalidShare,
     /// InvalidPublicPolynomial is raised when the public polynomial does not
     /// have the correct degree. Each public polynomial in the scheme must have
     /// a degree equals to `threshold - 1` set for the DKG protocol.
     /// The two fields are (1) the degree of the polynomial and (2) the
     /// second is the degree it should be,i.e. `threshold - 1`.
+    #[error("polynomial does not have the correct degree, got: {0}, expected {1}")]
     InvalidPublicPolynomial(usize, usize),
 }
 
