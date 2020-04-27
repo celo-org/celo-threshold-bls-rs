@@ -444,13 +444,15 @@ where
     /// `Success` elements. If so, the protocol terminates.
     ///
     /// If there are complaints in the Status matrix, then it will return an error with the
-    /// justificajustifications required for Phase 3 of the DKG.
+    /// justifications required for Phase 3 of the DKG.
     pub fn process_responses(
-        self,
+        mut self,
         responses: &[BundledResponses],
     ) -> Result<DKGOutput<C>, (DKGWaitingJustification<C>, Option<BundledJustification<C>>)> {
         let n = self.info.n();
-        let statuses = self.set_statuses(responses);
+        self.set_statuses(responses);
+        let statuses = &self.statuses;
+
         // find out if justifications are required
         // if there is a least one participant that issued one complaint
         let justifications_required = (0..n).any(|dealer| !statuses.all_true(dealer as Idx));
@@ -461,7 +463,7 @@ where
             let bundled_justifications = if !statuses.all_true(my_idx) {
                 let justifications = statuses
                     .get_for_dealer(my_idx)
-                    .into_iter()
+                    .iter()
                     .enumerate()
                     .filter_map(|(i, success)| {
                         if !success {
@@ -490,7 +492,7 @@ where
                 info: self.info,
                 dist_share: self.dist_share,
                 dist_pub: self.dist_pub,
-                statuses,
+                statuses: self.statuses,
                 publics: self.publics,
             };
 
@@ -513,8 +515,7 @@ where
     }
 
     /// set_statuses set the status of the given responses on the status matrix.
-    fn set_statuses(&self, responses: &[BundledResponses]) -> StatusMatrix {
-        let mut statuses = self.statuses.clone();
+    fn set_statuses(&mut self, responses: &[BundledResponses]) {
         let my_idx = self.info.index;
         let n = self.info.n();
 
@@ -529,10 +530,10 @@ where
             let holder_index = bundle.share_idx;
             for response in bundle.responses.iter() {
                 let dealer_index = response.dealer_idx;
-                statuses.set(dealer_index, holder_index, response.status);
+                self.statuses
+                    .set(dealer_index, holder_index, response.status);
             }
         }
-        statuses
     }
 }
 
