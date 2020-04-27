@@ -16,13 +16,13 @@ use threshold_bls::{
 /// of the protocol, if sucessful, the index is used to verify the validity of
 /// the share this node holds.
 #[derive(Clone, Serialize, Deserialize, PartialEq)]
-pub struct Node<C: Curve>(ID, C::Point);
+pub struct Node<C: Curve>(Idx, C::Point);
 
 impl<C> Node<C>
 where
     C: Curve,
 {
-    pub fn new(index: ID, public: C::Point) -> Self {
+    pub fn new(index: Idx, public: C::Point) -> Self {
         Self(index, public)
     }
 }
@@ -39,11 +39,8 @@ pub struct Group<C: Curve> {
     pub threshold: usize,
 }
 
-type ID = Idx;
-// type alias for readability.
-type Bitset = BitVec;
 #[derive(Clone, Debug, Serialize, Deserialize)]
-struct StatusMatrix(Vec<Bitset>);
+struct StatusMatrix(Vec<BitVec>);
 
 impl StatusMatrix {
     pub fn new(dealers: usize, share_holders: usize, def: Status) -> StatusMatrix {
@@ -57,12 +54,12 @@ impl StatusMatrix {
         Self(m)
     }
 
-    pub fn set(&mut self, dealer: ID, share: ID, status: Status) {
+    pub fn set(&mut self, dealer: Idx, share: Idx, status: Status) {
         self.0[dealer as usize].set(share as usize, status.to_bool());
     }
 
     // return a bitset whose indices are the dealer indexes
-    pub fn get_for_share(&self, share: ID) -> Bitset {
+    pub fn get_for_share(&self, share: Idx) -> BitVec {
         let mut bs = bitvec![0; self.0.len()];
         for (dealer_idx, shares) in self.0.iter().enumerate() {
             bs.set(dealer_idx, *shares.get(share as usize).unwrap());
@@ -70,11 +67,11 @@ impl StatusMatrix {
         bs
     }
 
-    pub fn all_true(&self, dealer: ID) -> bool {
+    pub fn all_true(&self, dealer: Idx) -> bool {
         self.0[dealer as usize].all()
     }
 
-    pub fn get_for_dealer(&self, dealer: ID) -> Bitset {
+    pub fn get_for_dealer(&self, dealer: Idx) -> BitVec {
         self.0[dealer as usize].clone()
     }
 }
@@ -108,7 +105,7 @@ impl<C> Node<C>
 where
     C: Curve,
 {
-    pub fn id(&self) -> ID {
+    pub fn id(&self) -> Idx {
         self.0
     }
     pub fn key(&self) -> &C::Point {
@@ -144,7 +141,7 @@ where
         self.nodes.is_empty()
     }
 
-    pub fn index(&self, public: &C::Point) -> Option<ID> {
+    pub fn index(&self, public: &C::Point) -> Option<Idx> {
         match self.nodes.iter().find(|n| &n.1 == public) {
             Some(n) => Some(n.0),
             _ => None,
@@ -177,7 +174,7 @@ where
         let nodes = list
             .into_iter()
             .enumerate()
-            .map(|(i, public)| Node(i as ID, public))
+            .map(|(i, public)| Node(i as Idx, public))
             .collect();
         Self::new(nodes, thr).expect("threshold should be good here")
     }
@@ -187,7 +184,7 @@ where
 #[serde(bound = "C::Scalar: DeserializeOwned")]
 struct DKGInfo<C: Curve> {
     private_key: C::Scalar,
-    index: ID,
+    index: Idx,
     group: Group<C>,
     secret: Poly<C::Scalar>,
     public: Poly<C::Point>,
@@ -225,7 +222,7 @@ pub struct DKG<C: Curve> {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(bound = "C::Scalar: DeserializeOwned")]
 pub struct EncryptedShare<C: Curve> {
-    share_idx: ID,
+    share_idx: Idx,
     secret: EciesCipher<C>,
 }
 
@@ -234,7 +231,7 @@ pub struct EncryptedShare<C: Curve> {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(bound = "C::Scalar: DeserializeOwned")]
 pub struct BundledShares<C: Curve> {
-    pub dealer_idx: ID,
+    pub dealer_idx: Idx,
     pub shares: Vec<EncryptedShare<C>>,
     /// public is the commitment of the secret polynomial
     /// created by the dealer. In the context of using a blockchain as a
@@ -292,7 +289,7 @@ impl Status {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Response {
-    pub dealer_idx: ID,
+    pub dealer_idx: Idx,
     pub status: Status,
 }
 
@@ -304,7 +301,7 @@ pub struct Response {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct BundledResponses {
     /// share_idx is the index of the node that received the shares
-    pub share_idx: ID,
+    pub share_idx: Idx,
     pub responses: Vec<Response>,
 }
 
@@ -313,14 +310,14 @@ pub struct BundledResponses {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(bound = "C::Scalar: DeserializeOwned")]
 pub struct Justification<C: Curve> {
-    share_idx: ID,
+    share_idx: Idx,
     share: C::Scalar,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(bound = "C::Scalar: DeserializeOwned")]
 pub struct BundledJustification<C: Curve> {
-    pub dealer_idx: ID,
+    pub dealer_idx: Idx,
     pub justifications: Vec<Justification<C>>,
     pub public: PublicPoly<C>,
 }
@@ -483,7 +480,7 @@ where
             if dealer_idx == my_idx as usize {
                 continue;
             }
-            statuses.set(dealer_idx as ID, my_idx, Complaint);
+            statuses.set(dealer_idx as Idx, my_idx, Complaint);
         }
         let public_polynomials = Self::extract_poly(&bundles);
 
@@ -530,7 +527,7 @@ where
             .iter()
             .enumerate()
             .map(|(i, b)| Response {
-                dealer_idx: i as ID,
+                dealer_idx: i as Idx,
                 status: Status::from(*b),
             })
             .collect();
@@ -543,9 +540,9 @@ where
         Ok((new_dkg, bundle))
     }
 
-    // extract_poly maps the bundles into a map: ID -> public poly for ease of
+    // extract_poly maps the bundles into a map: Idx -> public poly for ease of
     // use later on
-    fn extract_poly(bundles: &[BundledShares<C>]) -> HashMap<ID, PublicPoly<C>> {
+    fn extract_poly(bundles: &[BundledShares<C>]) -> HashMap<Idx, PublicPoly<C>> {
         // TODO avoid cloning by using lifetime or better gestin in
         // process_shares
         bundles.iter().fold(HashMap::new(), |mut acc, b| {
@@ -556,7 +553,7 @@ where
 
     fn try_share(
         &self,
-        dealer: ID,
+        dealer: Idx,
         public: &PublicPoly<C>,
         share: &EncryptedShare<C>,
     ) -> Result<C::Scalar, ShareError> {
@@ -588,7 +585,7 @@ pub struct DKGWaitingResponse<C: Curve> {
     dist_share: C::Scalar,
     dist_pub: PublicPoly<C>,
     statuses: StatusMatrix,
-    publics: HashMap<ID, PublicPoly<C>>,
+    publics: HashMap<Idx, PublicPoly<C>>,
 }
 
 impl<C> DKGWaitingResponse<C>
@@ -600,7 +597,7 @@ where
         dist_share: C::Scalar,
         dist_pub: PublicPoly<C>,
         statuses: StatusMatrix,
-        publics: HashMap<ID, PublicPoly<C>>,
+        publics: HashMap<Idx, PublicPoly<C>>,
     ) -> Self {
         Self {
             info,
@@ -622,7 +619,7 @@ where
         let statuses = self.set_statuses(responses);
         // find out if justifications are required
         // if there is a least one participant that issued one complaint
-        let required = (0..n).any(|dealer| !statuses.all_true(dealer as ID));
+        let required = (0..n).any(|dealer| !statuses.all_true(dealer as Idx));
 
         if !required {
             // bingo ! Returns the final share now and stop the protocol
@@ -649,7 +646,7 @@ where
                 if *success {
                     continue;
                 }
-                let id = i as ID;
+                let id = i as Idx;
                 // reveal the share
                 let ijust = Justification {
                     share_idx: id,
@@ -683,8 +680,8 @@ where
         // makes sure the API doesn't take into account our own responses!
         let not_from_me = responses.iter().filter(|r| r.share_idx != my_idx);
         let valid_idx = not_from_me.filter(|r| {
-            let good_holder = r.share_idx < n as ID;
-            let good_dealers = !r.responses.iter().any(|resp| resp.dealer_idx >= n as ID);
+            let good_holder = r.share_idx < n as Idx;
+            let good_dealers = !r.responses.iter().any(|resp| resp.dealer_idx >= n as Idx);
             good_dealers && good_holder
         });
         for bundle in valid_idx {
@@ -708,7 +705,7 @@ pub struct DKGWaitingJustification<C: Curve> {
     dist_pub: PublicPoly<C>,
     // guaranteed to be of the right size (n)
     statuses: StatusMatrix,
-    publics: HashMap<ID, PublicPoly<C>>,
+    publics: HashMap<Idx, PublicPoly<C>>,
 }
 
 impl<C> DKGWaitingJustification<C>
@@ -732,7 +729,7 @@ where
         let mut add_public = PublicPoly::<C>::zero();
         for bundle in justifs
             .iter()
-            .filter(|b| b.dealer_idx < self.info.n() as ID)
+            .filter(|b| b.dealer_idx < self.info.n() as Idx)
             .filter(|b| b.dealer_idx != self.info.index)
             .filter(|b| self.publics.contains_key(&b.dealer_idx))
         {
@@ -755,7 +752,7 @@ where
         let n = self.info.n();
         // QUAL is the set of all entries in the matrix where all bits are set
         let qual_indices = (0..n).fold(Vec::new(), |mut acc, dealer| {
-            if statuses.all_true(dealer as ID) {
+            if statuses.all_true(dealer as Idx) {
                 acc.push(dealer);
             }
             acc
@@ -827,7 +824,7 @@ pub enum DKGError {
 struct ShareError {
     // XXX better structure to put dealer_idx in an outmost struct but leads to
     // more verbose code. To review?
-    dealer_idx: ID,
+    dealer_idx: Idx,
     error: ShareErrorType,
 }
 
@@ -838,7 +835,7 @@ impl fmt::Display for ShareError {
 }
 
 impl ShareError {
-    fn from(dealer_idx: ID, error: ShareErrorType) -> Self {
+    fn from(dealer_idx: Idx, error: ShareErrorType) -> Self {
         Self { dealer_idx, error }
     }
 }
@@ -865,7 +862,7 @@ enum ShareErrorType {
 
 /// Checks if the commitment to the share corresponds to the public polynomial's
 /// evaluated at the given point.
-fn share_correct<C: Curve>(idx: ID, share: &C::Scalar, public: &PublicPoly<C>) -> bool {
+fn share_correct<C: Curve>(idx: Idx, share: &C::Scalar, public: &PublicPoly<C>) -> bool {
     let mut commit = C::Point::one();
     commit.mul(&share);
     let pub_eval = public.eval(idx);
