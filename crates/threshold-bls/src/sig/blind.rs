@@ -24,6 +24,12 @@ pub enum BlinderError {
 #[serde(bound = "S: Serialize + serde::de::DeserializeOwned")]
 pub struct Token<S: Scalar>(S);
 
+impl<S: Scalar> Default for Token<S> {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl<S: Scalar> Token<S> {
     pub fn new() -> Self {
         Self(S::new())
