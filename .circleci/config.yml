@@ -34,8 +34,19 @@ jobs:
       - image: circleci/rust:latest
     steps:
       - checkout
+      - run:
+          name: Install Dependencies
+          command: |
+              cargo install cargo-audit
+              rustup component add clippy
       - run: cargo test --all
-      - run: cargo fmt --all -- --check
+      - run: |
+        name: Check style
+            cargo fmt --all -- --check
+            cargo clippy --all-targets --all-features -- -D warnings
+      - run:
+          name: Audit Dependencies
+          command: cargo audit --ignore RUSTSEC-2019-0031 # ignore lazy static warning
 
   wasm:
     docker:
