@@ -24,6 +24,7 @@ pub fn default_threshold(n: usize) -> usize {
 pub type DKGResult<A> = Result<A, DKGError>;
 
 #[derive(Debug, Error)]
+/// Errors which may occur during the DKG
 pub enum DKGError {
     /// PublicKeyNotFound is raised when the private key given to the DKG init
     /// function does not yield a public key that is included in the group.
@@ -46,15 +47,16 @@ pub enum DKGError {
     #[error("only has {0}/{1} required justifications")]
     NotEnoughJustifications(usize, usize),
 
-    /// Rejected is thrown when the participant is rejected from the final
+    /// Rejected is raised when the participant is rejected from the final
     /// output
     #[error("this participant is rejected from the qualified set")]
     Rejected,
 
-    /// De(serialization) failed
+    /// BincodeError is raised when de(serialization) by bincode fails
     #[error("de(serialization failed: {0})")]
     BincodeError(#[from] bincode::Error),
 
+    /// ShareError is raised when a share is being processed
     #[error(transparent)]
     ShareError(#[from] ShareError),
 }

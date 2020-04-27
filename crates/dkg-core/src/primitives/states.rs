@@ -168,6 +168,7 @@ impl<C: Curve> DKG<C> {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+/// A response which gets generated when processing the shares from Phase 1
 pub struct Response {
     /// The index of the dealer (the person that created the share)
     pub dealer_idx: Idx,
@@ -191,7 +192,8 @@ pub struct BundledResponses {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(bound = "C::Scalar: DeserializeOwned")]
 /// DKG Stage which waits to receive the shares from the previous phase's participants
-/// as input
+/// as input. After processing the shares, if there were any complaints it will generate
+/// a bundle of responses for the next phase.
 pub struct DKGWaitingShare<C: Curve> {
     /// Metadata about the DKG
     info: DKGInfo<C>,
@@ -410,6 +412,9 @@ pub struct BundledJustification<C: Curve> {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(bound = "C::Scalar: DeserializeOwned")]
+/// DKG Stage which waits to receive the responses from the previous phase's participants
+/// as input. The responses will be processed and justifications may be generated as a byproduct
+/// if there are complaints.
 pub struct DKGWaitingResponse<C: Curve> {
     info: DKGInfo<C>,
     dist_share: C::Scalar,
@@ -548,6 +553,8 @@ impl<C: Curve> DKGWaitingResponse<C> {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(bound = "C::Scalar: DeserializeOwned")]
+/// DKG Stage which waits to receive the justifications from the previous phase's participants
+/// as input to produce either the final DKG Output, or an error.
 pub struct DKGWaitingJustification<C: Curve> {
     // TODO: transform that into one info variable that gets default value for
     // missing parts depending in the round of the protocol.

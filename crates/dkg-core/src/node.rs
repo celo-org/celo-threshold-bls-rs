@@ -16,6 +16,7 @@ use thiserror::Error;
 use threshold_bls::group::Curve;
 
 #[derive(Debug, Error)]
+/// Error thrown while running the DKG or while publishing to the board
 pub enum NodeError {
     /// Node could not publish to the board
     #[error("Could not publish to board")]
@@ -28,7 +29,9 @@ pub enum NodeError {
 /// Phase2 can either be successful or require going to Phase 3.
 #[derive(Clone, Debug)]
 pub enum Phase2Result<C: Curve> {
+    /// The final DKG output
     Output(DKGOutput<C>),
+    /// Indicates that Phase 2 failed and that the protocol must proceed to Phase 3
     GoToPhase3(DKGWaitingJustification<C>),
 }
 
@@ -45,6 +48,9 @@ pub trait DKGPhase<C: Curve, B: BoardPublisher<C>, T> {
 }
 
 #[derive(Clone, Debug)]
+/// The initial phase of the DKG. In this phase, each participant imports their private
+/// key and the initial group which will participate in the DKG. Running this phase will
+/// encrypt the shares and then publish them to the board
 pub struct Phase0<C: Curve> {
     inner: DKG<C>,
 }
@@ -57,12 +63,17 @@ impl<C: Curve> Phase0<C> {
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
+/// Phase 1 of the DKG. This phase reads the shares generated from Phase 0 and if there were
+/// complaints, it generates responses which are published to the board.
 pub struct Phase1<C: Curve> {
     #[serde(bound = "C::Scalar: Serialize + DeserializeOwned")]
     inner: DKGWaitingShare<C>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
+/// Phase 2 of the DKG. This phase reads the responses generated from Phase 1, and if processing
+/// is successful outputs the result of the DKG. If processing returns an error, then any
+/// justifications get published to the board and it produces the necessary data for Phase 3.
 pub struct Phase2<C: Curve> {
     #[serde(bound = "C::Scalar: Serialize + DeserializeOwned")]
     inner: DKGWaitingResponse<C>,

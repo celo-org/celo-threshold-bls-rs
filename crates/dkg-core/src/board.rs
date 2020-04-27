@@ -10,6 +10,7 @@ use threshold_bls::group::Curve;
 /// Trait which must be implemented for writing to the board. This trait assumes
 /// an authenticated channel.
 pub trait BoardPublisher<C: Curve> {
+    /// Error raised when trying to publish data to the board
     type Error;
 
     /// Publishes the shares to the board
