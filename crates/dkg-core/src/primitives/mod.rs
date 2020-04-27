@@ -1,5 +1,9 @@
+/// Primitives for grouping together vectors of nodes with an associated threshold
 pub mod group;
+
+/// Core DKG logic, implemented as a state machine
 pub mod states;
+
 /// 2D binary array utilities for tracking successful (or not) participation in the DKG
 pub mod status;
 
@@ -57,6 +61,7 @@ pub enum DKGError {
 
 #[derive(Debug, Error)]
 #[allow(clippy::enum_variant_names)]
+/// Error which may occur while processing a share in Phase 1
 pub enum ShareError {
     /// InvalidCipherText returns the error raised when decrypting the encrypted
     /// share.

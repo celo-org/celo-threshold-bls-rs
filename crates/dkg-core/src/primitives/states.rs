@@ -1,6 +1,7 @@
 use super::{
     group::Group,
     status::{Status, StatusMatrix},
+    DKGError, DKGResult, ShareError,
 };
 
 use rand_core::RngCore;
@@ -13,7 +14,7 @@ use threshold_bls::{
     DistPublic, Share,
 };
 
-use super::{DKGError, DKGResult, ShareError};
+use std::cell::RefCell;
 
 // TODO
 // - check VSS-forgery article
@@ -29,10 +30,7 @@ struct DKGInfo<C: Curve> {
     public: Poly<C::Point>,
 }
 
-impl<C> DKGInfo<C>
-where
-    C: Curve,
-{
+impl<C: Curve> DKGInfo<C> {
     /// Returns the number of nodes participating in the group for this DKG
     fn n(&self) -> usize {
         self.group.len()
@@ -77,18 +75,17 @@ pub struct EncryptedShare<C: Curve> {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(bound = "C::Scalar: DeserializeOwned")]
 pub struct BundledShares<C: Curve> {
+    /// The dealer's index
     pub dealer_idx: Idx,
+    /// The encrypted shared created by the dealer
     pub shares: Vec<EncryptedShare<C>>,
-    /// public is the commitment of the secret polynomial
-    /// created by the dealer. In the context of using a blockchain as a
-    /// broadcast channel, it can be posted only once.
+    /// The commitment of the secret polynomial created by the dealer.
+    /// In the context of using a blockchain as a broadcast channel,
+    /// it can be posted only once.
     pub public: PublicPoly<C>,
 }
 
-impl<C> DKG<C>
-where
-    C: Curve,
-{
+impl<C: Curve> DKG<C> {
     /// Creates a new DKG instance from the provided private key and group.
     ///
     /// The private key must be part of the group, otherwise this will return an error.
@@ -97,6 +94,9 @@ where
         Self::new_rand(private_key, group, &mut thread_rng())
     }
 
+    /// Creates a new DKG instance from the provided private key, group and RNG.
+    ///
+    /// The private key must be part of the group, otherwise this will return an error.
     pub fn new_rand<R: RngCore>(
         private_key: C::Scalar,
         group: Group<C>,
@@ -126,6 +126,9 @@ where
         Ok(DKG { info })
     }
 
+    /// Evaluates the secret polynomial at the index of each DKG participant and encrypts
+    /// the result with the corresponding public key. Returns the bundled encrypted shares
+    /// as well as the next phase of the DKG.
     pub fn encrypt_shares<R: RngCore>(
         self,
         rng: &mut R,
@@ -187,14 +190,14 @@ pub struct BundledResponses {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(bound = "C::Scalar: DeserializeOwned")]
+/// DKG Stage which waits to receive the shares from the previous phase's participants
+/// as input
 pub struct DKGWaitingShare<C: Curve> {
+    /// Metadata about the DKG
     info: DKGInfo<C>,
 }
 
-impl<C> DKGWaitingShare<C>
-where
-    C: Curve,
-{
+impl<C: Curve> DKGWaitingShare<C> {
     /// (a) Report complaint on invalid dealer index
     /// (b) Report complaint on absentee shares for us
     /// (c) Report complaint on invalid encryption
@@ -386,15 +389,22 @@ where
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(bound = "C::Scalar: DeserializeOwned")]
 pub struct Justification<C: Curve> {
+    /// The share holder's index
     share_idx: Idx,
+    /// The plaintext share
     share: C::Scalar,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(bound = "C::Scalar: DeserializeOwned")]
+/// A BundledJustification is broadcast by a dealer and contains the justifications
+/// they have received along with their corresponding Public polynomial
 pub struct BundledJustification<C: Curve> {
+    /// The dealer's index
     pub dealer_idx: Idx,
+    /// The justifications
     pub justifications: Vec<Justification<C>>,
+    /// The public polynomial
     pub public: PublicPoly<C>,
 }
 
@@ -421,10 +431,7 @@ pub struct DKGOutput<C: Curve> {
     pub share: Share<C::Scalar>,
 }
 
-impl<C> DKGWaitingResponse<C>
-where
-    C: Curve,
-{
+impl<C: Curve> DKGWaitingResponse<C> {
     fn new(
         info: DKGInfo<C>,
         dist_share: C::Scalar,
@@ -538,8 +545,6 @@ where
         }
     }
 }
-
-use std::cell::RefCell;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(bound = "C::Scalar: DeserializeOwned")]
@@ -656,18 +661,19 @@ pub mod tests {
     use crate::poly::{Eval, InvalidRecovery};
 
     use rand::prelude::*;
+    use std::fmt::Debug;
 
     use serde::{de::DeserializeOwned, Serialize};
     use static_assertions::assert_impl_all;
 
-    assert_impl_all!(Node<BCurve>: Serialize, DeserializeOwned, Clone, std::fmt::Debug);
-    assert_impl_all!(Group<BCurve>: Serialize, DeserializeOwned, Clone, std::fmt::Debug);
-    assert_impl_all!(DKGInfo<BCurve>: Serialize, DeserializeOwned, Clone, std::fmt::Debug);
-    assert_impl_all!(DKG<BCurve>: Serialize, DeserializeOwned, Clone, std::fmt::Debug);
-    assert_impl_all!(EncryptedShare<BCurve>: Serialize, DeserializeOwned, Clone, std::fmt::Debug);
-    assert_impl_all!(BundledShares<BCurve>: Serialize, DeserializeOwned, Clone, std::fmt::Debug);
-    assert_impl_all!(DKGOutput<BCurve>: Serialize, DeserializeOwned, Clone, std::fmt::Debug);
-    assert_impl_all!(BundledJustification<BCurve>: Serialize, DeserializeOwned, Clone, std::fmt::Debug);
+    assert_impl_all!(Node<BCurve>: Serialize, DeserializeOwned, Clone, Debug);
+    assert_impl_all!(Group<BCurve>: Serialize, DeserializeOwned, Clone, Debug);
+    assert_impl_all!(DKGInfo<BCurve>: Serialize, DeserializeOwned, Clone, Debug);
+    assert_impl_all!(DKG<BCurve>: Serialize, DeserializeOwned, Clone, Debug);
+    assert_impl_all!(EncryptedShare<BCurve>: Serialize, DeserializeOwned, Clone, Debug);
+    assert_impl_all!(BundledShares<BCurve>: Serialize, DeserializeOwned, Clone, Debug);
+    assert_impl_all!(DKGOutput<BCurve>: Serialize, DeserializeOwned, Clone, Debug);
+    assert_impl_all!(BundledJustification<BCurve>: Serialize, DeserializeOwned, Clone, Debug);
 
     fn setup_group(n: usize) -> (Vec<Scalar>, Group<BCurve>) {
         let privs: Vec<Scalar> = (0..n)
