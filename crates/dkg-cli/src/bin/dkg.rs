@@ -26,8 +26,8 @@ fn main() {
     });
 
     match command {
-        Command::New(opts) => keygen::<Scheme, _>(opts, rand::thread_rng()),
-        Command::PublishShares(opts) => phase1::<Scheme, Curve>(opts),
+        Command::New(opts) => keygen::<Scheme, _>(opts, &mut rand::thread_rng()),
+        Command::PublishShares(opts) => phase1::<Scheme, Curve, _>(opts, &mut rand::thread_rng()),
         Command::PublishResponses(opts) => phase2::<Curve>(opts),
         Command::TryFinalize(opts) => try_finalize::<Curve>(opts),
         Command::Finalize(opts) => phase3::<Curve>(opts),

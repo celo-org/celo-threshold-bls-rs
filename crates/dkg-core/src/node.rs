@@ -6,6 +6,7 @@ use super::{
     },
 };
 
+use rand::RngCore;
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use thiserror::Error;
 use threshold_bls::group::Curve;
@@ -63,23 +64,20 @@ pub struct Phase2<C: Curve> {
     inner: DKGWaitingResponse<C>,
 }
 
-impl<C, B> DKGPhase<C, B, bool> for Phase0<C>
+impl<C, B, R> DKGPhase<C, B, &mut R> for Phase0<C>
 where
     C: Curve,
     B: BoardPublisher<C>,
+    R: RngCore,
 {
     type Next = Phase1<C>;
 
-    fn run(self, board: &mut B, be_bad: bool) -> NodeResult<Self::Next> {
-        // TODO: Should we remove `be_bad` and replace it with an RNG implementer,
-        // which gets passed as an rng, instead of assuming thread_rng here?
-        let (next, shares) = self.inner.encrypt_shares(&mut rand::thread_rng());
+    fn run(self, board: &mut B, rng: &mut R) -> NodeResult<Self::Next> {
+        let (next, shares) = self.inner.encrypt_shares(rng);
 
-        if !be_bad {
-            board
-                .publish_shares(shares)
-                .map_err(|_| NodeError::PublisherError)?;
-        }
+        board
+            .publish_shares(shares)
+            .map_err(|_| NodeError::PublisherError)?;
 
         Ok(Phase1 { inner: next })
     }
@@ -150,6 +148,13 @@ mod tests {
         Index,
     };
 
+    // helper to simulate a phase0 where a participant does not publish their
+    // shares to the board
+    fn bad_phase0<C: Curve, R: RngCore>(phase0: Phase0<C>, rng: &mut R) -> Phase1<C> {
+        let (next, _) = phase0.inner.encrypt_shares(rng);
+        Phase1 { inner: next }
+    }
+
     #[test]
     fn dkg_sign_e2e() {
         let (t, n) = (3, 5);
@@ -207,7 +212,7 @@ mod tests {
         // Phase 1: Publishes shares
         let phase1s = phase0s
             .into_iter()
-            .map(|phase0| phase0.run(&mut board, false).unwrap())
+            .map(|phase0| phase0.run(&mut board, rng).unwrap())
             .collect::<Vec<_>>();
 
         // Get the shares from the board
@@ -253,8 +258,11 @@ mod tests {
             .into_iter()
             .enumerate()
             .map(|(i, phase0)| {
-                let be_bad = i < bad;
-                phase0.run(&mut board, be_bad).unwrap()
+                if i < bad {
+                    bad_phase0(phase0, rng)
+                } else {
+                    phase0.run(&mut board, rng).unwrap()
+                }
             })
             .collect::<Vec<_>>();
 
@@ -294,8 +302,11 @@ mod tests {
             .map(|(i, phase0)| {
                 // some participants decide not to broadcast their share.
                 // this forces us to go to phase 3
-                let be_bad = i < bad;
-                phase0.run(&mut board, be_bad).unwrap()
+                if i < bad {
+                    bad_phase0(phase0, rng)
+                } else {
+                    phase0.run(&mut board, rng).unwrap()
+                }
             })
             .collect::<Vec<_>>();
 
