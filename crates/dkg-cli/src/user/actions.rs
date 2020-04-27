@@ -12,13 +12,13 @@ use dkg_core::{
 
 use threshold_bls::{group::Curve, sig::Scheme};
 
-pub fn keygen<S, R>(opts: NewOpts, mut rng: R) -> CLIResult<()>
+pub fn keygen<S, R>(opts: NewOpts, rng: &mut R) -> CLIResult<()>
 where
     S: Scheme,
     R: RngCore,
 {
     // write the private key for later use
-    let (private_key, public_key) = S::keypair(&mut rng);
+    let (private_key, public_key) = S::keypair(rng);
     let f = File::create(opts.private_key)?;
     bincode::serialize_into(&f, &private_key)?;
 
@@ -30,11 +30,12 @@ where
     Ok(())
 }
 
-pub fn phase1<S, C>(opts: PublishSharesOpts) -> CLIResult<()>
+pub fn phase1<S, C, R>(opts: PublishSharesOpts, rng: &mut R) -> CLIResult<()>
 where
     C: Curve,
     // We need to bind the Curve's Point and Scalars to the Scheme
     S: Scheme<Public = <C as Curve>::Point, Private = <C as Curve>::Scalar>,
+    R: RngCore,
 {
     let private_key_file = File::open(opts.private_key)?;
     let pk: S::Private = bincode::deserialize_from(private_key_file)?;
@@ -46,7 +47,7 @@ where
 
     // writes the shares to the board
     let mut board = File::create(opts.output)?;
-    let phase1 = phase0.run(&mut board, false)?;
+    let phase1 = phase0.run(&mut board, rng)?;
 
     let phase1_file = File::create(opts.out_phase)?;
     bincode::serialize_into(&phase1_file, &phase1)?;
