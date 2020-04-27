@@ -1,6 +1,6 @@
 pub mod group;
 pub mod states;
-mod status;
+pub mod status;
 
 use std::fmt;
 use thiserror::Error;

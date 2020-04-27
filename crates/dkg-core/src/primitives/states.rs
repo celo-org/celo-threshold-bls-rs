@@ -102,21 +102,27 @@ where
         group: Group<C>,
         rng: &mut R,
     ) -> Result<DKG<C>, DKGError> {
-        // check if public key is included
+        // get the public key
         let mut public_key = C::Point::one();
         public_key.mul(&private_key);
-        let idx = group
+
+        // check if the public key is part of the group
+        let index = group
             .index(&public_key)
             .ok_or_else(|| DKGError::PublicKeyNotFound)?;
+
+        // Generate a secret polynomial and commit to it
         let secret = PrivatePoly::<C>::new_from(group.threshold - 1, rng);
         let public = secret.commit::<C::Point>();
+
         let info = DKGInfo {
             private_key,
-            index: idx,
+            index,
             group,
             secret,
             public,
         };
+
         Ok(DKG { info })
     }
 
@@ -127,10 +133,17 @@ where
             .nodes
             .iter()
             .map(|n| {
+                // evaluate the secret polynomial at the node's id
                 let sec = self.info.secret.eval(n.id() as Idx);
+
+                // serialize the evaluation
                 let buff = bincode::serialize(&sec.value).expect("serialization should not fail");
+
+                // encrypt it
                 let cipher = ecies::encrypt::<C, _>(n.key(), &buff, rng);
-                EncryptedShare::<C> {
+
+                // save the share
+                EncryptedShare {
                     share_idx: n.id(),
                     secret: cipher,
                 }
@@ -143,25 +156,16 @@ where
             public: self.info.public.clone(),
         };
         let dw = DKGWaitingShare { info: self.info };
+
         (dw, bundle)
     }
 }
 
-/// DKGOutput is the final output of the DKG protocol in case it runs
-/// successfully. It contains the QUALified group (the list of nodes that
-/// sucessfully ran the protocol until the end), the distributed public key and
-/// the private share corresponding to the participant's index.
-#[derive(Clone, Debug, Serialize, Deserialize)]
-#[serde(bound = "C::Scalar: DeserializeOwned")]
-pub struct DKGOutput<C: Curve> {
-    pub qual: Group<C>,
-    pub public: DistPublic<C>,
-    pub share: Share<C::Scalar>,
-}
-
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Response {
+    /// The index of the dealer (the person that created the share)
     pub dealer_idx: Idx,
+    /// The status of the response (whether it suceeded or if there were complaints)
     pub status: Status,
 }
 
@@ -174,24 +178,8 @@ pub struct Response {
 pub struct BundledResponses {
     /// share_idx is the index of the node that received the shares
     pub share_idx: Idx,
+    /// A vector of responses from each share creator
     pub responses: Vec<Response>,
-}
-
-/// A `Justification` contains the share of the share holder that issued a
-/// complaint, in plaintext.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(bound = "C::Scalar: DeserializeOwned")]
-pub struct Justification<C: Curve> {
-    share_idx: Idx,
-    share: C::Scalar,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(bound = "C::Scalar: DeserializeOwned")]
-pub struct BundledJustification<C: Curve> {
-    pub dealer_idx: Idx,
-    pub justifications: Vec<Justification<C>>,
-    pub public: PublicPoly<C>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -227,11 +215,11 @@ where
 
         let (newdkg, bundle) = self.process_shares_get_all(bundles)?;
 
-        let complaints: Vec<_> = bundle
+        let complaints = bundle
             .responses
             .into_iter()
             .filter(|r| !r.status.is_success())
-            .collect();
+            .collect::<Vec<_>>();
 
         let bundle = if !complaints.is_empty() {
             Some(BundledResponses {
@@ -254,7 +242,6 @@ where
         self,
         bundles: &[BundledShares<C>],
     ) -> DKGResult<(DKGWaitingResponse<C>, BundledResponses)> {
-        use Status::{Complaint, Success};
         let n = self.info.n();
         let thr = self.info.thr();
         let my_idx = self.info.index;
@@ -286,14 +273,13 @@ where
         // Currently: all responses are set to true except for my own indexes so
         // by default this node requires to have all shares and will issue a
         // response if any share is missing or wrong
-        let mut statuses = StatusMatrix::new(n, n, Success);
+        let mut statuses = StatusMatrix::new(n, n, Status::Success);
         for dealer_idx in 0..n {
             if dealer_idx == my_idx as usize {
                 continue;
             }
-            statuses.set(dealer_idx as Idx, my_idx, Complaint);
+            statuses.set(dealer_idx as Idx, my_idx, Status::Complaint);
         }
-        let public_polynomials = Self::extract_poly(&bundles);
 
         let not_from_me = bundles.iter().filter(|b| b.dealer_idx != my_idx);
         let mut ok = vec![];
@@ -303,6 +289,7 @@ where
                 // (a) reporting
                 continue;
             }
+
             // NOTE: this implementation stops at the first one.
             // TODO: should it return an error if multiple shares are for my idx?
             //       -> probably yes
@@ -328,26 +315,30 @@ where
         let mut fshare = self.info.secret.eval(self.info.index).value;
         let mut fpub = self.info.public.clone();
         for bundle in ok {
-            statuses.set(bundle.0, my_idx, Success);
+            statuses.set(bundle.0, my_idx, Status::Success);
             fpub.add(&bundle.1);
             fshare.add(&bundle.2);
         }
 
-        let responses: Vec<Response> = statuses
+        let responses = statuses
             .get_for_share(my_idx)
-            .iter()
+            .into_iter()
             .enumerate()
             .map(|(i, b)| Response {
                 dealer_idx: i as Idx,
-                status: Status::from(*b),
+                status: Status::from(b),
             })
-            .collect();
+            .collect::<Vec<_>>();
+
         let bundle = BundledResponses {
             share_idx: my_idx,
             responses,
         };
+
+        let public_polynomials = Self::extract_poly(&bundles);
         let new_dkg =
             DKGWaitingResponse::new(self.info, fshare, fpub, statuses, public_polynomials);
+
         Ok((new_dkg, bundle))
     }
 
@@ -388,6 +379,23 @@ where
     }
 }
 
+/// A `Justification` contains the share of the share holder that issued a
+/// complaint, in plaintext.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(bound = "C::Scalar: DeserializeOwned")]
+pub struct Justification<C: Curve> {
+    share_idx: Idx,
+    share: C::Scalar,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(bound = "C::Scalar: DeserializeOwned")]
+pub struct BundledJustification<C: Curve> {
+    pub dealer_idx: Idx,
+    pub justifications: Vec<Justification<C>>,
+    pub public: PublicPoly<C>,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(bound = "C::Scalar: DeserializeOwned")]
 pub struct DKGWaitingResponse<C: Curve> {
@@ -396,6 +404,19 @@ pub struct DKGWaitingResponse<C: Curve> {
     dist_pub: PublicPoly<C>,
     statuses: StatusMatrix,
     publics: HashMap<Idx, PublicPoly<C>>,
+}
+
+/// DKGOutput is the final output of the DKG protocol in case it runs
+/// successfully.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(bound = "C::Scalar: DeserializeOwned")]
+pub struct DKGOutput<C: Curve> {
+    /// The list of nodes that successfully ran the protocol until the end
+    pub qual: Group<C>,
+    /// The distributed public key
+    pub public: DistPublic<C>,
+    /// The private share which corresponds to the participant's index
+    pub share: Share<C::Scalar>,
 }
 
 impl<C> DKGWaitingResponse<C>
@@ -418,9 +439,12 @@ where
         }
     }
 
-    /// Check:
-    /// - no more than
     #[allow(clippy::type_complexity)]
+    /// Checks if the responses when applied to the status matrix result in a matrix with only
+    /// `Success` elements. If so, the protocol terminates.
+    ///
+    /// If there are complaints in the Status matrix, then it will return an error with the
+    /// justificajustifications required for Phase 3 of the DKG.
     pub fn process_responses(
         self,
         responses: &[BundledResponses],
@@ -429,56 +453,63 @@ where
         let statuses = self.set_statuses(responses);
         // find out if justifications are required
         // if there is a least one participant that issued one complaint
-        let required = (0..n).any(|dealer| !statuses.all_true(dealer as Idx));
+        let justifications_required = (0..n).any(|dealer| !statuses.all_true(dealer as Idx));
 
-        if !required {
-            // bingo ! Returns the final share now and stop the protocol
-            let share = Share {
-                index: self.info.index,
-                private: self.dist_share,
+        if justifications_required {
+            // find out if some responses correspond to our deal
+            let my_idx = self.info.index;
+            let bundled_justifications = if !statuses.all_true(my_idx) {
+                let justifications = statuses
+                    .get_for_dealer(my_idx)
+                    .into_iter()
+                    .enumerate()
+                    .filter_map(|(i, success)| {
+                        if !success {
+                            // reveal the share
+                            let id = i as Idx;
+                            Some(Justification {
+                                share_idx: id,
+                                share: self.info.secret.eval(id).value,
+                            })
+                        } else {
+                            None
+                        }
+                    })
+                    .collect::<Vec<_>>();
+
+                Some(BundledJustification {
+                    dealer_idx: self.info.index,
+                    justifications,
+                    public: self.info.public.clone(),
+                })
+            } else {
+                None
             };
-            return Ok(DKGOutput {
-                // everybody is qualified in this case since there is no
-                // complaint at all
-                qual: self.info.group.clone(),
-                public: self.dist_pub,
-                share,
-            });
+
+            let dkg = DKGWaitingJustification {
+                info: self.info,
+                dist_share: self.dist_share,
+                dist_pub: self.dist_pub,
+                statuses,
+                publics: self.publics,
+            };
+
+            return Err((dkg, bundled_justifications));
         }
 
-        // find out if some responses correspond to our deal
-        let mut ret_justif: Option<BundledJustification<C>> = None;
-        let my_idx = self.info.index;
-        if !statuses.all_true(my_idx) {
-            let my_row = statuses.get_for_dealer(my_idx);
-            let mut justifs = Vec::with_capacity(my_row.len());
-            for (i, success) in my_row.iter().enumerate() {
-                if *success {
-                    continue;
-                }
-                let id = i as Idx;
-                // reveal the share
-                let ijust = Justification {
-                    share_idx: id,
-                    share: self.info.secret.eval(id).value,
-                };
-                justifs.push(ijust);
-            }
-            let bundle = BundledJustification {
-                dealer_idx: self.info.index,
-                justifications: justifs,
-                public: self.info.public.clone(),
-            };
-            ret_justif = Some(bundle);
-        }
-        let dkg = DKGWaitingJustification {
-            info: self.info,
-            dist_share: self.dist_share,
-            dist_pub: self.dist_pub,
-            statuses,
-            publics: self.publics,
+        // bingo ! Returns the final share now and stop the protocol
+        let share = Share {
+            index: self.info.index,
+            private: self.dist_share,
         };
-        Err((dkg, ret_justif))
+
+        Ok(DKGOutput {
+            // everybody is qualified in this case since there is no
+            // complaint at all
+            qual: self.info.group.clone(),
+            public: self.dist_pub,
+            share,
+        })
     }
 
     /// set_statuses set the status of the given responses on the status matrix.

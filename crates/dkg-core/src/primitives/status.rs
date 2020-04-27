@@ -43,10 +43,13 @@ impl Status {
 pub struct StatusMatrix(Vec<BitVec>);
 
 impl StatusMatrix {
-    pub fn new(dealers: usize, share_holders: usize, def: Status) -> StatusMatrix {
+    /// Returns a NxM Status Matrix (N = dealers, M = share_holders) where all elements
+    /// are initialized to `default`. The elements on the diagonal (i==j) are by initialized
+    /// to `Success`, since the dealer is assumed to succeed
+    pub fn new(dealers: usize, share_holders: usize, default: Status) -> StatusMatrix {
         let m = (0..dealers)
             .map(|i| {
-                let mut bs = bitvec![def.to_bool() as u8; share_holders];
+                let mut bs = bitvec![default.to_bool() as u8; share_holders];
                 bs.set(i, Status::Success.to_bool());
                 bs
             })
@@ -58,7 +61,7 @@ impl StatusMatrix {
         self.0[dealer as usize].set(share as usize, status.to_bool());
     }
 
-    // return a bitset whose indices are the dealer indexes
+    /// Return a bitvec whose indices are the dealer indexes
     pub fn get_for_share(&self, share: Idx) -> BitVec {
         let mut bs = bitvec![0; self.0.len()];
         for (dealer_idx, shares) in self.0.iter().enumerate() {
@@ -67,6 +70,7 @@ impl StatusMatrix {
         bs
     }
 
+    /// Returns `true` if the row corresponding to `dealer` is all 1s.
     pub fn all_true(&self, dealer: Idx) -> bool {
         self.0[dealer as usize].all()
     }
