@@ -1,9 +1,11 @@
-use bitvec::{prelude::*, vec::BitVec};
+use super::{
+    group::Group,
+    status::{Status, StatusMatrix},
+};
+
 use rand_core::RngCore;
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use std::collections::HashMap;
-use std::fmt;
-use thiserror::Error;
 use threshold_bls::{
     ecies::{self, EciesCipher},
     group::{Curve, Element},
@@ -11,174 +13,11 @@ use threshold_bls::{
     DistPublic, Share,
 };
 
-/// Node is a participant in the DKG protocol. In a DKG protocol, each
-/// participant must be identified both by an index and a public key. At the end
-/// of the protocol, if sucessful, the index is used to verify the validity of
-/// the share this node holds.
-#[derive(Clone, Serialize, Deserialize, PartialEq)]
-pub struct Node<C: Curve>(Idx, C::Point);
-
-impl<C> Node<C>
-where
-    C: Curve,
-{
-    pub fn new(index: Idx, public: C::Point) -> Self {
-        Self(index, public)
-    }
-}
-
-/// A Group is a collection of Nodes with an associated threshold. A DKG scheme
-/// takes in a group at the beginning of the protocol and outputs a potentially
-/// new group that contains members that succesfully ran the protocol. When
-/// creating a new group using the `from()` or `from_list()`method, the module
-/// sets the threshold to the output of `default_threshold()`.
-#[derive(Clone, Serialize, Deserialize, PartialEq)]
-#[serde(bound = "C::Scalar: DeserializeOwned")]
-pub struct Group<C: Curve> {
-    pub nodes: Vec<Node<C>>,
-    pub threshold: usize,
-}
-
-#[derive(Clone, Debug, Serialize, Deserialize)]
-struct StatusMatrix(Vec<BitVec>);
-
-impl StatusMatrix {
-    pub fn new(dealers: usize, share_holders: usize, def: Status) -> StatusMatrix {
-        let m = (0..dealers)
-            .map(|i| {
-                let mut bs = bitvec![def.to_bool() as u8; share_holders];
-                bs.set(i, Status::Success.to_bool());
-                bs
-            })
-            .collect();
-        Self(m)
-    }
-
-    pub fn set(&mut self, dealer: Idx, share: Idx, status: Status) {
-        self.0[dealer as usize].set(share as usize, status.to_bool());
-    }
-
-    // return a bitset whose indices are the dealer indexes
-    pub fn get_for_share(&self, share: Idx) -> BitVec {
-        let mut bs = bitvec![0; self.0.len()];
-        for (dealer_idx, shares) in self.0.iter().enumerate() {
-            bs.set(dealer_idx, *shares.get(share as usize).unwrap());
-        }
-        bs
-    }
-
-    pub fn all_true(&self, dealer: Idx) -> bool {
-        self.0[dealer as usize].all()
-    }
-
-    pub fn get_for_dealer(&self, dealer: Idx) -> BitVec {
-        self.0[dealer as usize].clone()
-    }
-}
-
-impl fmt::Display for StatusMatrix {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        for (dealer, shares) in self.0.iter().enumerate() {
-            match writeln!(f, "-> dealer {}: {:?}", dealer, shares) {
-                Ok(()) => continue,
-                Err(e) => return Err(e),
-            }
-        }
-        Ok(())
-    }
-}
+use super::{DKGError, DKGResult, ShareError, ShareErrorType};
 
 // TODO
 // - check VSS-forgery article
 // - zeroise
-
-impl<C> fmt::Debug for Node<C>
-where
-    C: Curve,
-{
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "Node{{{} -> {:?} }}", self.0, self.1)
-    }
-}
-
-impl<C> Node<C>
-where
-    C: Curve,
-{
-    pub fn id(&self) -> Idx {
-        self.0
-    }
-    pub fn key(&self) -> &C::Point {
-        &self.1
-    }
-}
-
-impl<C> Group<C>
-where
-    C: Curve,
-{
-    pub fn from_list(nodes: Vec<Node<C>>) -> Group<C> {
-        let l = nodes.len();
-        Self {
-            nodes,
-            threshold: default_threshold(l),
-        }
-    }
-    pub fn new(nodes: Vec<Node<C>>, threshold: usize) -> DKGResult<Group<C>> {
-        let minimum = minimum_threshold(nodes.len());
-        let maximum = nodes.len();
-        if threshold < minimum || threshold > maximum {
-            return Err(DKGError::InvalidThreshold(threshold, minimum, maximum));
-        }
-        Ok(Self { nodes, threshold })
-    }
-
-    pub fn len(&self) -> usize {
-        self.nodes.len()
-    }
-
-    pub fn is_empty(&self) -> bool {
-        self.nodes.is_empty()
-    }
-
-    pub fn index(&self, public: &C::Point) -> Option<Idx> {
-        match self.nodes.iter().find(|n| &n.1 == public) {
-            Some(n) => Some(n.0),
-            _ => None,
-        }
-    }
-}
-impl<C> fmt::Debug for Group<C>
-where
-    C: Curve,
-{
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self
-            .nodes
-            .iter()
-            .map(|n| write!(f, " {:?} ", n.0))
-            .collect::<fmt::Result>()
-        {
-            Ok(_) => Ok(()),
-            Err(e) => Err(e),
-        }
-    }
-}
-impl<C> From<Vec<C::Point>> for Group<C>
-where
-    C: Curve,
-{
-    fn from(list: Vec<C::Point>) -> Self {
-        let thr = default_threshold(list.len());
-        // TODO check if we can do stg like .map(Node::new)
-        let nodes = list
-            .into_iter()
-            .enumerate()
-            .map(|(i, public)| Node(i as Idx, public))
-            .collect();
-        Self::new(nodes, thr).expect("threshold should be good here")
-    }
-}
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(bound = "C::Scalar: DeserializeOwned")]
@@ -194,24 +33,29 @@ impl<C> DKGInfo<C>
 where
     C: Curve,
 {
+    /// Returns the number of nodes participating in the group for this DKG
     fn n(&self) -> usize {
         self.group.len()
     }
+
+    /// Returns the threshold of the group for this DKG
     fn thr(&self) -> usize {
         self.group.threshold
     }
 }
 
 /// DKG is the struct containing the logic to run the Distributed Key Generation
-/// protocol from
-/// [Pedersen](https://link.springer.com/content/pdf/10.1007%2F3-540-48910-X_21.pdf).
+/// protocol from [Pedersen](https://link.springer.com/content/pdf/10.1007%2F3-540-48910-X_21.pdf).
+///
 /// The protocol runs at minimum in two phases and at most in three phases as
-/// described in the module documentation. Each transition to a new phase is
-/// consuming the DKG state (struct) to produce a new state that only accepts to
-/// transition to the next phase.
+/// described in the module documentation.
+///
+/// Each transition to a new phase is consuming the DKG state (struct) to produce
+/// a new state that only accepts to transition to the next phase.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(bound = "C::Scalar: DeserializeOwned")]
 pub struct DKG<C: Curve> {
+    /// Metadata about the DKG
     info: DKGInfo<C>,
 }
 
@@ -222,7 +66,9 @@ pub struct DKG<C: Curve> {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(bound = "C::Scalar: DeserializeOwned")]
 pub struct EncryptedShare<C: Curve> {
+    /// The index of the participant this share belongs to
     share_idx: Idx,
+    /// The ECIES encrypted share
     secret: EciesCipher<C>,
 }
 
@@ -239,93 +85,13 @@ pub struct BundledShares<C: Curve> {
     pub public: PublicPoly<C>,
 }
 
-/// DKGOutput is the final output of the DKG protocol in case it runs
-/// successfully. It contains the QUALified group (the list of nodes that
-/// sucessfully ran the protocol until the end), the distributed public key and
-/// the private share corresponding to the participant's index.
-#[derive(Clone, Debug, Serialize, Deserialize)]
-#[serde(bound = "C::Scalar: DeserializeOwned")]
-pub struct DKGOutput<C: Curve> {
-    pub qual: Group<C>,
-    pub public: DistPublic<C>,
-    pub share: Share<C::Scalar>,
-}
-
-/// A `Status` holds the claim of a validity or not of a share from the point of
-/// a view of the share holder. A status is sent inside a `Response` during the
-/// second phase of the protocol.
-/// Currently, this protocol only outputs `Complaint` since that is how the protocol
-/// is specified using a synchronous network with a broadcast channel. In
-/// practice, that means any `Response` seen during the second phase is a
-/// `Complaint` from a participant about one of its received share.
-#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
-pub enum Status {
-    Success,
-    Complaint,
-}
-
-impl From<bool> for Status {
-    fn from(b: bool) -> Self {
-        if b {
-            Status::Success
-        } else {
-            Status::Complaint
-        }
-    }
-}
-
-impl Status {
-    fn to_bool(self) -> bool {
-        self.is_success()
-    }
-
-    fn is_success(self) -> bool {
-        match self {
-            Status::Success => true,
-            Status::Complaint => false,
-        }
-    }
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct Response {
-    pub dealer_idx: Idx,
-    pub status: Status,
-}
-
-/// A `BundledResponse` is sent during the second phase of the protocol by all
-/// participants that have received invalid or inconsistent shares (all statuses
-/// are `Complaint`). The bundles contains the index of the recipient of the
-/// shares, the one that created the response.  Each `Response` contains the
-/// index of the participant that created the share (a *dealer*),
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct BundledResponses {
-    /// share_idx is the index of the node that received the shares
-    pub share_idx: Idx,
-    pub responses: Vec<Response>,
-}
-
-/// A `Justification` contains the share of the share holder that issued a
-/// complaint, in plaintext.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(bound = "C::Scalar: DeserializeOwned")]
-pub struct Justification<C: Curve> {
-    share_idx: Idx,
-    share: C::Scalar,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(bound = "C::Scalar: DeserializeOwned")]
-pub struct BundledJustification<C: Curve> {
-    pub dealer_idx: Idx,
-    pub justifications: Vec<Justification<C>>,
-    pub public: PublicPoly<C>,
-}
-
 impl<C> DKG<C>
 where
     C: Curve,
 {
+    /// Creates a new DKG instance from the provided private key and group.
+    ///
+    /// The private key must be part of the group, otherwise this will return an error.
     pub fn new(private_key: C::Scalar, group: Group<C>) -> Result<DKG<C>, DKGError> {
         use rand::prelude::*;
         Self::new_rand(private_key, group, &mut thread_rng())
@@ -336,24 +102,28 @@ where
         group: Group<C>,
         rng: &mut R,
     ) -> Result<DKG<C>, DKGError> {
-        // check if public key is included
+        // get the public key
         let mut public_key = C::Point::one();
         public_key.mul(&private_key);
-        match group.index(&public_key) {
-            Some(idx) => {
-                let secret = PrivatePoly::<C>::new_from(group.threshold - 1, rng);
-                let public = secret.commit::<C::Point>();
-                let info = DKGInfo {
-                    private_key,
-                    index: idx,
-                    group,
-                    secret,
-                    public,
-                };
-                Ok(DKG { info })
-            }
-            None => Err(DKGError::PublicKeyNotFound),
-        }
+
+        // check if the public key is part of the group
+        let index = group
+            .index(&public_key)
+            .ok_or_else(|| DKGError::PublicKeyNotFound)?;
+
+        // Generate a secret polynomial and commit to it
+        let secret = PrivatePoly::<C>::new_from(group.threshold - 1, rng);
+        let public = secret.commit::<C::Point>();
+
+        let info = DKGInfo {
+            private_key,
+            index,
+            group,
+            secret,
+            public,
+        };
+
+        Ok(DKG { info })
     }
 
     pub fn encrypt_shares<R: RngCore>(self, rng: &mut R) -> (DKGWaitingShare<C>, BundledShares<C>) {
@@ -363,10 +133,17 @@ where
             .nodes
             .iter()
             .map(|n| {
+                // evaluate the secret polynomial at the node's id
                 let sec = self.info.secret.eval(n.id() as Idx);
+
+                // serialize the evaluation
                 let buff = bincode::serialize(&sec.value).expect("serialization should not fail");
+
+                // encrypt it
                 let cipher = ecies::encrypt::<C, _>(n.key(), &buff, rng);
-                EncryptedShare::<C> {
+
+                // save the share
+                EncryptedShare {
                     share_idx: n.id(),
                     secret: cipher,
                 }
@@ -379,8 +156,30 @@ where
             public: self.info.public.clone(),
         };
         let dw = DKGWaitingShare { info: self.info };
+
         (dw, bundle)
     }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Response {
+    /// The index of the dealer (the person that created the share)
+    pub dealer_idx: Idx,
+    /// The status of the response (whether it suceeded or if there were complaints)
+    pub status: Status,
+}
+
+/// A `BundledResponse` is sent during the second phase of the protocol by all
+/// participants that have received invalid or inconsistent shares (all statuses
+/// are `Complaint`). The bundles contains the index of the recipient of the
+/// shares, the one that created the response.  Each `Response` contains the
+/// index of the participant that created the share (a *dealer*),
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct BundledResponses {
+    /// share_idx is the index of the node that received the shares
+    pub share_idx: Idx,
+    /// A vector of responses from each share creator
+    pub responses: Vec<Response>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -416,11 +215,11 @@ where
 
         let (newdkg, bundle) = self.process_shares_get_all(bundles)?;
 
-        let complaints: Vec<_> = bundle
+        let complaints = bundle
             .responses
             .into_iter()
             .filter(|r| !r.status.is_success())
-            .collect();
+            .collect::<Vec<_>>();
 
         let bundle = if !complaints.is_empty() {
             Some(BundledResponses {
@@ -443,7 +242,6 @@ where
         self,
         bundles: &[BundledShares<C>],
     ) -> DKGResult<(DKGWaitingResponse<C>, BundledResponses)> {
-        use Status::{Complaint, Success};
         let n = self.info.n();
         let thr = self.info.thr();
         let my_idx = self.info.index;
@@ -475,14 +273,13 @@ where
         // Currently: all responses are set to true except for my own indexes so
         // by default this node requires to have all shares and will issue a
         // response if any share is missing or wrong
-        let mut statuses = StatusMatrix::new(n, n, Success);
+        let mut statuses = StatusMatrix::new(n, n, Status::Success);
         for dealer_idx in 0..n {
             if dealer_idx == my_idx as usize {
                 continue;
             }
-            statuses.set(dealer_idx as Idx, my_idx, Complaint);
+            statuses.set(dealer_idx as Idx, my_idx, Status::Complaint);
         }
-        let public_polynomials = Self::extract_poly(&bundles);
 
         let not_from_me = bundles.iter().filter(|b| b.dealer_idx != my_idx);
         let mut ok = vec![];
@@ -492,6 +289,7 @@ where
                 // (a) reporting
                 continue;
             }
+
             // NOTE: this implementation stops at the first one.
             // TODO: should it return an error if multiple shares are for my idx?
             //       -> probably yes
@@ -517,26 +315,30 @@ where
         let mut fshare = self.info.secret.eval(self.info.index).value;
         let mut fpub = self.info.public.clone();
         for bundle in ok {
-            statuses.set(bundle.0, my_idx, Success);
+            statuses.set(bundle.0, my_idx, Status::Success);
             fpub.add(&bundle.1);
             fshare.add(&bundle.2);
         }
 
-        let responses: Vec<Response> = statuses
+        let responses = statuses
             .get_for_share(my_idx)
-            .iter()
+            .into_iter()
             .enumerate()
             .map(|(i, b)| Response {
                 dealer_idx: i as Idx,
-                status: Status::from(*b),
+                status: Status::from(b),
             })
-            .collect();
+            .collect::<Vec<_>>();
+
         let bundle = BundledResponses {
             share_idx: my_idx,
             responses,
         };
+
+        let public_polynomials = Self::extract_poly(&bundles);
         let new_dkg =
             DKGWaitingResponse::new(self.info, fshare, fpub, statuses, public_polynomials);
+
         Ok((new_dkg, bundle))
     }
 
@@ -557,25 +359,41 @@ where
         public: &PublicPoly<C>,
         share: &EncryptedShare<C>,
     ) -> Result<C::Scalar, ShareError> {
-        use ShareErrorType::*;
         let thr = self.info.thr();
         if public.degree() + 1 != thr {
             // report (d) error
             return Err(ShareError::from(
                 dealer,
-                InvalidPublicPolynomial(public.degree(), thr),
+                ShareErrorType::InvalidPublicPolynomial(public.degree(), thr),
             ));
         }
         let buff = ecies::decrypt::<C>(&self.info.private_key, &share.secret)
-            .map_err(|err| ShareError::from(dealer, InvalidCiphertext(err)))?;
+            .map_err(|err| ShareError::from(dealer, ShareErrorType::InvalidCiphertext(err)))?;
 
         let share: C::Scalar =
             bincode::deserialize(&buff).expect("scalar should not fail when unmarshaling");
         if !share_correct::<C>(self.info.index, &share, public) {
-            return Err(ShareError::from(dealer, InvalidShare));
+            return Err(ShareError::from(dealer, ShareErrorType::InvalidShare));
         }
         Ok(share)
     }
+}
+
+/// A `Justification` contains the share of the share holder that issued a
+/// complaint, in plaintext.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(bound = "C::Scalar: DeserializeOwned")]
+pub struct Justification<C: Curve> {
+    share_idx: Idx,
+    share: C::Scalar,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(bound = "C::Scalar: DeserializeOwned")]
+pub struct BundledJustification<C: Curve> {
+    pub dealer_idx: Idx,
+    pub justifications: Vec<Justification<C>>,
+    pub public: PublicPoly<C>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -586,6 +404,19 @@ pub struct DKGWaitingResponse<C: Curve> {
     dist_pub: PublicPoly<C>,
     statuses: StatusMatrix,
     publics: HashMap<Idx, PublicPoly<C>>,
+}
+
+/// DKGOutput is the final output of the DKG protocol in case it runs
+/// successfully.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(bound = "C::Scalar: DeserializeOwned")]
+pub struct DKGOutput<C: Curve> {
+    /// The list of nodes that successfully ran the protocol until the end
+    pub qual: Group<C>,
+    /// The distributed public key
+    pub public: DistPublic<C>,
+    /// The private share which corresponds to the participant's index
+    pub share: Share<C::Scalar>,
 }
 
 impl<C> DKGWaitingResponse<C>
@@ -608,72 +439,83 @@ where
         }
     }
 
-    /// Check:
-    /// - no more than
     #[allow(clippy::type_complexity)]
+    /// Checks if the responses when applied to the status matrix result in a matrix with only
+    /// `Success` elements. If so, the protocol terminates.
+    ///
+    /// If there are complaints in the Status matrix, then it will return an error with the
+    /// justifications required for Phase 3 of the DKG.
     pub fn process_responses(
-        self,
+        mut self,
         responses: &[BundledResponses],
     ) -> Result<DKGOutput<C>, (DKGWaitingJustification<C>, Option<BundledJustification<C>>)> {
         let n = self.info.n();
-        let statuses = self.set_statuses(responses);
+        self.set_statuses(responses);
+        let statuses = &self.statuses;
+
         // find out if justifications are required
         // if there is a least one participant that issued one complaint
-        let required = (0..n).any(|dealer| !statuses.all_true(dealer as Idx));
+        let justifications_required = (0..n).any(|dealer| !statuses.all_true(dealer as Idx));
 
-        if !required {
-            // bingo ! Returns the final share now and stop the protocol
-            let share = Share {
-                index: self.info.index,
-                private: self.dist_share,
+        if justifications_required {
+            // find out if some responses correspond to our deal
+            let my_idx = self.info.index;
+            let bundled_justifications = if !statuses.all_true(my_idx) {
+                let justifications = statuses
+                    .get_for_dealer(my_idx)
+                    .iter()
+                    .enumerate()
+                    .filter_map(|(i, success)| {
+                        if !success {
+                            // reveal the share
+                            let id = i as Idx;
+                            Some(Justification {
+                                share_idx: id,
+                                share: self.info.secret.eval(id).value,
+                            })
+                        } else {
+                            None
+                        }
+                    })
+                    .collect::<Vec<_>>();
+
+                Some(BundledJustification {
+                    dealer_idx: self.info.index,
+                    justifications,
+                    public: self.info.public.clone(),
+                })
+            } else {
+                None
             };
-            return Ok(DKGOutput {
-                // everybody is qualified in this case since there is no
-                // complaint at all
-                qual: self.info.group.clone(),
-                public: self.dist_pub,
-                share,
-            });
+
+            let dkg = DKGWaitingJustification {
+                info: self.info,
+                dist_share: self.dist_share,
+                dist_pub: self.dist_pub,
+                statuses: RefCell::new(self.statuses),
+                publics: self.publics,
+            };
+
+            return Err((dkg, bundled_justifications));
         }
 
-        // find out if some responses correspond to our deal
-        let mut ret_justif: Option<BundledJustification<C>> = None;
-        let my_idx = self.info.index;
-        if !statuses.all_true(my_idx) {
-            let my_row = statuses.get_for_dealer(my_idx);
-            let mut justifs = Vec::with_capacity(my_row.len());
-            for (i, success) in my_row.iter().enumerate() {
-                if *success {
-                    continue;
-                }
-                let id = i as Idx;
-                // reveal the share
-                let ijust = Justification {
-                    share_idx: id,
-                    share: self.info.secret.eval(id).value,
-                };
-                justifs.push(ijust);
-            }
-            let bundle = BundledJustification {
-                dealer_idx: self.info.index,
-                justifications: justifs,
-                public: self.info.public.clone(),
-            };
-            ret_justif = Some(bundle);
-        }
-        let dkg = DKGWaitingJustification {
-            info: self.info,
-            dist_share: self.dist_share,
-            dist_pub: self.dist_pub,
-            statuses,
-            publics: self.publics,
+        // bingo ! Returns the final share now and stop the protocol
+        let share = Share {
+            index: self.info.index,
+            private: self.dist_share,
         };
-        Err((dkg, ret_justif))
+
+        Ok(DKGOutput {
+            // everybody is qualified in this case since there is no
+            // complaint at all
+            qual: self.info.group.clone(),
+            public: self.dist_pub,
+            share,
+        })
     }
 
     /// set_statuses set the status of the given responses on the status matrix.
-    fn set_statuses(&self, responses: &[BundledResponses]) -> StatusMatrix {
-        let mut statuses = self.statuses.clone();
+    fn set_statuses(&mut self, responses: &[BundledResponses]) {
         let my_idx = self.info.index;
         let n = self.info.n();
 
@@ -688,12 +530,14 @@ where
             let holder_index = bundle.share_idx;
             for response in bundle.responses.iter() {
                 let dealer_index = response.dealer_idx;
-                statuses.set(dealer_index, holder_index, response.status);
+                self.statuses
+                    .set(dealer_index, holder_index, response.status);
             }
         }
-        statuses
     }
 }
+
+use std::cell::RefCell;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(bound = "C::Scalar: DeserializeOwned")]
@@ -704,7 +548,7 @@ pub struct DKGWaitingJustification<C: Curve> {
     dist_share: C::Scalar,
     dist_pub: PublicPoly<C>,
     // guaranteed to be of the right size (n)
-    statuses: StatusMatrix,
+    statuses: RefCell<StatusMatrix>,
     publics: HashMap<Idx, PublicPoly<C>>,
 }
 
@@ -722,53 +566,58 @@ where
         self,
         justifs: &[BundledJustification<C>],
     ) -> Result<DKGOutput<C>, DKGError> {
-        use Status::Success;
-        // avoid a mutable ref needed, ok for small miner size..
-        let mut statuses = self.statuses.clone();
+        let n = self.info.n();
         let mut add_share = C::Scalar::zero();
         let mut add_public = PublicPoly::<C>::zero();
-        for bundle in justifs
+        justifs
             .iter()
-            .filter(|b| b.dealer_idx < self.info.n() as Idx)
+            .filter(|b| b.dealer_idx < n as Idx)
             .filter(|b| b.dealer_idx != self.info.index)
-            .filter(|b| self.publics.contains_key(&b.dealer_idx))
-        {
-            // guaranteed unwrap from previous filter
-            let public = self.publics.get(&bundle.dealer_idx).unwrap();
-            for j in bundle.justifications.iter() {
-                if !share_correct::<C>(j.share_idx, &j.share, public) {
-                    continue;
-                }
-                // justification is valid, we mark it off from our matrix
-                statuses.set(bundle.dealer_idx, j.share_idx, Success);
-                // if it is for us, then add it to our final share and public poly
-                if j.share_idx == self.info.index {
-                    add_share.add(&j.share);
-                    add_public.add(&bundle.public);
-                }
-            }
-        }
+            // get only the bundles for which we have a public polynomial for
+            .filter_map(|b| self.publics.get(&b.dealer_idx).map(|public| (b, public)))
+            .for_each(|(bundle, public)| {
+                bundle.justifications.iter().for_each(|justification| {
+                    if !share_correct::<C>(justification.share_idx, &justification.share, public) {
+                        return;
+                    }
 
-        let n = self.info.n();
+                    // justification is valid, we mark it off from our matrix
+                    self.statuses.borrow_mut().set(
+                        bundle.dealer_idx,
+                        justification.share_idx,
+                        Status::Success,
+                    );
+
+                    // if it is for us, then add it to our final share and public poly
+                    if justification.share_idx == self.info.index {
+                        add_share.add(&justification.share);
+                        add_public.add(&bundle.public);
+                    }
+                })
+            });
+
         // QUAL is the set of all entries in the matrix where all bits are set
+        let statuses = self.statuses.borrow();
         let qual_indices = (0..n).fold(Vec::new(), |mut acc, dealer| {
             if statuses.all_true(dealer as Idx) {
                 acc.push(dealer);
             }
             acc
         });
+
         let thr = self.info.group.threshold;
         if qual_indices.len() < thr {
             // too many unanswered justifications, DKG abort !
             return Err(DKGError::NotEnoughJustifications(qual_indices.len(), thr));
         }
 
+        // create a group out of the qualifying nodes
         let qual_nodes = self
             .info
             .group
             .nodes
             .into_iter()
-            .filter(|n| qual_indices.contains(&(n.0 as usize)))
+            .filter(|n| qual_indices.contains(&(n.id() as usize)))
             .collect();
         let group = Group::<C>::new(qual_nodes, thr)?;
 
@@ -779,85 +628,13 @@ where
             index: self.info.index,
             private: add_share,
         };
+
         Ok(DKGOutput {
             qual: group,
             public: add_public,
             share: ds,
         })
     }
-}
-
-pub type DKGResult<A> = Result<A, DKGError>;
-
-#[derive(Debug, PartialEq, Error)]
-pub enum DKGError {
-    /// PublicKeyNotFound is raised when the private key given to the DKG init
-    /// function does not yield a public key that is included in the group.
-    #[error("public key not found in list of participants")]
-    PublicKeyNotFound,
-
-    /// InvalidThreshold is raised when creating a group and specifying an
-    /// invalid threshold. Either the threshold is too low, inferior to
-    /// what `minimum_threshold()` returns or is too large (i.e. larger than the
-    /// number of nodes).
-    #[error("threshold {0} is not in range [{1},{2}]")]
-    InvalidThreshold(usize, usize, usize),
-
-    /// NotEnoughValidShares is raised when the DKG has not successfully
-    /// processed enough shares because they were invalid. In that case, the DKG
-    /// can not continue, the protocol MUST be aborted.
-    #[error("only has {0}/{1} valid shares")]
-    NotEnoughValidShares(usize, usize),
-
-    #[error("only has {0}/{1} required justifications")]
-    NotEnoughJustifications(usize, usize),
-
-    /// Rejected is thrown when the participant is rejected from the final
-    /// output
-    #[error("this participant is rejected from the qualified set")]
-    Rejected,
-}
-
-// TODO: potentially add to the API the ability to streamline the decryption of
-// bundles, and in that case, it would make sense to report those errors.
-#[derive(Debug)]
-struct ShareError {
-    // XXX better structure to put dealer_idx in an outmost struct but leads to
-    // more verbose code. To review?
-    dealer_idx: Idx,
-    error: ShareErrorType,
-}
-
-impl fmt::Display for ShareError {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        writeln!(f, "ShareError(dealer: {}): {}", self.dealer_idx, self.error)
-    }
-}
-
-impl ShareError {
-    fn from(dealer_idx: Idx, error: ShareErrorType) -> Self {
-        Self { dealer_idx, error }
-    }
-}
-
-#[derive(Debug, Error)]
-#[allow(clippy::enum_variant_names)]
-enum ShareErrorType {
-    /// InvalidCipherText returns the error raised when decrypting the encrypted
-    /// share.
-    #[error("Invalid ciphertext")]
-    InvalidCiphertext(ecies::EciesError),
-    /// InvalidShare is raised when the share does not corresponds to the public
-    /// polynomial associated.
-    #[error("Share does not match associated public polynomial")]
-    InvalidShare,
-    /// InvalidPublicPolynomial is raised when the public polynomial does not
-    /// have the correct degree. Each public polynomial in the scheme must have
-    /// a degree equals to `threshold - 1` set for the DKG protocol.
-    /// The two fields are (1) the degree of the polynomial and (2) the
-    /// second is the degree it should be,i.e. `threshold - 1`.
-    #[error("polynomial does not have the correct degree, got: {0}, expected {1}")]
-    InvalidPublicPolynomial(usize, usize),
 }
 
 /// Checks if the commitment to the share corresponds to the public polynomial's
@@ -867,13 +644,6 @@ fn share_correct<C: Curve>(idx: Idx, share: &C::Scalar, public: &PublicPoly<C>) 
     commit.mul(&share);
     let pub_eval = public.eval(idx);
     pub_eval.value == commit
-}
-
-pub fn minimum_threshold(n: usize) -> usize {
-    (((n as f64) / 2.0) + 1.0) as usize
-}
-pub fn default_threshold(n: usize) -> usize {
-    (((n as f64) * 2.0 / 3.0) + 1.0) as usize
 }
 
 #[cfg(feature = "bls12_381")]
@@ -929,6 +699,7 @@ pub mod tests {
             .collect();
         Poly::<C::Scalar, C::Scalar>::full_recover(thr, evals)
     }
+
     #[test]
     fn group_index() {
         let n = 6;
@@ -1001,7 +772,9 @@ pub mod tests {
             .into_iter()
             .map(|p| DKG::new(p, group.clone()).unwrap())
             .collect();
+
         let mut all_shares = Vec::with_capacity(n);
+
         let dkgs: Vec<_> = dkgs
             .into_iter()
             .map(|dkg| {
@@ -1010,9 +783,11 @@ pub mod tests {
                 ndkg
             })
             .collect();
+
         // modify a share
         all_shares[0].shares[1].secret = ecies::encrypt(&BCurve::point(), &vec![1]);
         all_shares[3].shares[4].secret = ecies::encrypt(&BCurve::point(), &vec![1]);
+
         let mut response_bundles = Vec::with_capacity(n);
         let dkgs: Vec<_> = dkgs
             .into_iter()
@@ -1026,6 +801,7 @@ pub mod tests {
                 ndkg
             })
             .collect();
+
         let mut justifications = Vec::with_capacity(n);
         let dkgs: Vec<_> = dkgs
             .into_iter()
@@ -1042,6 +818,7 @@ pub mod tests {
                 }
             })
             .collect();
+
         let outputs: Vec<_> = dkgs
             .into_iter()
             .map(|dkg| match dkg.process_justifications(&justifications) {
@@ -1049,6 +826,7 @@ pub mod tests {
                 Err(e) => panic!("{}", e),
             })
             .collect();
+
         let recovered_private = reconstruct(thr, &outputs).unwrap();
         let recovered_public = recovered_private.commit::<G1>();
         let recovered_key = recovered_public.public_key();

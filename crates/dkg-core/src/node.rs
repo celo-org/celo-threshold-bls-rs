@@ -1,8 +1,12 @@
 use super::{
     board::BoardPublisher,
     primitives::{
-        BundledResponses, BundledShares, DKGError, DKGOutput, DKGWaitingJustification,
-        DKGWaitingResponse, DKGWaitingShare, Group, DKG,
+        group::Group,
+        states::{
+            BundledResponses, BundledShares, DKGOutput, DKGWaitingJustification,
+            DKGWaitingResponse, DKGWaitingShare, DKG,
+        },
+        DKGError,
     },
 };
 
@@ -133,10 +137,7 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{
-        primitives::{Group, Node},
-        test_helpers::InMemoryBoard,
-    };
+    use crate::{primitives::group::Node, test_helpers::InMemoryBoard};
 
     use threshold_bls::{
         curve::bls12381::{self, PairingCurve as BLS12_381},

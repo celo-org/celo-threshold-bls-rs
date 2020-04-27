@@ -6,7 +6,8 @@ use std::fs::File;
 use dkg_core::{
     node::{DKGPhase, Phase0, Phase1, Phase2, Phase2Result},
     primitives::{
-        BundledJustification, BundledResponses, BundledShares, DKGWaitingJustification, Group,
+        group::Group,
+        states::{BundledJustification, BundledResponses, BundledShares, DKGWaitingJustification},
     },
 };
 
