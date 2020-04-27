@@ -19,7 +19,7 @@ type Scheme = G2Scheme<BLS12_377>;
 fn main() {
     let opts = DKGOpts::parse_args_default_or_exit();
 
-    let command = opts.clone().command.unwrap_or_else(|| {
+    let command = opts.command.unwrap_or_else(|| {
         eprintln!("No command was provided.");
         eprintln!("{}", DKGOpts::usage());
         process::exit(2)

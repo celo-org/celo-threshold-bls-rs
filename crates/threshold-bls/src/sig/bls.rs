@@ -69,7 +69,7 @@ mod common {
                 return Err(BLSError::InvalidSig);
             }
 
-            return Ok(());
+            Ok(())
         }
 
         /// Performs the final exponentiation for the BLS sig scheme

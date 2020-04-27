@@ -1,3 +1,6 @@
+// add this so that we can be more explicit about unsafe calls inside unsafe functions
+#![allow(unused_unsafe)]
+
 pub mod ffi;
 
 #[cfg(feature = "wasm")]

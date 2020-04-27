@@ -18,12 +18,6 @@ impl<C: Curve> InMemoryBoard<C> {
             justifs: vec![],
         }
     }
-
-    #[allow(unused)]
-    pub fn need_phase3(&self) -> bool {
-        // if there is no complaint we dont need any justifications
-        return self.responses.len() != 0;
-    }
 }
 
 impl<C: Curve> BoardPublisher<C> for InMemoryBoard<C> {

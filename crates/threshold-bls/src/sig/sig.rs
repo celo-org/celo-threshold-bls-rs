@@ -141,6 +141,6 @@ pub trait BlindThresholdScheme: ThresholdSchemeExt + Blinder {
     /// component.
     fn unblind_partial(
         t: &Self::Token,
-        partial: &Partial,
+        partial: &[u8],
     ) -> Result<Partial, <Self as BlindThresholdScheme>::Error>;
 }
