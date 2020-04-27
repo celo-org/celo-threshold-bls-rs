@@ -10,7 +10,7 @@ use threshold_bls::poly::Idx;
 /// is specified using a synchronous network with a broadcast channel. In
 /// practice, that means any `Response` seen during the second phase is a
 /// `Complaint` from a participant about one of its received share.
-#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Hash, Eq)]
 pub enum Status {
     Success,
     Complaint,
@@ -48,7 +48,7 @@ impl Status {
 /// use dkg_core::primitives::status::{Status, StatusMatrix};
 ///
 /// // iniitializes the matrix (diagonal elements are always set to Status::Success)
-/// let matrix = StatusMatrix::new(3, 5, Status::Complaint);
+/// let mut matrix = StatusMatrix::new(3, 5, Status::Complaint);
 ///
 /// // get the matrix's first row
 /// let row = matrix.row(1);
@@ -57,7 +57,11 @@ impl Status {
 /// let column = matrix.row(1);
 ///
 /// // set a value in the matrix
-/// matrix.set(1, 2, Status::Success)
+/// matrix.set(1, 2, Status::Complaint);
+///
+/// // get a value in the matrix
+/// let val = matrix.get(1, 2);
+/// assert_eq!(val, Status::Complaint);
 ///
 /// // check if all values in a row are OK
 /// let all_ones: bool = matrix.all_true(2);
@@ -112,14 +116,39 @@ impl StatusMatrix {
                 bs
             })
             .collect();
+
         Self(m)
     }
 
+    /// Sets an element at the cell corresponding to (dealer, share) to `status`.
+    ///
+    /// # Panics
+    ///
+    /// - If the `share` index is greater than the number of shareholders
+    /// - If the `dealer` index is greater than the number of dealers
     pub fn set(&mut self, dealer: Idx, share: Idx, status: Status) {
         self.0[dealer as usize].set(share as usize, status.to_bool());
     }
 
-    /// Returns the column corresponding to the shareholder at `share`
+    /// Gets the element at the cell corresponding to (dealer, share)
+    ///
+    /// # Panics
+    ///
+    /// - If the `share` index is greater than the number of shareholders
+    /// - If the `dealer` index is greater than the number of dealers
+    pub fn get(&self, dealer: Idx, share: Idx) -> Status {
+        Status::from(
+            *self.0[dealer as usize]
+                .get(share as usize)
+                .expect("share index out of bounds"),
+        )
+    }
+
+    /// Returns the column corresponding to the shareholder at `share`.
+    ///
+    /// This will allocate a new vector, and as such changing the underlying
+    /// status matrix will _not_ affect the returned value.
+    ///
     /// # Panics
     ///
     /// If the `share` index is greater than the number of shareholders
@@ -171,6 +200,16 @@ mod tests {
     }
 
     #[test]
+    fn set() {
+        let mut matrix = StatusMatrix::new(3, 3, Status::Complaint);
+        let status = matrix.get(1, 1);
+        assert_eq!(status, Status::Success);
+        matrix.set(1, 1, Status::Complaint);
+        let status = matrix.get(1, 1);
+        assert_eq!(status, Status::Complaint);
+    }
+
+    #[test]
     fn get_row() {
         let matrix = StatusMatrix::new(3, 3, Status::Complaint);
         let row = matrix.row(1);
@@ -186,7 +225,6 @@ mod tests {
 
     #[test]
     fn get_column() {
-        // 2x3 array's has columns of length 2
         let matrix = StatusMatrix::new(2, 3, Status::Complaint);
         let col = matrix.column(2);
         assert_eq!(col, bitvec![0, 0]);
