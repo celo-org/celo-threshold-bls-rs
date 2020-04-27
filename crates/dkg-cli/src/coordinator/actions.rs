@@ -1,7 +1,10 @@
 use super::opts::{CombineOpts, SetupOpts};
 use crate::CLIResult;
-use dkg_core::node::NodeError;
-use dkg_core::primitives::{Group, Node};
+
+use dkg_core::{
+    node::NodeError,
+    primitives::group::{Group, Node},
+};
 use threshold_bls::{group::Curve, sig::Scheme, Index};
 
 use glob::glob;
