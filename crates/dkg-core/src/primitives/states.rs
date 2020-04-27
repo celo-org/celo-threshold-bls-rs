@@ -13,7 +13,7 @@ use threshold_bls::{
     DistPublic, Share,
 };
 
-use super::{DKGError, DKGResult, ShareError, ShareErrorType};
+use super::{DKGError, DKGResult, ShareError};
 
 // TODO
 // - check VSS-forgery article
@@ -126,7 +126,10 @@ where
         Ok(DKG { info })
     }
 
-    pub fn encrypt_shares<R: RngCore>(self, rng: &mut R) -> (DKGWaitingShare<C>, BundledShares<C>) {
+    pub fn encrypt_shares<R: RngCore>(
+        self,
+        rng: &mut R,
+    ) -> DKGResult<(DKGWaitingShare<C>, BundledShares<C>)> {
         let shares = self
             .info
             .group
@@ -137,18 +140,18 @@ where
                 let sec = self.info.secret.eval(n.id() as Idx);
 
                 // serialize the evaluation
-                let buff = bincode::serialize(&sec.value).expect("serialization should not fail");
+                let buff = bincode::serialize(&sec.value)?;
 
                 // encrypt it
                 let cipher = ecies::encrypt::<C, _>(n.key(), &buff, rng);
 
                 // save the share
-                EncryptedShare {
+                Ok(EncryptedShare {
                     share_idx: n.id(),
                     secret: cipher,
-                }
+                })
             })
-            .collect();
+            .collect::<Result<Vec<_>, DKGError>>()?;
 
         let bundle = BundledShares {
             dealer_idx: self.info.index,
@@ -157,7 +160,7 @@ where
         };
         let dw = DKGWaitingShare { info: self.info };
 
-        (dw, bundle)
+        Ok((dw, bundle))
     }
 }
 
@@ -358,23 +361,22 @@ where
         dealer: Idx,
         public: &PublicPoly<C>,
         share: &EncryptedShare<C>,
-    ) -> Result<C::Scalar, ShareError> {
+    ) -> Result<C::Scalar, DKGError> {
+        // report (d) error
         let thr = self.info.thr();
         if public.degree() + 1 != thr {
-            // report (d) error
-            return Err(ShareError::from(
-                dealer,
-                ShareErrorType::InvalidPublicPolynomial(public.degree(), thr),
-            ));
+            return Err(ShareError::InvalidPublicPolynomial(dealer, public.degree(), thr).into());
         }
-        let buff = ecies::decrypt::<C>(&self.info.private_key, &share.secret)
-            .map_err(|err| ShareError::from(dealer, ShareErrorType::InvalidCiphertext(err)))?;
 
-        let share: C::Scalar =
-            bincode::deserialize(&buff).expect("scalar should not fail when unmarshaling");
+        let buff = ecies::decrypt::<C>(&self.info.private_key, &share.secret)
+            .map_err(|err| ShareError::InvalidCiphertext(dealer, err))?;
+
+        let share: C::Scalar = bincode::deserialize(&buff)?;
+
         if !share_correct::<C>(self.info.index, &share, public) {
-            return Err(ShareError::from(dealer, ShareErrorType::InvalidShare));
+            return Err(ShareError::InvalidShare(dealer).into());
         }
+
         Ok(share)
     }
 }

@@ -15,7 +15,7 @@ use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use thiserror::Error;
 use threshold_bls::group::Curve;
 
-#[derive(Debug, Error, PartialEq)]
+#[derive(Debug, Error)]
 pub enum NodeError {
     /// Node could not publish to the board
     #[error("Could not publish to board")]
@@ -77,7 +77,7 @@ where
     type Next = Phase1<C>;
 
     fn run(self, board: &mut B, rng: &mut R) -> NodeResult<Self::Next> {
-        let (next, shares) = self.inner.encrypt_shares(rng);
+        let (next, shares) = self.inner.encrypt_shares(rng)?;
 
         board
             .publish_shares(shares)
@@ -152,7 +152,7 @@ mod tests {
     // helper to simulate a phase0 where a participant does not publish their
     // shares to the board
     fn bad_phase0<C: Curve, R: RngCore>(phase0: Phase0<C>, rng: &mut R) -> Phase1<C> {
-        let (next, _) = phase0.inner.encrypt_shares(rng);
+        let (next, _) = phase0.inner.encrypt_shares(rng).unwrap();
         Phase1 { inner: next }
     }
 
@@ -274,18 +274,34 @@ mod tests {
         let errs = phase1s
             .into_iter()
             .map(|phase1| phase1.run(&mut board, &shares).unwrap_err())
+            .map(|err| match err {
+                NodeError::DKGError(err) => err,
+                _ => panic!("should get dkg error"),
+            })
             .collect::<Vec<_>>();
 
         // bad contributors who try to contribute in P2 without contributing in P1
         // will get `honest`
         for err in &errs[..bad] {
-            assert_eq!(err, &DKGError::NotEnoughValidShares(honest, t).into());
+            match err {
+                DKGError::NotEnoughValidShares(got, required) => {
+                    assert_eq!(*got, honest);
+                    assert_eq!(*required, t);
+                }
+                _ => panic!("should not get here"),
+            };
         }
 
         // the honest participants should have received `honest - 1` shares
         // (which were not enough)
         for err in &errs[bad..] {
-            assert_eq!(err, &DKGError::NotEnoughValidShares(honest - 1, t).into());
+            match err {
+                DKGError::NotEnoughValidShares(got, required) => {
+                    assert_eq!(*got, honest - 1);
+                    assert_eq!(*required, t);
+                }
+                _ => panic!("should not get here"),
+            };
         }
     }
 
