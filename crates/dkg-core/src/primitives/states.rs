@@ -492,7 +492,7 @@ where
                 info: self.info,
                 dist_share: self.dist_share,
                 dist_pub: self.dist_pub,
-                statuses: self.statuses,
+                statuses: RefCell::new(self.statuses),
                 publics: self.publics,
             };
 
@@ -537,6 +537,8 @@ where
     }
 }
 
+use std::cell::RefCell;
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(bound = "C::Scalar: DeserializeOwned")]
 pub struct DKGWaitingJustification<C: Curve> {
@@ -546,7 +548,7 @@ pub struct DKGWaitingJustification<C: Curve> {
     dist_share: C::Scalar,
     dist_pub: PublicPoly<C>,
     // guaranteed to be of the right size (n)
-    statuses: StatusMatrix,
+    statuses: RefCell<StatusMatrix>,
     publics: HashMap<Idx, PublicPoly<C>>,
 }
 
@@ -564,47 +566,52 @@ where
         self,
         justifs: &[BundledJustification<C>],
     ) -> Result<DKGOutput<C>, DKGError> {
-        use Status::Success;
-        // avoid a mutable ref needed, ok for small miner size..
-        let mut statuses = self.statuses.clone();
+        let n = self.info.n();
         let mut add_share = C::Scalar::zero();
         let mut add_public = PublicPoly::<C>::zero();
-        for bundle in justifs
+        justifs
             .iter()
-            .filter(|b| b.dealer_idx < self.info.n() as Idx)
+            .filter(|b| b.dealer_idx < n as Idx)
             .filter(|b| b.dealer_idx != self.info.index)
-            .filter(|b| self.publics.contains_key(&b.dealer_idx))
-        {
-            // guaranteed unwrap from previous filter
-            let public = self.publics.get(&bundle.dealer_idx).unwrap();
-            for j in bundle.justifications.iter() {
-                if !share_correct::<C>(j.share_idx, &j.share, public) {
-                    continue;
-                }
-                // justification is valid, we mark it off from our matrix
-                statuses.set(bundle.dealer_idx, j.share_idx, Success);
-                // if it is for us, then add it to our final share and public poly
-                if j.share_idx == self.info.index {
-                    add_share.add(&j.share);
-                    add_public.add(&bundle.public);
-                }
-            }
-        }
+            // get only the bundles for which we have a public polynomial for
+            .filter_map(|b| self.publics.get(&b.dealer_idx).map(|public| (b, public)))
+            .for_each(|(bundle, public)| {
+                bundle.justifications.iter().for_each(|justification| {
+                    if !share_correct::<C>(justification.share_idx, &justification.share, public) {
+                        return;
+                    }
 
-        let n = self.info.n();
+                    // justification is valid, we mark it off from our matrix
+                    self.statuses.borrow_mut().set(
+                        bundle.dealer_idx,
+                        justification.share_idx,
+                        Status::Success,
+                    );
+
+                    // if it is for us, then add it to our final share and public poly
+                    if justification.share_idx == self.info.index {
+                        add_share.add(&justification.share);
+                        add_public.add(&bundle.public);
+                    }
+                })
+            });
+
         // QUAL is the set of all entries in the matrix where all bits are set
+        let statuses = self.statuses.borrow();
         let qual_indices = (0..n).fold(Vec::new(), |mut acc, dealer| {
             if statuses.all_true(dealer as Idx) {
                 acc.push(dealer);
             }
             acc
         });
+
         let thr = self.info.group.threshold;
         if qual_indices.len() < thr {
             // too many unanswered justifications, DKG abort !
             return Err(DKGError::NotEnoughJustifications(qual_indices.len(), thr));
         }
 
+        // create a group out of the qualifying nodes
         let qual_nodes = self
             .info
             .group
@@ -621,6 +628,7 @@ where
             index: self.info.index,
             private: add_share,
         };
+
         Ok(DKGOutput {
             qual: group,
             public: add_public,
