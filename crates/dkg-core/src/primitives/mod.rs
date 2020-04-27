@@ -1,5 +1,6 @@
 pub mod group;
 pub mod states;
+/// 2D binary array utilities for tracking successful (or not) participation in the DKG
 pub mod status;
 
 use std::fmt;
