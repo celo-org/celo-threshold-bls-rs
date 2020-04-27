@@ -47,14 +47,14 @@ impl Status {
 /// ```rust
 /// use dkg_core::primitives::status::{Status, StatusMatrix};
 ///
-/// // iniitializes the matrix (diagonal elements are always set to Status::Success)
+/// // initializes the matrix (diagonal elements are always set to Status::Success)
 /// let mut matrix = StatusMatrix::new(3, 5, Status::Complaint);
 ///
 /// // get the matrix's first row
-/// let row = matrix.row(1);
+/// let row = matrix.get_for_dealer(1);
 ///
 /// // get the matrix's first column
-/// let column = matrix.row(1);
+/// let column = matrix.get_for_dealer(1);
 ///
 /// // set a value in the matrix
 /// matrix.set(1, 2, Status::Complaint);
@@ -152,8 +152,7 @@ impl StatusMatrix {
     /// # Panics
     ///
     /// If the `share` index is greater than the number of shareholders
-    pub fn column(&self, share: Idx) -> BitVec {
-        // each column has `rows.length` elements
+    pub fn get_for_share(&self, share: Idx) -> BitVec {
         let mut col = bitvec![0; self.0.len()];
 
         for (dealer_idx, shares) in self.0.iter().enumerate() {
@@ -170,17 +169,17 @@ impl StatusMatrix {
     ///
     /// # Panics
     ///
-    /// If the `dealer` index is greater than the number of rows
+    /// If the `dealer` index is greater than the number of dealers
     pub fn all_true(&self, dealer: Idx) -> bool {
-        self.row(dealer).all()
+        self.get_for_dealer(dealer).all()
     }
 
-    /// Returns the row corresponding to `dealer`
+    /// Returns the row corresponding to the dealer at `dealer`
     ///
     /// # Panics
     ///
-    /// If the `dealer` index is greater than the number of rows
-    pub fn row(&self, dealer: Idx) -> &BitVec {
+    /// If the `dealer` index is greater than the number of dealers
+    pub fn get_for_dealer(&self, dealer: Idx) -> &BitVec {
         self.0
             .get(dealer as usize)
             .expect("dealer index out of bounds")
@@ -194,8 +193,8 @@ mod tests {
     #[test]
     fn diagonal_success() {
         let matrix = StatusMatrix::new(10, 10, Status::Complaint);
-        for (i, row) in matrix.into_iter().enumerate() {
-            assert_eq!(row.get(i).unwrap(), &true);
+        for (i, get_for_dealer) in matrix.into_iter().enumerate() {
+            assert_eq!(get_for_dealer.get(i).unwrap(), &true);
         }
     }
 
@@ -210,23 +209,23 @@ mod tests {
     }
 
     #[test]
-    fn get_row() {
+    fn get_for_dealer() {
         let matrix = StatusMatrix::new(3, 3, Status::Complaint);
-        let row = matrix.row(1);
-        assert_eq!(row, &bitvec![0, 1, 0]);
+        let get_for_dealer = matrix.get_for_dealer(1);
+        assert_eq!(get_for_dealer, &bitvec![0, 1, 0]);
     }
 
     #[test]
     #[should_panic(expected = "dealer index out of bounds")]
     fn dealer_out_of_bounds() {
         let matrix = StatusMatrix::new(3, 5, Status::Complaint);
-        matrix.row(3);
+        matrix.get_for_dealer(3);
     }
 
     #[test]
-    fn get_column() {
+    fn get_for_share() {
         let matrix = StatusMatrix::new(2, 3, Status::Complaint);
-        let col = matrix.column(2);
+        let col = matrix.get_for_share(2);
         assert_eq!(col, bitvec![0, 0]);
     }
 
@@ -234,7 +233,7 @@ mod tests {
     #[should_panic(expected = "share index out of bounds")]
     fn share_out_of_bounds() {
         let matrix = StatusMatrix::new(3, 5, Status::Complaint);
-        matrix.column(5);
+        matrix.get_for_share(5);
     }
 
     #[test]

@@ -321,7 +321,7 @@ where
         }
 
         let responses = statuses
-            .column(my_idx)
+            .get_for_share(my_idx)
             .into_iter()
             .enumerate()
             .map(|(i, b)| Response {
@@ -462,7 +462,7 @@ where
             let my_idx = self.info.index;
             let bundled_justifications = if !statuses.all_true(my_idx) {
                 let justifications = statuses
-                    .row(my_idx)
+                    .get_for_dealer(my_idx)
                     .iter()
                     .enumerate()
                     .filter_map(|(i, success)| {
