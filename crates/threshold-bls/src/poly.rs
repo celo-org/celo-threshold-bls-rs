@@ -374,7 +374,7 @@ pub mod tests {
 
         for i in 0..larger.len() {
             if i < smaller.len() {
-                let mut coeff_sum = p1.0[i].clone();
+                let mut coeff_sum = p1.0[i];
                 coeff_sum.add(&p2.0[i]);
                 assert_eq!(res.0[i], coeff_sum);
             } else {
@@ -397,7 +397,7 @@ pub mod tests {
 
         let p1 = Poly::<Sc>::zero();
         let p2 = Poly::<Sc>::new(3);
-        let mut res = p1.clone();
+        let mut res = p1;
         res.add(&p2);
         assert_eq!(res, p2);
     }
@@ -406,13 +406,13 @@ pub mod tests {
     fn mul_by_zero() {
         let p1 = Poly::<Sc>::new(3);
         let p2 = Poly::<Sc>::zero();
-        let mut res = p1.clone();
+        let mut res = p1;
         res.mul(&p2);
         assert_eq!(res, Poly::<Sc>::zero());
 
         let p1 = Poly::<Sc>::zero();
         let p2 = Poly::<Sc>::new(3);
-        let mut res = p1.clone();
+        let mut res = p1;
         res.mul(&p2);
         assert_eq!(res, Poly::<Sc>::zero());
     }
@@ -495,12 +495,11 @@ pub mod tests {
 
         // Naively calculate \sum c_i * x^i
         let coeffs = p1.0;
-        let mut sum = coeffs[0].clone();
-        for i in 1..=d {
+        let mut sum = coeffs[0];
+        for (i, coeff) in coeffs.into_iter().enumerate().take(d + 1).skip(1) {
             let xi = pow(x, i);
-            let mut var = coeffs[i];
+            let mut var = coeff;
             var.mul(&xi);
-
             sum.add(&var);
         }
 
