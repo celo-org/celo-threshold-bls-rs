@@ -6,7 +6,7 @@ use rand_core::{RngCore, SeedableRng};
 
 use threshold_bls::{
     poly::{Idx as Index, Poly},
-    sig::{Blinder, Scheme, Share, SignatureScheme, ThresholdScheme, ThresholdSchemeExt, Token},
+    sig::{Blinder, Scheme, Share, SignatureScheme, SignatureSchemeExt, ThresholdScheme, ThresholdSchemeExt, Token},
 };
 
 use crate::*;
@@ -82,6 +82,27 @@ pub fn verify(public_key_buf: &[u8], message: &[u8], signature: &[u8]) -> Result
         .map_err(|err| JsValue::from_str(&format!("signature verification failed: {}", err)))
 }
 
+
+#[wasm_bindgen(js_name = verifyBlindSignature)]
+/// Verifies the signature after it has been unblinded without hashing. Users will call this on the
+/// threshold signature against the full public key
+///
+/// * public_key: The public key used to sign the message
+/// * message: The message which was signed
+/// * signature: The signature which was produced on the message
+///
+/// # Throws
+///
+/// - If verification fails
+pub fn verify_blind_signature(public_key_buf: &[u8], message: &[u8], signature: &[u8]) -> Result<()> {
+    let public_key: PublicKey = bincode::deserialize(&public_key_buf)
+        .map_err(|err| JsValue::from_str(&format!("could not deserialize public key {}", err)))?;
+
+    // checks the signature on the message hash
+    SigScheme::verify_without_hashing(&public_key, &message, &signature)
+        .map_err(|err| JsValue::from_str(&format!("signature verification failed: {}", err)))
+}
+
 ///////////////////////////////////////////////////////////////////////////
 // Service -> Library
 ///////////////////////////////////////////////////////////////////////////
@@ -97,6 +118,20 @@ pub fn sign(private_key_buf: &[u8], message: &[u8]) -> Result<Vec<u8>> {
         .map_err(|err| JsValue::from_str(&format!("could not deserialize private key {}", err)))?;
 
     SigScheme::sign(&private_key, &message)
+        .map_err(|err| JsValue::from_str(&format!("could not sign message: {}", err)))
+}
+
+#[wasm_bindgen(js_name = signBlindedMessage)]
+/// Signs the message with the provided private key without hashing and returns the signature
+///
+/// # Throws
+///
+/// - If signing fails
+pub fn sign_blinded_message(private_key_buf: &[u8], message: &[u8]) -> Result<Vec<u8>> {
+    let private_key: PrivateKey = bincode::deserialize(&private_key_buf)
+        .map_err(|err| JsValue::from_str(&format!("could not deserialize private key {}", err)))?;
+
+    SigScheme::sign_without_hashing(&private_key, &message)
         .map_err(|err| JsValue::from_str(&format!("could not sign message: {}", err)))
 }
 

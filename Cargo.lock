@@ -1425,6 +1425,7 @@ version = "0.1.0"
 dependencies = [
  "bincode",
  "bls-crypto",
+ "cfg-if",
  "rand_chacha 0.2.2",
  "rand_core 0.5.1",
  "serde",
