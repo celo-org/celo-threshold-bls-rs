@@ -63,6 +63,16 @@ impl<C: Element> Poly<C> {
     pub fn zero() -> Self {
         Self::from(vec![C::zero()])
     }
+
+    /// Performs polynomial addition in place
+    pub fn add(&mut self, other: &Self) {
+        // if we have a smaller degree we should pad with zeros
+        if self.0.len() < other.0.len() {
+            self.0.resize(other.0.len(), C::zero())
+        }
+
+        self.0.iter_mut().zip(&other.0).for_each(|(a, b)| a.add(&b))
+    }
 }
 
 #[derive(Debug, Error)]
@@ -93,16 +103,6 @@ where
             value: res,
             index: i,
         }
-    }
-
-    /// Adds the two polynomial togethers.
-    pub fn add(&mut self, other: &Self) {
-        // if we have a smaller degree we should pad with zeros
-        if self.0.len() < other.0.len() {
-            self.0.resize(other.0.len(), C::zero())
-        }
-
-        self.0.iter_mut().zip(&other.0).for_each(|(a, b)| a.add(&b))
     }
 
     pub fn recover(t: usize, mut shares: Vec<Eval<C>>) -> Result<C, PolyError> {
