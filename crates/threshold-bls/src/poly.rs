@@ -90,6 +90,7 @@ where
     C: Element,
     C::RHS: Scalar<RHS = C::RHS>,
 {
+    /// Evaluates the polynomial at the specified value.
     pub fn eval(&self, i: Idx) -> Eval<C> {
         let mut xi = C::RHS::new();
         // +1 because we must never evaluate the polynomial at its first point
@@ -215,12 +216,14 @@ impl<C: Element> From<Poly<C>> for Vec<C> {
     }
 }
 
-/// Adds the multiplication operation for polynomial scalars. Note this is a
-/// simple implementation that is suitable for secret sharing schemes, but may
-/// be inneficient for other purposes: the degree of the returned polynomial
-/// is always the greatest possible, regardless of the actual coefficients
-/// given.
 impl<X: Scalar<RHS = X>> Poly<X> {
+    /// Performs the multiplication operation.
+    ///
+    /// Note this is a simple implementation that is suitable for secret sharing schemes,
+    /// but may be inneficient for other purposes: the degree of the returned polynomial
+    /// is always the greatest possible, regardless of the actual coefficients
+    /// given.
+    // TODO: Implement divide and conquer algorithm
     fn mul(&mut self, other: &Self) {
         if self.is_zero() || other.is_zero() {
             *self = Self::zero();
@@ -458,17 +461,35 @@ pub mod tests {
         }
     }
 
-    #[test]
-    fn eval() {
-        let d = 4;
+    #[quickcheck]
+    fn eval(d: usize, idx: Idx) {
+        let mut x = Sc::new();
+        x.set_int(idx as u64 + 1);
+
         let p1 = Poly::<Sc>::new(d);
-        // f(1) = SUM( coeffs)
-        let f1 = p1.eval(0);
-        let exp = p1.0.iter().fold(Sc::new(), |mut acc, coeff| {
-            acc.add(coeff);
-            acc
-        });
-        assert_eq!(exp, f1.value);
+        let evaluation = p1.eval(idx).value;
+
+        // Naively calculate \sum c_i * x^i
+        let coeffs = p1.0;
+        let mut sum = coeffs[0].clone();
+        for i in 1..=d {
+            let xi = pow(x, i);
+            let mut var = coeffs[i];
+            var.mul(&xi);
+
+            sum.add(&var);
+        }
+
+        assert_eq!(sum, evaluation);
+
+        // helper to calculate the power of x
+        fn pow(base: Sc, pow: usize) -> Sc {
+            let mut res = Sc::one();
+            for _ in 0..pow {
+                res.mul(&base)
+            }
+            res
+        }
     }
 
     #[test]
