@@ -64,6 +64,10 @@ impl<C: Element> Poly<C> {
         Self::from(vec![C::zero()])
     }
 
+    fn is_zero(&self) -> bool {
+        self.0.is_empty() || self.0.iter().all(|coeff| coeff == &C::zero())
+    }
+
     /// Performs polynomial addition in place
     pub fn add(&mut self, other: &Self) {
         // if we have a smaller degree we should pad with zeros
@@ -218,15 +222,19 @@ impl<C: Element> From<Poly<C>> for Vec<C> {
 /// given.
 impl<X: Scalar<RHS = X>> Poly<X> {
     fn mul(&mut self, other: &Self) {
-        let d1 = self.degree();
-        let d2 = other.degree();
-        let d3 = d1 + d2;
+        if self.is_zero() || other.is_zero() {
+            *self = Self::zero();
+            return;
+        }
+
+        let d3 = self.degree() + other.degree();
 
         // need to initializes every coeff to zero first
         let mut coeffs = (0..=d3).map(|_| X::zero()).collect::<Vec<X>>();
 
         for (i, c1) in self.0.iter().enumerate() {
             for (j, c2) in other.0.iter().enumerate() {
+                // c_ij += c1 * c2
                 let mut tmp = X::one();
                 tmp.mul(c1);
                 tmp.mul(c2);
@@ -359,6 +367,36 @@ pub mod tests {
     }
 
     #[test]
+    fn add_zero() {
+        let p1 = Poly::<Sc>::new(3);
+        let p2 = Poly::<Sc>::zero();
+        let mut res = p1.clone();
+        res.add(&p2);
+        assert_eq!(res, p1);
+
+        let p1 = Poly::<Sc>::zero();
+        let p2 = Poly::<Sc>::new(3);
+        let mut res = p1.clone();
+        res.add(&p2);
+        assert_eq!(res, p2);
+    }
+
+    #[test]
+    fn mul_by_zero() {
+        let p1 = Poly::<Sc>::new(3);
+        let p2 = Poly::<Sc>::zero();
+        let mut res = p1.clone();
+        res.mul(&p2);
+        assert_eq!(res, Poly::<Sc>::zero());
+
+        let p1 = Poly::<Sc>::zero();
+        let p2 = Poly::<Sc>::new(3);
+        let mut res = p1.clone();
+        res.mul(&p2);
+        assert_eq!(res, Poly::<Sc>::zero());
+    }
+
+    #[test]
     fn full_interpolation() {
         let degree = 4;
         let threshold = degree + 1;
@@ -366,11 +404,15 @@ pub mod tests {
         let shares = (0..threshold)
             .map(|i| poly.eval(i as Idx))
             .collect::<Vec<Eval<Sc>>>();
+
         let smaller_shares: Vec<_> = shares.iter().take(threshold - 1).cloned().collect();
+
         let recovered = Poly::<Sc>::full_recover(threshold as usize, shares).unwrap();
+
         let expected = poly.0[0];
         let computed = recovered.0[0];
         assert_eq!(expected, computed);
+
         Poly::<Sc>::recover(threshold as usize, smaller_shares).unwrap_err();
     }
 
@@ -441,12 +483,15 @@ pub mod tests {
         // f2 = d0 + d1 * x
         //                   l1            l2                l3
         // f3 = f1 * f2 = (c0*d0) + (c0*d1 + d0*c1) * x + (c1*d1) * x^2
+
         // f3(1) = l1 + l2 + l3
         let mut l1 = p1.0[0];
         l1.mul(&p2.0[0]);
+
         // c0 * d1
         let mut l21 = p1.0[0];
         l21.mul(&p2.0[1]);
+
         // d0 * c1
         let mut l22 = p1.0[1];
         l22.mul(&p2.0[0]);
@@ -455,6 +500,7 @@ pub mod tests {
         l2.add(&l22);
         let mut l3 = p1.0[1];
         l3.mul(&p2.0[1]);
+
         let mut total = Sc::new();
         total.add(&l1);
         total.add(&l2);
@@ -465,25 +511,31 @@ pub mod tests {
 
     #[test]
     fn new_neg_constant() {
-        let rd = Sc::rand(&mut thread_rng());
-        let p = Poly::<Sc>::new_neg_constant(rd);
-        let res = p.eval(0);
-        let mut exp = rd;
-        // -rd
-        exp.negate();
-        // 1 - rd
-        exp.add(&Sc::one());
-        assert_eq!(exp, res.value);
+        let mut constant = Sc::rand(&mut thread_rng());
+        let p = Poly::<Sc>::new_neg_constant(constant);
+
+        constant.negate();
+        let v = vec![constant, Sc::one()];
+        let res = Poly::from(v);
+
+        assert_eq!(res, p);
     }
 
     #[test]
     fn commit() {
         let secret = Poly::<Sc>::new(5);
-        let commitment = secret.commit::<G1>();
-        let first = secret.0[0];
-        let mut p = G1::one();
-        p.mul(&first);
-        // TODO make polynomial implement equal
-        assert_eq!(commitment.0[0], p);
+
+        let coeffs = secret.0.clone();
+        let commitment = coeffs
+            .iter()
+            .map(|coeff| {
+                let mut p = G1::one();
+                p.mul(coeff);
+                p
+            })
+            .collect::<Vec<_>>();
+        let commitment = Poly::from(commitment);
+
+        assert_eq!(commitment, secret.commit::<G1>());
     }
 }
