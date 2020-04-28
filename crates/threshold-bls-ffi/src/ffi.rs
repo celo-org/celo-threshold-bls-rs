@@ -4,12 +4,11 @@ use rand_core::{RngCore, SeedableRng};
 
 use serde::{de::DeserializeOwned, Serialize};
 use threshold_bls::{
-    poly::Poly,
+    poly::{Idx as Index, Poly},
     sig::{
-        blind::Token, Blinder, Scheme, SignatureScheme, SignatureSchemeExt, ThresholdScheme,
-        ThresholdSchemeExt,
+        Blinder, Scheme, Share, SignatureScheme, SignatureSchemeExt, ThresholdScheme,
+        ThresholdSchemeExt, Token,
     },
-    Index, Share,
 };
 
 use bls_crypto::ffi::Buffer;

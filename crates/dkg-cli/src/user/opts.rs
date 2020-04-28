@@ -1,7 +1,7 @@
 use gumdrop::Options;
 use std::default::Default;
 
-use threshold_bls::Index;
+use threshold_bls::poly::Idx;
 
 #[derive(Debug, Options, Clone)]
 pub struct DKGOpts {
@@ -35,8 +35,8 @@ pub enum Command {
 pub struct NewOpts {
     help: bool,
 
-    #[options(help = "your aggreed upon index in the DKG")]
-    pub index: Index,
+    #[options(help = "your agreed upon index in the DKG")]
+    pub index: Idx,
 
     #[options(help = "path to the file where the private key will be written")]
     pub private_key: String,

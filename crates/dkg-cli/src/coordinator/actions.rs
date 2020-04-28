@@ -5,7 +5,7 @@ use dkg_core::{
     node::NodeError,
     primitives::group::{Group, Node},
 };
-use threshold_bls::{group::Curve, sig::Scheme, Index};
+use threshold_bls::{group::Curve, poly::Idx, sig::Scheme};
 
 use glob::glob;
 use serde::{de::DeserializeOwned, Serialize};
@@ -23,7 +23,7 @@ where
     for path in glob(&opts.nodes).expect("Failed to read glob pattern") {
         let file = File::open(path?)?;
 
-        let index: Index = bincode::deserialize_from(&file)?;
+        let index: Idx = bincode::deserialize_from(&file)?;
         let pubkey: S::Public = bincode::deserialize_from(&file)?;
 
         let node = Node::<C>::new(index, pubkey);
