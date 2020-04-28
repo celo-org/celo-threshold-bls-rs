@@ -1,17 +1,16 @@
-use crate::group::{CurveFrom as CF, Element, PairingCurve as PC, Point, Scalar as Sc};
+use crate::group::{self, Element, PairingCurve as PC, Point, Scalar as Sc};
 use ff::{Field, PrimeField};
 use groupy::CurveProjective;
 use paired::bls12_381::{Bls12, Fq12, Fr, FrRepr, G1 as PG1, G2 as PG2};
 use paired::Engine;
 use rand_core::RngCore;
 use std::result::Result;
+use thiserror::Error;
 
 pub type Scalar = Fr;
 pub type G1 = PG1;
 pub type G2 = PG2;
 pub type GT = Fq12;
-
-use thiserror::Error;
 
 #[derive(Debug, Error)]
 pub enum BellmanError {
@@ -64,6 +63,7 @@ impl Sc for Scalar {
         self.sub_assign(other);
     }
 }
+
 /// G1 points can be multiplied by Fr elements
 impl Element for G1 {
     type RHS = Scalar;
@@ -155,18 +155,24 @@ impl Element for GT {
     }
 }
 
-// TODO rename to G1
-pub type Curve = CF<Scalar, G1>;
-pub type G2Curve = CF<Scalar, G2>;
+/// alias to BLS12-381's G1 group
+pub type Curve = group::G1Curve<PairingCurve>;
+
+/// alias to BLS12-381's G2 Group
+pub type G2Curve = group::G2Curve<PairingCurve>;
 
 #[derive(Clone, Debug)]
 pub struct PairingCurve;
 
 impl PC for PairingCurve {
     type Scalar = Scalar;
+
     type G1 = G1;
+
     type G2 = G2;
+
     type GT = Fq12;
+
     fn pair(a: &Self::G1, b: &Self::G2) -> Self::GT {
         Bls12::pairing(a.into_affine(), b.into_affine())
     }
@@ -175,7 +181,6 @@ impl PC for PairingCurve {
 #[cfg(test)]
 mod tests {
     use super::*;
-    //use rand::{SeedableRng, XorShiftRng};
     use rand::prelude::*;
 
     use serde::{de::DeserializeOwned, Serialize};

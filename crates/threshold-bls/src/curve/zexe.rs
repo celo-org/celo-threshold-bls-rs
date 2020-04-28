@@ -1,4 +1,4 @@
-use crate::group::{Curve, CurveFrom, Element, PairingCurve as PC, Point, Scalar as Sc};
+use crate::group::{self, Element, PairingCurve as PC, Point, Scalar as Sc};
 use algebra::{
     bls12_377 as zexe,
     curves::{AffineCurve, PairingEngine, ProjectiveCurve},
@@ -232,24 +232,18 @@ impl fmt::Display for GT {
     }
 }
 
-pub type G1Curve = CurveFrom<Scalar, G1>;
-//pub type G2Curve = CurveFrom<Scalar, G2>;
-#[derive(Clone, Debug)]
-pub struct G2Curve {}
-
-impl Curve for G2Curve {
-    type Scalar = Scalar;
-    type Point = G2;
-}
+pub type G1Curve = group::G1Curve<PairingCurve>;
+pub type G2Curve = group::G2Curve<PairingCurve>;
 
 #[derive(Clone, Debug)]
-pub struct PairingCurve {}
+pub struct PairingCurve;
 
 impl PC for PairingCurve {
     type Scalar = Scalar;
     type G1 = G1;
     type G2 = G2;
     type GT = GT;
+
     fn pair(a: &Self::G1, b: &Self::G2) -> Self::GT {
         GT(<zexe::Bls12_377 as PairingEngine>::pairing(a.0, b.0))
     }
