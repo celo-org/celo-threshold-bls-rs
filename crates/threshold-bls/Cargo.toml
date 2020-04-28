@@ -36,3 +36,5 @@ bls12_381 = ["paired", "groupy", "ff"]
 
 [dev-dependencies]
 static_assertions = "1.1.0"
+quickcheck = "0.9.2"
+quickcheck_macros = "0.9.1"

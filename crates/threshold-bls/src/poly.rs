@@ -25,13 +25,20 @@ impl<A: fmt::Display> fmt::Display for Eval<A> {
 /// element for the coefficients. The coefficients must be able to multiply
 /// the type of the variable, which is always a scalar.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct Poly<C> {
-    c: Vec<C>,
-}
+pub struct Poly<C>(Vec<C>);
 
 impl<C> Poly<C> {
+    /// Returns the degree of the polynomial
     pub fn degree(&self) -> usize {
-        self.c.len() - 1
+        // e.g. c_3 * x^3 + c_2 * x^2 + c_1 * x + c_0
+        // ^ 4 coefficients correspond to a 3rd degree poly
+        self.0.len() - 1
+    }
+
+    #[cfg(test)]
+    /// Returns the number of coefficients
+    fn len(&self) -> usize {
+        self.0.len()
     }
 }
 
@@ -75,11 +82,13 @@ where
         // otherwise it reveals the "secret" value !
         // TODO: maybe move that a layer above, to not mix ss scheme with poly.
         xi.set_int((i + 1).into());
-        let mut res = C::new();
-        (0..=self.degree()).rev().for_each(|i| {
-            res.mul(&xi);
-            res.add(&self.c[i]);
+
+        let res = self.0.iter().rev().fold(C::zero(), |mut sum, coeff| {
+            sum.mul(&xi);
+            sum.add(coeff);
+            sum
         });
+
         Eval {
             value: res,
             index: i,
@@ -88,18 +97,12 @@ where
 
     /// Adds the two polynomial togethers.
     pub fn add(&mut self, other: &Self) {
-        if self.degree() < other.degree() {
-            // self has lesser degree so we extend it
-            let diff = other.degree() - self.degree();
-            self.c.extend(vec![C::new(); diff]);
-            let zipped = self.c.iter_mut().zip(other.c.iter());
-            zipped.for_each(|(a, b)| a.add(&b));
-            return;
+        // if we have a smaller degree we should pad with zeros
+        if self.0.len() < other.0.len() {
+            self.0.resize(other.0.len(), C::zero())
         }
-        // if self.degree() >= other.degree() the coefficients
-        // outside the zip dont need to change
-        let zipped = self.c.iter_mut().zip(other.c.iter());
-        zipped.for_each(|(a, b)| a.add(&b));
+
+        self.0.iter_mut().zip(&other.0).for_each(|(a, b)| a.add(&b))
     }
 
     pub fn recover(t: usize, mut shares: Vec<Eval<C>>) -> Result<C, PolyError> {
@@ -175,7 +178,7 @@ where
             // one element of the linear combination
             // y_j * L_y
             let lin = basis
-                .c
+                .0
                 .iter()
                 .map(|c| {
                     // TODO avoid re-allocation for <X,X> case by just mul()
@@ -204,7 +207,7 @@ where
             }
 
             // basis * (x - sc)
-            let minus_sc = Self::new_neg_constant(&sc.0);
+            let minus_sc = Poly::<C::RHS>::new_neg_constant(&sc.0);
             basis.mul(&minus_sc);
             // den = xi - sc
             let mut den = C::RHS::zero();
@@ -220,31 +223,20 @@ where
         basis
     }
 
-    /// Returns a scalar polynomial f(x) = x - c
-    fn new_neg_constant(x: &C::RHS) -> Poly<C::RHS> {
-        let mut neg = x.clone();
-        neg.negate();
-        Poly::from(vec![neg, C::RHS::one()])
-    }
-
-    pub fn free_coeff(&self) -> C {
-        self.c[0].clone()
-    }
-
-    pub fn public_key(&self) -> C {
-        self.free_coeff()
+    pub fn public_key(&self) -> &C {
+        &self.0[0]
     }
 }
 
 impl<C: Element> From<Vec<C>> for Poly<C> {
     fn from(c: Vec<C>) -> Self {
-        Self { c }
+        Self(c)
     }
 }
 
 impl<C: Element> From<Poly<C>> for Vec<C> {
     fn from(poly: Poly<C>) -> Self {
-        poly.c
+        poly.0
     }
 }
 
@@ -262,8 +254,8 @@ impl<X: Scalar<RHS = X>> Poly<X> {
         // need to initializes every coeff to zero first
         let mut coeffs = (0..=d3).map(|_| X::zero()).collect::<Vec<X>>();
 
-        for (i, c1) in self.c.iter().enumerate() {
-            for (j, c2) in other.c.iter().enumerate() {
+        for (i, c1) in self.0.iter().enumerate() {
+            for (j, c2) in other.0.iter().enumerate() {
                 let mut tmp = X::one();
                 tmp.mul(c1);
                 tmp.mul(c2);
@@ -271,12 +263,20 @@ impl<X: Scalar<RHS = X>> Poly<X> {
             }
         }
 
-        self.c = coeffs;
+        self.0 = coeffs;
     }
+
+    /// Returns a scalar polynomial f(x) = x - c
+    fn new_neg_constant(x: &X) -> Poly<X> {
+        let mut neg = x.clone();
+        neg.negate();
+        Poly::from(vec![neg, X::one()])
+    }
+
 
     pub fn commit<P: Point<RHS = X>>(&self) -> Poly<P> {
         let commits = self
-            .c
+            .0
             .iter()
             .map(|c| {
                 let mut commitment = P::one();
@@ -291,7 +291,7 @@ impl<X: Scalar<RHS = X>> Poly<X> {
 impl<C: fmt::Display> fmt::Display for Poly<C> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         let s = self
-            .c
+            .0
             .iter()
             .enumerate()
             .map(|(i, c)| format!("{}: {}", i, c))
@@ -309,22 +309,45 @@ pub mod tests {
     use crate::curve::bls12381::G1;
     use rand::prelude::*;
 
+    use quickcheck_macros::quickcheck;
+
+
     #[test]
-    fn new_poly() {
+    fn poly_degree() {
         let s = 5;
         let p = Poly::<Sc>::new(s);
-        assert_eq!(p.c.len(), s + 1);
+        assert_eq!(p.0.len(), s + 1);
+        assert_eq!(p.degree(), s);
     }
 
-    #[test]
-    fn serialization() {
-        let p = Poly::<Sc>::new(10);
+    // the coefficients up to the smaller polynomial's degree should be summed up,
+    // after that they should be the same as the largest one
+    #[quickcheck]
+    fn addition(deg1: usize, deg2: usize) {
+        let p1 = Poly::<Sc>::new(deg1);
+        let p2 = Poly::<Sc>::new(deg2);
+        let mut res = p1.clone();
+        res.add(&p2);
 
-        let ser = bincode::serialize(&p).unwrap();
+        let (larger, smaller) = if p1.degree() > p2.degree() {
+            (&p1, &p2)
+        } else {
+            (&p2, &p1)
+        };
 
-        let de: Poly<Sc> = bincode::deserialize(&ser).unwrap();
+        for i in 0..larger.len() {
+            if i < smaller.len() {
+                let mut coeff_sum = p1.0[i].clone();
+                coeff_sum.add(&p2.0[i]);
+                assert_eq!(res.0[i], coeff_sum);
+            } else {
+                // (this code branch will never get hit when p1.length = p2.length)
+                assert_eq!(res.0[i], larger.0[i]);
+            }
+        }
 
-        assert_eq!(p, de);
+        // the result has the largest degree
+        assert_eq!(res.degree(), larger.degree());
     }
 
     #[test]
@@ -337,8 +360,8 @@ pub mod tests {
             .collect::<Vec<Eval<Sc>>>();
         let smaller_shares: Vec<_> = shares.iter().take(threshold - 1).cloned().collect();
         let recovered = Poly::<Sc>::full_recover(threshold as usize, shares).unwrap();
-        let expected = poly.c[0];
-        let computed = recovered.c[0];
+        let expected = poly.0[0];
+        let computed = recovered.0[0];
         assert_eq!(expected, computed);
         Poly::<Sc>::recover(threshold as usize, smaller_shares).unwrap_err();
     }
@@ -353,7 +376,7 @@ pub mod tests {
             .collect::<Vec<Eval<Sc>>>();
         let smaller_shares: Vec<_> = shares.iter().take(threshold - 1).cloned().collect();
         let recovered = Poly::<Sc>::recover(threshold as usize, shares).unwrap();
-        let expected = poly.c[0];
+        let expected = poly.0[0];
         assert_eq!(expected, recovered);
         Poly::<Sc>::recover(threshold as usize, smaller_shares).unwrap_err();
     }
@@ -391,24 +414,13 @@ pub mod tests {
         let p1 = Poly::<Sc>::new(d);
         // f(1) = SUM( coeffs)
         let f1 = p1.eval(0);
-        let exp = p1.c.iter().fold(Sc::new(), |mut acc, coeff| {
+        let exp = p1.0.iter().fold(Sc::new(), |mut acc, coeff| {
             acc.add(coeff);
             acc
         });
         assert_eq!(exp, f1.value);
     }
 
-    #[test]
-    fn add() {
-        let d = 4;
-        let p1 = Poly::<Sc>::new(d);
-        let p2 = Poly::<Sc>::new(d);
-        let mut p3 = p1.clone();
-        p3.add(&p2);
-        let mut exp = p1.c[0];
-        exp.add(&p2.c[0]);
-        assert_eq!(exp, p3.c[0]);
-    }
     #[test]
     fn mul() {
         let d = 1;
@@ -422,19 +434,19 @@ pub mod tests {
         //                   l1            l2                l3
         // f3 = f1 * f2 = (c0*d0) + (c0*d1 + d0*c1) * x + (c1*d1) * x^2
         // f3(1) = l1 + l2 + l3
-        let mut l1 = p1.c[0];
-        l1.mul(&p2.c[0]);
+        let mut l1 = p1.0[0];
+        l1.mul(&p2.0[0]);
         // c0 * d1
-        let mut l21 = p1.c[0];
-        l21.mul(&p2.c[1]);
+        let mut l21 = p1.0[0];
+        l21.mul(&p2.0[1]);
         // d0 * c1
-        let mut l22 = p1.c[1];
-        l22.mul(&p2.c[0]);
+        let mut l22 = p1.0[1];
+        l22.mul(&p2.0[0]);
         let mut l2 = Sc::new();
         l2.add(&l21);
         l2.add(&l22);
-        let mut l3 = p1.c[1];
-        l3.mul(&p2.c[1]);
+        let mut l3 = p1.0[1];
+        l3.mul(&p2.0[1]);
         let mut total = Sc::new();
         total.add(&l1);
         total.add(&l2);
@@ -460,10 +472,10 @@ pub mod tests {
     fn commit() {
         let secret = Poly::<Sc>::new(5);
         let commitment = secret.commit::<G1>();
-        let first = secret.c[0];
+        let first = secret.0[0];
         let mut p = G1::one();
         p.mul(&first);
         // TODO make polynomial implement equal
-        assert_eq!(commitment.c[0], p);
+        assert_eq!(commitment.0[0], p);
     }
 }

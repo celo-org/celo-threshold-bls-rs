@@ -179,7 +179,7 @@ mod tests {
         );
         let final_sig = T::aggregate(threshold, &partials).unwrap();
 
-        T::verify(&public.free_coeff(), &msg, &final_sig).unwrap();
+        T::verify(public.public_key(), &msg, &final_sig).unwrap();
     }
 
     #[test]
