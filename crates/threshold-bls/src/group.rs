@@ -9,7 +9,9 @@ use std::marker::PhantomData;
 /// which is also equipped with a multiplication transformation.
 /// Two implementations are for Scalar which forms a ring so RHS is the same
 /// and Point which can be multiplied by a scalar of its prime field.
-pub trait Element: Clone + Display + Debug + Eq + Serialize + for<'a> Deserialize<'a> {
+pub trait Element:
+    Clone + Display + Debug + Eq + Serialize + for<'a> Deserialize<'a> + PartialEq
+{
     /// The right-hand-side argument for multiplication
     type RHS;
 

@@ -592,8 +592,8 @@ pub unsafe extern "C" fn threshold_keygen(n: usize, t: usize, seed: &[u8], keys:
             private: e.value,
         })
         .collect();
-    let polynomial = private.commit();
-    let threshold_public_key = polynomial.public_key();
+    let polynomial: Poly<PublicKey> = private.commit();
+    let threshold_public_key = polynomial.public_key().clone();
 
     let keys_local = Keys {
         shares,

@@ -712,7 +712,7 @@ pub mod tests {
                 index: o.share.index,
             })
             .collect();
-        Poly::<C::Scalar, C::Scalar>::full_recover(thr, evals)
+        Poly::<C::Scalar>::full_recover(thr, evals)
     }
 
     #[test]

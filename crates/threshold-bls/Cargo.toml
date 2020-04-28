@@ -36,3 +36,4 @@ bls12_381 = ["paired", "groupy", "ff"]
 
 [dev-dependencies]
 static_assertions = "1.1.0"
+proptest = "0.9.6"
