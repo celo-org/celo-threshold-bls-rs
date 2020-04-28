@@ -51,6 +51,10 @@ impl<C: Element> Poly<C> {
         Self::from(coeffs)
     }
 
+    /// Returns a new polynomial of the given degree where each coefficients is
+    /// sampled at random.
+    ///
+    /// In the context of secret sharing, the threshold is the degree + 1.
     pub fn new(degree: usize) -> Self {
         use rand::prelude::*;
         Self::new_from(degree, &mut thread_rng())
@@ -83,6 +87,8 @@ impl<C: Element> Poly<C> {
 pub enum PolyError {
     #[error("Invalid recovery: only has {0}/{1} shares")]
     InvalidRecovery(usize, usize),
+    #[error("Could not invert scalar")]
+    NoInverse,
 }
 
 impl<C> Poly<C>
@@ -110,28 +116,14 @@ where
         }
     }
 
-    pub fn recover(t: usize, mut shares: Vec<Eval<C>>) -> Result<C, PolyError> {
-        if shares.len() < t {
-            return Err(PolyError::InvalidRecovery(shares.len(), t));
-        }
-
-        // first sort the shares as it can happens recovery happens for
-        // non-correlated shares so the subset chosen becomes important
-        shares.sort_by(|a, b| a.index.cmp(&b.index));
-
-        // convert the indexes of the shares into scalars
-        let xs = shares.iter().take(t).fold(HashMap::new(), |mut m, sh| {
-            let mut xi = C::RHS::new();
-            xi.set_int((sh.index + 1).into());
-            m.insert(sh.index, (xi, &sh.value));
-            m
-        });
-
-        assert!(xs.len() == t);
-        let mut acc = C::zero();
+    /// Given at least `t` polynomial evaluations, it will recover the polynomial's
+    /// constant term
+    pub fn recover(t: usize, shares: Vec<Eval<C>>) -> Result<C, PolyError> {
+        let xs = Self::share_map(t, shares)?;
 
         // iterate over all indices and for each multiply the lagrange basis
         // with the value of the share
+        let mut acc = C::zero();
         for (i, xi) in &xs {
             let mut yi = xi.1.clone();
             let mut num = C::RHS::one();
@@ -151,7 +143,7 @@ where
                 den.mul(&tmp);
             }
 
-            let inv = den.inverse().unwrap();
+            let inv = den.inverse().ok_or(PolyError::NoInverse)?;
             num.mul(&inv);
             yi.mul(&num);
             acc.add(&yi);
@@ -160,45 +152,71 @@ where
         Ok(acc)
     }
 
-    pub fn full_recover(t: usize, mut shares: Vec<Eval<C>>) -> Result<Self, PolyError> {
+    /// Given at least `t` polynomial evaluations, it will recover the entire polynomial
+    pub fn full_recover(t: usize, shares: Vec<Eval<C>>) -> Result<Self, PolyError> {
+        let xs = Self::share_map(t, shares)?;
+
+        // iterate over all indices and for each multiply the lagrange basis
+        // with the value of the share
+        let res = xs
+            .iter()
+            // get the share and the lagrange basis
+            .map(|(i, share)| (share, Poly::<C::RHS>::lagrange_basis(*i, &xs)))
+            // get the linear combination poly
+            .map(|(share, basis)| {
+                // calculate the linear combination coefficients
+                let linear_coeffs = basis
+                    .0
+                    .into_iter()
+                    .map(move |c| {
+                        // y_j * L_y
+                        // TODO: Can we avoid allocating here?
+                        let mut s = share.1.clone();
+                        s.mul(&c);
+                        s
+                    })
+                    .collect::<Vec<_>>();
+
+                Self::from(linear_coeffs)
+            })
+            .fold(Self::zero(), |mut acc, poly| {
+                acc.add(&poly);
+                acc
+            });
+
+        Ok(res)
+    }
+
+    fn share_map(
+        t: usize,
+        mut shares: Vec<Eval<C>>,
+    ) -> Result<HashMap<Idx, (C::RHS, C)>, PolyError> {
         if shares.len() < t {
             return Err(PolyError::InvalidRecovery(shares.len(), t));
         }
+
         // first sort the shares as it can happens recovery happens for
         // non-correlated shares so the subset chosen becomes important
         shares.sort_by(|a, b| a.index.cmp(&b.index));
 
         // convert the indexes of the shares into scalars
-        let xs = shares.iter().take(t).fold(HashMap::new(), |mut m, sh| {
-            let mut xi = C::RHS::new();
-            xi.set_int((sh.index + 1).into());
-            m.insert(sh.index, (xi, &sh.value));
-            m
-        });
-        assert!(xs.len() == t);
-        let mut acc: Self = vec![C::new()].into();
-        // iterate over all indices and for each multiply the lagrange basis
-        // with the value of the share
-        for (i, sh) in &xs {
-            let basis = Poly::<C::RHS>::lagrange_basis(*i, &xs);
-            // one element of the linear combination
-            // y_j * L_y
-            let lin = basis
-                .0
-                .iter()
-                .map(|c| {
-                    // TODO avoid re-allocation for <X,X> case by just mul()
-                    let mut s = sh.1.clone();
-                    s.mul(c);
-                    s
-                })
-                .collect::<Vec<C>>();
-            let linear_poly: Poly<C> = Self::from(lin);
-            acc.add(&linear_poly);
-        }
-        Ok(acc)
+        let xs = shares
+            .into_iter()
+            .take(t)
+            .fold(HashMap::new(), |mut m, sh| {
+                let mut xi = C::RHS::new();
+                xi.set_int((sh.index + 1).into());
+                m.insert(sh.index, (xi, sh.value));
+                m
+            });
+
+        debug_assert_eq!(xs.len(), t);
+
+        Ok(xs)
     }
 
+    /// Returns the constant term of the polynomial which can be interpreted as
+    /// the threshold public key
     pub fn public_key(&self) -> &C {
         &self.0[0]
     }
@@ -255,7 +273,7 @@ impl<X: Scalar<RHS = X>> Poly<X> {
     }
 
     /// Computes the lagrange basis polynomial of index i
-    fn lagrange_basis<E: Element<RHS = X>>(i: Idx, xs: &HashMap<Idx, (X, &E)>) -> Poly<X> {
+    fn lagrange_basis<E: Element<RHS = X>>(i: Idx, xs: &HashMap<Idx, (X, E)>) -> Poly<X> {
         let mut basis = Poly::<X>::from(vec![X::one()]);
 
         // accumulator of the denominator values
@@ -399,39 +417,45 @@ pub mod tests {
         assert_eq!(res, Poly::<Sc>::zero());
     }
 
-    #[test]
-    fn full_interpolation() {
-        let degree = 4;
-        let threshold = degree + 1;
+    #[quickcheck]
+    fn interpolation(degree: usize, num_evals: usize) {
         let poly = Poly::<Sc>::new(degree);
-        let shares = (0..threshold)
-            .map(|i| poly.eval(i as Idx))
-            .collect::<Vec<Eval<Sc>>>();
-
-        let smaller_shares: Vec<_> = shares.iter().take(threshold - 1).cloned().collect();
-
-        let recovered = Poly::<Sc>::full_recover(threshold as usize, shares).unwrap();
-
         let expected = poly.0[0];
-        let computed = recovered.0[0];
-        assert_eq!(expected, computed);
 
-        Poly::<Sc>::recover(threshold as usize, smaller_shares).unwrap_err();
+        let shares = (0..num_evals)
+            .map(|i| poly.eval(i as Idx))
+            .collect::<Vec<_>>();
+
+        let recovered_poly = Poly::<Sc>::full_recover(num_evals, shares.clone()).unwrap();
+        let computed = recovered_poly.0[0];
+
+        let recovered_constant = Poly::<Sc>::recover(num_evals, shares).unwrap();
+
+        // if we had enough evaluations we must get the correct term
+        if num_evals > degree {
+            assert_eq!(expected, computed);
+            assert_eq!(expected, recovered_constant);
+        } else {
+            // if there were not enough evaluations, then the call will still succeed
+            // but will return a mismatching recovered term
+            assert_ne!(expected, computed);
+            assert_ne!(expected, recovered_constant);
+        }
     }
 
     #[test]
-    fn interpolation() {
+    fn interpolation_insufficient_shares() {
         let degree = 4;
         let threshold = degree + 1;
         let poly = Poly::<Sc>::new(degree);
-        let shares = (0..threshold)
+
+        // insufficient shares gathered
+        let shares = (0..threshold - 1)
             .map(|i| poly.eval(i as Idx))
-            .collect::<Vec<Eval<Sc>>>();
-        let smaller_shares: Vec<_> = shares.iter().take(threshold - 1).cloned().collect();
-        let recovered = Poly::<Sc>::recover(threshold as usize, shares).unwrap();
-        let expected = poly.0[0];
-        assert_eq!(expected, recovered);
-        Poly::<Sc>::recover(threshold as usize, smaller_shares).unwrap_err();
+            .collect::<Vec<_>>();
+
+        Poly::<Sc>::recover(threshold, shares.clone()).unwrap_err();
+        Poly::<Sc>::full_recover(threshold, shares).unwrap_err();
     }
 
     #[test]
