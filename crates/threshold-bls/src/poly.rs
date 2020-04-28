@@ -151,6 +151,7 @@ where
             yi.mul(&num);
             acc.add(&yi);
         }
+
         Ok(acc)
     }
 
@@ -174,7 +175,7 @@ where
         // iterate over all indices and for each multiply the lagrange basis
         // with the value of the share
         for (i, sh) in &xs {
-            let basis = Self::lagrange_basis(*i, &xs);
+            let basis = Poly::<C::RHS>::lagrange_basis(*i, &xs);
             // one element of the linear combination
             // y_j * L_y
             let lin = basis
@@ -191,36 +192,6 @@ where
             acc.add(&linear_poly);
         }
         Ok(acc)
-    }
-
-    /// Computes the lagrange basis polynomial of index i
-    // TODO: move that to poly<X,X>
-    fn lagrange_basis(i: Idx, xs: &HashMap<Idx, (C::RHS, &C)>) -> Poly<C::RHS> {
-        let mut basis = Poly::<C::RHS>::from(vec![C::RHS::one()]);
-        // accumulator of the denominator values
-        let mut acc = C::RHS::one();
-        // TODO remove that cloning due to borrowing issue with the map
-        let xi = xs.get(&i).unwrap().clone().0;
-        for (idx, sc) in xs.iter() {
-            if *idx == i {
-                continue;
-            }
-
-            // basis * (x - sc)
-            let minus_sc = Poly::<C::RHS>::new_neg_constant(&sc.0);
-            basis.mul(&minus_sc);
-            // den = xi - sc
-            let mut den = C::RHS::zero();
-            den.add(&xi);
-            den.sub(&sc.0);
-            // den = 1 / den
-            den = den.inverse().unwrap();
-            // acc = acc * den
-            acc.mul(&den);
-        }
-        // multiply all coefficients by the denominator
-        basis.mul(&Poly::from(vec![acc]));
-        basis
     }
 
     pub fn public_key(&self) -> &C {
@@ -266,14 +237,51 @@ impl<X: Scalar<RHS = X>> Poly<X> {
         self.0 = coeffs;
     }
 
-    /// Returns a scalar polynomial f(x) = x - c
-    fn new_neg_constant(x: &X) -> Poly<X> {
-        let mut neg = x.clone();
-        neg.negate();
-        Poly::from(vec![neg, X::one()])
+    /// Returns the scalar polynomial f(x) = x - c
+    fn new_neg_constant(mut c: X) -> Poly<X> {
+        c.negate();
+        Poly::from(vec![c, X::one()])
     }
 
+    /// Computes the lagrange basis polynomial of index i
+    fn lagrange_basis<E: Element<RHS = X>>(i: Idx, xs: &HashMap<Idx, (X, &E)>) -> Poly<X> {
+        let mut basis = Poly::<X>::from(vec![X::one()]);
 
+        // accumulator of the denominator values
+        let mut acc = X::one();
+
+        // TODO remove that cloning due to borrowing issue with the map
+        let xi = xs.get(&i).unwrap().clone().0;
+        for (idx, sc) in xs.iter() {
+            if *idx == i {
+                continue;
+            }
+
+            // basis * (x - sc)
+            let minus_sc = Poly::<X>::new_neg_constant(sc.0.clone());
+            basis.mul(&minus_sc);
+
+            // den = xi - sc
+            let mut den = X::zero();
+            den.add(&xi);
+            den.sub(&sc.0);
+
+            // den = 1 / den
+            den = den.inverse().unwrap();
+
+            // acc = acc * den
+            acc.mul(&den);
+        }
+
+        // multiply all coefficients by the denominator
+        basis.mul(&Poly::from(vec![acc]));
+        basis
+    }
+
+    /// Commits the scalar polynomial to the group and returns a polynomial over the group
+    ///
+    /// This is done by multiplying each coefficient of the polynomial with the
+    /// group's generator.
     pub fn commit<P: Point<RHS = X>>(&self) -> Poly<P> {
         let commits = self
             .0
@@ -284,6 +292,7 @@ impl<X: Scalar<RHS = X>> Poly<X> {
                 commitment
             })
             .collect::<Vec<P>>();
+
         Poly::<P>::from(commits)
     }
 }
@@ -310,7 +319,6 @@ pub mod tests {
     use rand::prelude::*;
 
     use quickcheck_macros::quickcheck;
-
 
     #[test]
     fn poly_degree() {
@@ -458,7 +466,7 @@ pub mod tests {
     #[test]
     fn new_neg_constant() {
         let rd = Sc::rand(&mut thread_rng());
-        let p = Poly::<Sc>::new_neg_constant(&rd);
+        let p = Poly::<Sc>::new_neg_constant(rd);
         let res = p.eval(0);
         let mut exp = rd;
         // -rd
