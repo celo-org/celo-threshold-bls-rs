@@ -41,14 +41,10 @@ pub trait Scheme: Debug {
 ///  # #[cfg(feature = "bls12_381")]
 ///  # {
 ///  use rand::prelude::*;
-///  use threshold_bls::{sig::{SignatureScheme, Scheme}, group::{Element, Point}};
+///  use threshold_bls::{sig::{SignatureScheme, Scheme, G2Scheme}, group::{Element, Point}};
 ///  use threshold_bls::curve::bls12381::PairingCurve as PC;
-///  // import BLS signatures with public keys over G2
-///  use threshold_bls::sig::bls::G2Scheme;
-///
 ///
 ///  let msg = vec![1,9,6,9];
-///
 ///  let (private,public) = G2Scheme::<PC>::keypair(&mut thread_rng());
 ///  let signature = G2Scheme::<PC>::sign(&private,&msg).unwrap();
 ///  match G2Scheme::<PC>::verify(&public, &msg, &signature) {

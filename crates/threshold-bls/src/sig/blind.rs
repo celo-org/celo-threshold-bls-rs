@@ -4,7 +4,7 @@ use rand::RngCore;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
-/// BlindError are a type of errors that blind signature scheme can return.
+/// BlindError are errors which may be returned from a blind signature scheme
 #[derive(Debug, Error)]
 pub enum BlinderError {
     /// InvalidToken is thrown out when the token used to unblind can not be
@@ -12,6 +12,8 @@ pub enum BlinderError {
     /// returned by the blind operation.
     #[error("invalid token")]
     InvalidToken,
+
+    /// Raised when (de)serialization fails
     #[error("could not deserialize: {0}")]
     BincodeError(#[from] bincode::Error),
 }
@@ -31,6 +33,7 @@ impl<S: Scalar> Default for Token<S> {
 }
 
 impl<S: Scalar> Token<S> {
+    /// Instantiates a token with the `Zero` element of the underlying scalar
     pub fn new() -> Self {
         Self(S::new())
     }

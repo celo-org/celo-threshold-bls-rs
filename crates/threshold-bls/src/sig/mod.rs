@@ -1,7 +1,15 @@
-pub mod blind;
-pub mod bls;
+mod blind;
+pub use blind::{BlinderError, Token};
+
+mod bls;
+pub use bls::{BLSError, G1Scheme, G2Scheme};
+
+mod tblind;
+pub use tblind::BlindThresholdError;
+
+mod tbls;
+pub use tbls::{Share, ThresholdError};
+
 #[allow(clippy::module_inception)]
 mod sig;
-pub mod tblind;
-pub mod tbls;
 pub use sig::*;

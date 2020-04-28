@@ -1,22 +1,38 @@
-//! Implements Threshold Signatures for all Signature Scheme implementers
-use crate::poly::{Eval, Poly, PolyError};
+//! Threshold Signatures implementation for any type which implements
+//! [`SignatureScheme`](../trait.SignatureScheme.html)
+use crate::poly::{Eval, Idx, Poly, PolyError};
 use crate::sig::{
     Partial, SignatureScheme, SignatureSchemeExt, ThresholdScheme, ThresholdSchemeExt,
 };
-use crate::Share;
+use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+/// A private share which is part of the threshold signing key
+pub struct Share<S> {
+    /// The share's index in the polynomial
+    pub index: Idx,
+    /// The scalar corresponding to the share's secret
+    pub private: S,
+}
+
+/// Errors associated with threshold signing, verification and aggregation.
 #[derive(Debug, Error)]
 pub enum ThresholdError<I: SignatureScheme> {
+    /// PolyError is raised when the public key could not be recovered
     #[error("could not recover public key: {0}")]
     PolyError(PolyError),
 
+    /// BincodeError is raised when there is an error in (de)serialization
     #[error(transparent)]
     BincodeError(#[from] bincode::Error),
 
+    /// SignatureError is raised when there is an error in threshold signing
     #[error("signing error {0}")]
     SignatureError(I::Error),
 
+    /// NotEnoughPartialSignatures is raised if the signatures provided for aggregation
+    /// were fewer than the threshold
     #[error("not enough partial signatures: {0}/{1}")]
     NotEnoughPartialSignatures(usize, usize),
 }
@@ -123,7 +139,6 @@ mod tests {
             bls::{G1Scheme, G2Scheme},
             Scheme,
         },
-        Index,
     };
 
     type ShareCreator<T> = fn(
@@ -137,7 +152,7 @@ mod tests {
     fn shares<T: ThresholdScheme>(n: usize, t: usize) -> (Vec<Share<T::Private>>, Poly<T::Public>) {
         let private = Poly::<T::Private>::new(t - 1);
         let shares = (0..n)
-            .map(|i| private.eval(i as Index))
+            .map(|i| private.eval(i as Idx))
             .map(|e| Share {
                 index: e.index,
                 private: e.value,
