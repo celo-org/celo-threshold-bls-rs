@@ -1,40 +1,27 @@
 use super::{default_threshold, minimum_threshold, DKGError, DKGResult};
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
-use std::fmt;
 use threshold_bls::{group::Curve, poly::Idx};
 
 /// Node is a participant in the DKG protocol. In a DKG protocol, each
 /// participant must be identified both by an index and a public key. At the end
 /// of the protocol, if sucessful, the index is used to verify the validity of
 /// the share this node holds.
-#[derive(Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Clone, Serialize, Deserialize, PartialEq, Debug)]
 pub struct Node<C: Curve>(Idx, C::Point);
 
-impl<C> Node<C>
-where
-    C: Curve,
-{
+impl<C: Curve> Node<C> {
     pub fn new(index: Idx, public: C::Point) -> Self {
         Self(index, public)
     }
 }
 
-impl<C> fmt::Debug for Node<C>
-where
-    C: Curve,
-{
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "Node{{{} -> {:?} }}", self.0, self.1)
-    }
-}
-
-impl<C> Node<C>
-where
-    C: Curve,
-{
+impl<C: Curve> Node<C> {
+    /// Returns the node's index
     pub fn id(&self) -> Idx {
         self.0
     }
+
+    /// Returns the node's public key
     pub fn key(&self) -> &C::Point {
         &self.1
     }
@@ -45,10 +32,12 @@ where
 /// new group that contains members that succesfully ran the protocol. When
 /// creating a new group using the `from()` or `from_list()`method, the module
 /// sets the threshold to the output of `default_threshold()`.
-#[derive(Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Clone, Serialize, Deserialize, PartialEq, Debug)]
 #[serde(bound = "C::Scalar: DeserializeOwned")]
 pub struct Group<C: Curve> {
+    /// The vector of nodes in the group
     pub nodes: Vec<Node<C>>,
+    /// The minimum number of nodes required to participate in the DKG for this group
     pub threshold: usize,
 }
 
@@ -96,22 +85,6 @@ where
     }
 }
 
-impl<C> fmt::Debug for Group<C>
-where
-    C: Curve,
-{
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self
-            .nodes
-            .iter()
-            .map(|n| write!(f, " {:?} ", n.0))
-            .collect::<fmt::Result>()
-        {
-            Ok(_) => Ok(()),
-            Err(e) => Err(e),
-        }
-    }
-}
 impl<C> From<Vec<C::Point>> for Group<C>
 where
     C: Curve,
@@ -128,6 +101,3 @@ where
         Self::new(nodes, thr).expect("threshold should be good here")
     }
 }
-
-#[cfg(test)]
-mod tests {}

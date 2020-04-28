@@ -15,7 +15,8 @@ use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use thiserror::Error;
 use threshold_bls::group::Curve;
 
-#[derive(Debug, Error, PartialEq)]
+#[derive(Debug, Error)]
+/// Error thrown while running the DKG or while publishing to the board
 pub enum NodeError {
     /// Node could not publish to the board
     #[error("Could not publish to board")]
@@ -28,7 +29,9 @@ pub enum NodeError {
 /// Phase2 can either be successful or require going to Phase 3.
 #[derive(Clone, Debug)]
 pub enum Phase2Result<C: Curve> {
+    /// The final DKG output
     Output(DKGOutput<C>),
+    /// Indicates that Phase 2 failed and that the protocol must proceed to Phase 3
     GoToPhase3(DKGWaitingJustification<C>),
 }
 
@@ -45,6 +48,9 @@ pub trait DKGPhase<C: Curve, B: BoardPublisher<C>, T> {
 }
 
 #[derive(Clone, Debug)]
+/// The initial phase of the DKG. In this phase, each participant imports their private
+/// key and the initial group which will participate in the DKG. Running this phase will
+/// encrypt the shares and then publish them to the board
 pub struct Phase0<C: Curve> {
     inner: DKG<C>,
 }
@@ -57,12 +63,17 @@ impl<C: Curve> Phase0<C> {
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
+/// Phase 1 of the DKG. This phase reads the shares generated from Phase 0 and if there were
+/// complaints, it generates responses which are published to the board.
 pub struct Phase1<C: Curve> {
     #[serde(bound = "C::Scalar: Serialize + DeserializeOwned")]
     inner: DKGWaitingShare<C>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
+/// Phase 2 of the DKG. This phase reads the responses generated from Phase 1, and if processing
+/// is successful outputs the result of the DKG. If processing returns an error, then any
+/// justifications get published to the board and it produces the necessary data for Phase 3.
 pub struct Phase2<C: Curve> {
     #[serde(bound = "C::Scalar: Serialize + DeserializeOwned")]
     inner: DKGWaitingResponse<C>,
@@ -77,7 +88,7 @@ where
     type Next = Phase1<C>;
 
     fn run(self, board: &mut B, rng: &mut R) -> NodeResult<Self::Next> {
-        let (next, shares) = self.inner.encrypt_shares(rng);
+        let (next, shares) = self.inner.encrypt_shares(rng)?;
 
         board
             .publish_shares(shares)
@@ -152,7 +163,7 @@ mod tests {
     // helper to simulate a phase0 where a participant does not publish their
     // shares to the board
     fn bad_phase0<C: Curve, R: RngCore>(phase0: Phase0<C>, rng: &mut R) -> Phase1<C> {
-        let (next, _) = phase0.inner.encrypt_shares(rng);
+        let (next, _) = phase0.inner.encrypt_shares(rng).unwrap();
         Phase1 { inner: next }
     }
 
@@ -274,18 +285,34 @@ mod tests {
         let errs = phase1s
             .into_iter()
             .map(|phase1| phase1.run(&mut board, &shares).unwrap_err())
+            .map(|err| match err {
+                NodeError::DKGError(err) => err,
+                _ => panic!("should get dkg error"),
+            })
             .collect::<Vec<_>>();
 
         // bad contributors who try to contribute in P2 without contributing in P1
         // will get `honest`
         for err in &errs[..bad] {
-            assert_eq!(err, &DKGError::NotEnoughValidShares(honest, t).into());
+            match err {
+                DKGError::NotEnoughValidShares(got, required) => {
+                    assert_eq!(*got, honest);
+                    assert_eq!(*required, t);
+                }
+                _ => panic!("should not get here"),
+            };
         }
 
         // the honest participants should have received `honest - 1` shares
         // (which were not enough)
         for err in &errs[bad..] {
-            assert_eq!(err, &DKGError::NotEnoughValidShares(honest - 1, t).into());
+            match err {
+                DKGError::NotEnoughValidShares(got, required) => {
+                    assert_eq!(*got, honest - 1);
+                    assert_eq!(*required, t);
+                }
+                _ => panic!("should not get here"),
+            };
         }
     }
 
