@@ -153,11 +153,8 @@ mod tests {
     use threshold_bls::{
         curve::bls12381::{self, PairingCurve as BLS12_381},
         curve::zexe::{self as bls12_377, PairingCurve as BLS12_377},
-        sig::{
-            bls::{G1Scheme, G2Scheme},
-            BlindThresholdScheme, Scheme,
-        },
-        Index,
+        poly::Idx,
+        sig::{BlindThresholdScheme, G1Scheme, G2Scheme, Scheme},
     };
 
     // helper to simulate a phase0 where a participant does not publish their
@@ -401,7 +398,7 @@ mod tests {
         let nodes = keypairs
             .iter()
             .enumerate()
-            .map(|(i, (_, public))| Node::<C>::new(i as Index, public.clone()))
+            .map(|(i, (_, public))| Node::<C>::new(i as Idx, public.clone()))
             .collect::<Vec<_>>();
 
         // This is setup phase during which publickeys and indexes must be exchanged

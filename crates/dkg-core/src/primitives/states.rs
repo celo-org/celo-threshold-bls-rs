@@ -11,7 +11,7 @@ use threshold_bls::{
     ecies::{self, EciesCipher},
     group::{Curve, Element},
     poly::{Idx, Poly, PrivatePoly, PublicPoly},
-    DistPublic, Share,
+    sig::Share,
 };
 
 use std::cell::RefCell;
@@ -431,7 +431,7 @@ pub struct DKGOutput<C: Curve> {
     /// The list of nodes that successfully ran the protocol until the end
     pub qual: Group<C>,
     /// The distributed public key
-    pub public: DistPublic<C>,
+    pub public: PublicPoly<C>,
     /// The private share which corresponds to the participant's index
     pub share: Share<C::Scalar>,
 }

@@ -5,9 +5,8 @@ use rand_chacha::ChaChaRng;
 use rand_core::{RngCore, SeedableRng};
 
 use threshold_bls::{
-    poly::Poly,
-    sig::{blind::Token, Blinder, Scheme, SignatureScheme, ThresholdScheme, ThresholdSchemeExt},
-    Index, Share,
+    poly::{Idx as Index, Poly},
+    sig::{Blinder, Scheme, Share, SignatureScheme, ThresholdScheme, ThresholdSchemeExt, Token},
 };
 
 use crate::*;

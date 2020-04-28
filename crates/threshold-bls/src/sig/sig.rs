@@ -1,6 +1,8 @@
-use crate::group::{Element, Point, Scalar};
-use crate::poly::Poly;
-use crate::Share;
+pub use super::tbls::Share; // import and re-export it for easier access
+use crate::{
+    group::{Element, Point, Scalar},
+    poly::Poly,
+};
 use rand_core::RngCore;
 use serde::{de::DeserializeOwned, Serialize};
 use std::{error::Error, fmt::Debug};
@@ -39,14 +41,10 @@ pub trait Scheme: Debug {
 ///  # #[cfg(feature = "bls12_381")]
 ///  # {
 ///  use rand::prelude::*;
-///  use threshold_bls::{sig::{SignatureScheme,Scheme}, Element, Point};
+///  use threshold_bls::{sig::{SignatureScheme, Scheme, G2Scheme}, group::{Element, Point}};
 ///  use threshold_bls::curve::bls12381::PairingCurve as PC;
-///  // import BLS signatures with public keys over G2
-///  use threshold_bls::sig::bls::G2Scheme;
-///
 ///
 ///  let msg = vec![1,9,6,9];
-///
 ///  let (private,public) = G2Scheme::<PC>::keypair(&mut thread_rng());
 ///  let signature = G2Scheme::<PC>::sign(&private,&msg).unwrap();
 ///  match G2Scheme::<PC>::verify(&public, &msg, &signature) {
@@ -57,16 +55,27 @@ pub trait Scheme: Debug {
 /// ```
 /// Note signature scheme handles the format of the signature itself.
 pub trait SignatureScheme: Scheme {
+    /// Error produced when signing a message
     type Error: Error;
 
+    /// Signs the message with the provided private key and returns a serialized signature
     fn sign(private: &Self::Private, msg: &[u8]) -> Result<Vec<u8>, Self::Error>;
 
+    /// Verifies that the signature on the provided message was produced by the public key
     fn verify(public: &Self::Public, msg: &[u8], sig: &[u8]) -> Result<(), Self::Error>;
 }
 
+/// Extension trait over `SignatureScheme` which provides signing & verification methods
+/// which do not hash the message.
 pub trait SignatureSchemeExt: SignatureScheme {
+    /// Signs the message with the provided private key and returns a serialized signature. This
+    /// method **will not** hash the message before signing it. It should be used for
+    /// blind-signature related functionalities. In other cases, prefer `Signature`
     fn sign_without_hashing(private: &Self::Private, msg: &[u8]) -> Result<Vec<u8>, Self::Error>;
 
+    /// Verifies that the signature on the provided message was produced by the public key.
+    /// This method **will not** h the message. It should be used when verifying blind signatures
+    /// by parties that do not have access to the blinding factor
     fn verify_without_hashing(
         public: &Self::Public,
         msg: &[u8],
@@ -78,11 +87,19 @@ pub trait SignatureSchemeExt: SignatureScheme {
 /// not to be used alone but in combination with a signature scheme or a
 /// threshold scheme.
 pub trait Blinder {
+    /// The blinding factor which will be used to unblind the message
     type Token: Serialize + DeserializeOwned;
+
+    /// Error during blinding or unblinding
     type Error: Error;
 
+    /// Blinds the provided message using randomness from the provided RNG and returns
+    /// the blinding factor and the blinded message.
     fn blind<R: RngCore>(msg: &[u8], rng: &mut R) -> (Self::Token, Vec<u8>);
-    fn unblind(t: &Self::Token, sig: &[u8]) -> Result<Vec<u8>, Self::Error>;
+
+    /// Given the blinding factor that was used to blind the provided message, it will
+    /// unblind it and return the cleartext message
+    fn unblind(t: &Self::Token, blinded_message: &[u8]) -> Result<Vec<u8>, Self::Error>;
 }
 
 /// BlindScheme is a signature scheme where the message can be blinded before
@@ -100,10 +117,13 @@ pub type Partial = Vec<u8>;
 /// The `dkg-core` module allows participants to create a distributed private/public key
 /// that can be used with implementations `ThresholdScheme`.
 pub trait ThresholdScheme: Scheme {
+    /// Error produced when partially signing, aggregating or verifying
     type Error: Error;
 
+    /// Partially signs a message with a share of the private key
     fn partial_sign(private: &Share<Self::Private>, msg: &[u8]) -> Result<Partial, Self::Error>;
 
+    /// Verifies a partial signature on a message against the public polynomial
     fn partial_verify(
         public: &Poly<Self::Public>,
         msg: &[u8],
@@ -115,15 +135,22 @@ pub trait ThresholdScheme: Scheme {
     /// aggregates them.
     fn aggregate(threshold: usize, partials: &[Partial]) -> Result<Vec<u8>, Self::Error>;
 
+    /// Verifies a threshold signature on a message against the public key which corresponds
+    /// to the public polynomial of the shares that produced the partial signatures
     fn verify(public: &Self::Public, msg: &[u8], sig: &[u8]) -> Result<(), Self::Error>;
 }
 
+/// Extension trait over `ThresholdScheme` which provides partial signing & verification methods
+/// which do not hash the message.
 pub trait ThresholdSchemeExt: ThresholdScheme {
+    /// Partially signs a message with a share of the private key **without hashing the message**
     fn partial_sign_without_hashing(
         private: &Share<Self::Private>,
         msg: &[u8],
     ) -> Result<Partial, Self::Error>;
 
+    /// Verifies a partial signature on a message against the public polynomial **without hashing
+    /// the message**
     fn partial_verify_without_hashing(
         public: &Poly<Self::Public>,
         msg: &[u8],
@@ -137,8 +164,8 @@ pub trait ThresholdSchemeExt: ThresholdScheme {
 pub trait BlindThresholdScheme: ThresholdSchemeExt + Blinder {
     type Error: Error;
 
-    /// unblind_partial takes a blinded partial signatures and removes the blind
-    /// component.
+    /// Given the blinding factor that was used to blind a message that was blind partially
+    /// signed, it will unblind it and return the cleartext signature
     fn unblind_partial(
         t: &Self::Token,
         partial: &[u8],

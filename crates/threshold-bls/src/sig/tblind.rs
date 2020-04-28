@@ -5,10 +5,13 @@ use thiserror::Error;
 
 #[derive(Debug, Error)]
 // TODO: Can we get rid of this static lifetime bound?
+/// Errors associated with partially unblinding a signature
 pub enum BlindThresholdError<E: 'static + std::error::Error> {
+    /// Raised when unblinding fails
     #[error(transparent)]
     BlinderError(E),
 
+    /// Raised when (de)serialization fails
     #[error(transparent)]
     BincodeError(#[from] bincode::Error),
 }
@@ -47,9 +50,11 @@ mod tests {
     use crate::curve::bls12381::PairingCurve as PCurve;
     #[cfg(feature = "bls12_377")]
     use crate::curve::zexe::PairingCurve as Zexe;
-    use crate::sig::bls::{G1Scheme, G2Scheme};
-    use crate::Index;
-    use crate::{poly::Poly, Share};
+    use crate::poly::{Idx, Poly};
+    use crate::sig::{
+        bls::{G1Scheme, G2Scheme},
+        tbls::Share,
+    };
     use rand::thread_rng;
 
     fn shares<B: BlindThresholdScheme>(
@@ -58,7 +63,7 @@ mod tests {
     ) -> (Vec<Share<B::Private>>, Poly<B::Public>) {
         let private = Poly::<B::Private>::new(t - 1);
         let shares = (0..n)
-            .map(|i| private.eval(i as Index))
+            .map(|i| private.eval(i as Idx))
             .map(|e| Share {
                 index: e.index,
                 private: e.value,
