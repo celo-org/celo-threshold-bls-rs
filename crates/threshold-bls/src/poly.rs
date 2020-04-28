@@ -347,44 +347,12 @@ pub mod tests {
     use crate::curve::bls12381::G1;
     use rand::prelude::*;
 
-    use quickcheck_macros::quickcheck;
-
     #[test]
     fn poly_degree() {
         let s = 5;
         let p = Poly::<Sc>::new(s);
         assert_eq!(p.0.len(), s + 1);
         assert_eq!(p.degree(), s);
-    }
-
-    // the coefficients up to the smaller polynomial's degree should be summed up,
-    // after that they should be the same as the largest one
-    #[quickcheck]
-    fn addition(deg1: usize, deg2: usize) {
-        let p1 = Poly::<Sc>::new(deg1);
-        let p2 = Poly::<Sc>::new(deg2);
-        let mut res = p1.clone();
-        res.add(&p2);
-
-        let (larger, smaller) = if p1.degree() > p2.degree() {
-            (&p1, &p2)
-        } else {
-            (&p2, &p1)
-        };
-
-        for i in 0..larger.len() {
-            if i < smaller.len() {
-                let mut coeff_sum = p1.0[i];
-                coeff_sum.add(&p2.0[i]);
-                assert_eq!(res.0[i], coeff_sum);
-            } else {
-                // (this code branch will never get hit when p1.length = p2.length)
-                assert_eq!(res.0[i], larger.0[i]);
-            }
-        }
-
-        // the result has the largest degree
-        assert_eq!(res.degree(), larger.degree());
     }
 
     #[test]
@@ -417,8 +385,44 @@ pub mod tests {
         assert_eq!(res, Poly::<Sc>::zero());
     }
 
-    #[quickcheck]
-    fn interpolation(degree: usize, num_evals: usize) {
+    use proptest::prelude::*;
+
+    proptest! {
+
+    // the coefficients up to the smaller polynomial's degree should be summed up,
+    // after that they should be the same as the largest one
+    #[test]
+    fn addition(deg1 in 0..100usize, deg2 in 0..100usize) {
+        dbg!(deg1, deg2);
+        let p1 = Poly::<Sc>::new(deg1);
+        let p2 = Poly::<Sc>::new(deg2);
+        let mut res = p1.clone();
+        res.add(&p2);
+
+        let (larger, smaller) = if p1.degree() > p2.degree() {
+            (&p1, &p2)
+        } else {
+            (&p2, &p1)
+        };
+
+        for i in 0..larger.len() {
+            if i < smaller.len() {
+                let mut coeff_sum = p1.0[i];
+                coeff_sum.add(&p2.0[i]);
+                assert_eq!(res.0[i], coeff_sum);
+            } else {
+                // (this code branch will never get hit when p1.length = p2.length)
+                assert_eq!(res.0[i], larger.0[i]);
+            }
+        }
+
+        // the result has the largest degree
+        assert_eq!(res.degree(), larger.degree());
+    }
+
+
+    #[test]
+    fn interpolation(degree in 0..100usize, num_evals in 0..100usize) {
         let poly = Poly::<Sc>::new(degree);
         let expected = poly.0[0];
 
@@ -441,6 +445,38 @@ pub mod tests {
             assert_ne!(expected, computed);
             assert_ne!(expected, recovered_constant);
         }
+    }
+
+    #[test]
+    fn eval(d in 0..100usize, idx in 0..(100 as Idx)) {
+        let mut x = Sc::new();
+        x.set_int(idx as u64 + 1);
+
+        let p1 = Poly::<Sc>::new(d);
+        let evaluation = p1.eval(idx).value;
+
+        // Naively calculate \sum c_i * x^i
+        let coeffs = p1.0;
+        let mut sum = coeffs[0];
+        for (i, coeff) in coeffs.into_iter().enumerate().take(d + 1).skip(1) {
+            let xi = pow(x, i);
+            let mut var = coeff;
+            var.mul(&xi);
+            sum.add(&var);
+        }
+
+        assert_eq!(sum, evaluation);
+
+        // helper to calculate the power of x
+        fn pow(base: Sc, pow: usize) -> Sc {
+            let mut res = Sc::one();
+            for _ in 0..pow {
+                res.mul(&base)
+            }
+            res
+        }
+    }
+
     }
 
     #[test]
@@ -482,36 +518,6 @@ pub mod tests {
         match now.elapsed() {
             Ok(e) => println!("full_recover: time elapsed {:?}", e),
             Err(e) => panic!("{}", e),
-        }
-    }
-
-    #[quickcheck]
-    fn eval(d: usize, idx: Idx) {
-        let mut x = Sc::new();
-        x.set_int(idx as u64 + 1);
-
-        let p1 = Poly::<Sc>::new(d);
-        let evaluation = p1.eval(idx).value;
-
-        // Naively calculate \sum c_i * x^i
-        let coeffs = p1.0;
-        let mut sum = coeffs[0];
-        for (i, coeff) in coeffs.into_iter().enumerate().take(d + 1).skip(1) {
-            let xi = pow(x, i);
-            let mut var = coeff;
-            var.mul(&xi);
-            sum.add(&var);
-        }
-
-        assert_eq!(sum, evaluation);
-
-        // helper to calculate the power of x
-        fn pow(base: Sc, pow: usize) -> Sc {
-            let mut res = Sc::one();
-            for _ in 0..pow {
-                res.mul(&base)
-            }
-            res
         }
     }
 
