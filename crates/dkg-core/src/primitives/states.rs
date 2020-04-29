@@ -156,6 +156,8 @@ impl<C: Curve> DKG<C> {
             })
             .collect::<Result<Vec<_>, DKGError>>()?;
 
+        // Return the encrypted shares along with a commitment
+        // to their secret polynomial.
         let bundle = BundledShares {
             dealer_idx: self.info.index,
             shares,
@@ -223,6 +225,7 @@ impl<C: Curve> DKGWaitingShare<C> {
 
         let (newdkg, bundle) = self.process_shares_get_all(bundles)?;
 
+        // complaints are unsuccessful responses
         let complaints = bundle
             .responses
             .into_iter()
@@ -289,30 +292,27 @@ impl<C: Curve> DKGWaitingShare<C> {
             statuses.set(dealer_idx as Idx, my_idx, Status::Complaint);
         }
 
-        let not_from_me = bundles.iter().filter(|b| b.dealer_idx != my_idx);
-        let mut ok = vec![];
-        // iterate, extract and decode all shares for us
-        for bundle in not_from_me {
-            if bundle.dealer_idx >= n as Idx {
-                // (a) reporting
-                continue;
-            }
-
-            // NOTE: this implementation stops at the first one.
-            // TODO: should it return an error if multiple shares are for my idx?
-            //       -> probably yes
-            if let Some(my_share) = bundle.shares.iter().find(|s| s.share_idx == my_idx) {
-                match self.try_share(bundle.dealer_idx, &bundle.public, my_share) {
-                    Ok(share) => ok.push((bundle.dealer_idx, &bundle.public, share)),
-                    Err(err) => {
-                        eprintln!("Could not share: {}", err);
-                    }
-                }
-            } else {
-                // (b) reporting
-                continue;
-            }
-        }
+        let ok = bundles
+            .iter()
+            // check the ones we did not deal out
+            .filter(|b| b.dealer_idx != my_idx)
+            // check the ones with a valid dealer index
+            .filter(|b| b.dealer_idx <= n as Idx)
+            // get the share which corresponds to us
+            .filter_map(|b| {
+                b.shares
+                    .iter()
+                    .find(|s| s.share_idx == my_idx)
+                    .map(|share| (b, share))
+            })
+            // try to decrypt it (ignore invalid decryptions)
+            .filter_map(|(bundle, encrypted_share)| {
+                self.try_share(bundle.dealer_idx, &bundle.public, encrypted_share)
+                    .map(|share| (bundle.dealer_idx, &bundle.public, share))
+                    .ok()
+            })
+            // collect back to a vector
+            .collect::<Vec<_>>();
 
         // thr - 1 because I have my own shares
         if ok.len() < thr - 1 {
@@ -540,6 +540,7 @@ impl<C: Curve> DKGWaitingResponse<C> {
             let good_dealers = !r.responses.iter().any(|resp| resp.dealer_idx >= n as Idx);
             good_dealers && good_holder
         });
+
         for bundle in valid_idx {
             let holder_index = bundle.share_idx;
             for response in bundle.responses.iter() {
