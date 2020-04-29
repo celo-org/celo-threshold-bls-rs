@@ -292,7 +292,7 @@ impl<C: Curve> DKGWaitingShare<C> {
             statuses.set(dealer_idx as Idx, my_idx, Status::Complaint);
         }
 
-        let ok = bundles
+        let valid_shares = bundles
             .iter()
             // check the ones we did not deal out
             .filter(|b| b.dealer_idx != my_idx)
@@ -300,6 +300,9 @@ impl<C: Curve> DKGWaitingShare<C> {
             .filter(|b| b.dealer_idx <= n as Idx)
             // get the share which corresponds to us
             .filter_map(|b| {
+                // TODO: Return an error if there are multiple cases where the share
+                // index matches ours.
+                // `.find` stops at the first occurence only.
                 b.shares
                     .iter()
                     .find(|s| s.share_idx == my_idx)
@@ -308,25 +311,25 @@ impl<C: Curve> DKGWaitingShare<C> {
             // try to decrypt it (ignore invalid decryptions)
             .filter_map(|(bundle, encrypted_share)| {
                 self.try_share(bundle.dealer_idx, &bundle.public, encrypted_share)
-                    .map(|share| (bundle.dealer_idx, &bundle.public, share))
+                    .map(|share| (bundle, share))
                     .ok()
             })
             // collect back to a vector
             .collect::<Vec<_>>();
 
         // thr - 1 because I have my own shares
-        if ok.len() < thr - 1 {
-            return Err(DKGError::NotEnoughValidShares(ok.len(), thr));
+        if valid_shares.len() < thr - 1 {
+            return Err(DKGError::NotEnoughValidShares(valid_shares.len(), thr));
         }
 
         // add shares and public polynomial together for all ok deal
         let mut fshare = self.info.secret.eval(self.info.index).value;
         let mut fpub = self.info.public.clone();
-        for bundle in ok {
-            statuses.set(bundle.0, my_idx, Status::Success);
-            fpub.add(&bundle.1);
-            fshare.add(&bundle.2);
-        }
+        valid_shares.iter().for_each(|(bundle, share)| {
+            statuses.set(bundle.dealer_idx, my_idx, Status::Success);
+            fpub.add(&bundle.public);
+            fshare.add(&share);
+        });
 
         let responses = statuses
             .get_for_share(my_idx)
@@ -661,12 +664,14 @@ fn share_correct<C: Curve>(idx: Idx, share: &C::Scalar, public: &PublicPoly<C>) 
     pub_eval.value == commit
 }
 
-#[cfg(feature = "bls12_381")]
 #[cfg(test)]
 pub mod tests {
     use super::*;
-    use crate::curve::bls12381::{Curve as BCurve, Scalar, G1};
-    use crate::poly::{Eval, InvalidRecovery};
+    use crate::primitives::default_threshold;
+    use threshold_bls::{
+        curve::bls12381::{Curve as BCurve, Scalar, G1},
+        poly::{Eval, PolyError},
+    };
 
     use rand::prelude::*;
     use std::fmt::Debug;
@@ -674,7 +679,6 @@ pub mod tests {
     use serde::{de::DeserializeOwned, Serialize};
     use static_assertions::assert_impl_all;
 
-    assert_impl_all!(Node<BCurve>: Serialize, DeserializeOwned, Clone, Debug);
     assert_impl_all!(Group<BCurve>: Serialize, DeserializeOwned, Clone, Debug);
     assert_impl_all!(DKGInfo<BCurve>: Serialize, DeserializeOwned, Clone, Debug);
     assert_impl_all!(DKG<BCurve>: Serialize, DeserializeOwned, Clone, Debug);
@@ -684,13 +688,10 @@ pub mod tests {
     assert_impl_all!(BundledJustification<BCurve>: Serialize, DeserializeOwned, Clone, Debug);
 
     fn setup_group(n: usize) -> (Vec<Scalar>, Group<BCurve>) {
-        let privs: Vec<Scalar> = (0..n)
-            .map(|_| {
-                let mut private = Scalar::new();
-                private.pick(&mut thread_rng());
-                private
-            })
-            .collect();
+        let privs = (0..n)
+            .map(|_| Scalar::rand(&mut thread_rng()))
+            .collect::<Vec<_>>();
+
         let pubs: Vec<G1> = privs
             .iter()
             .map(|private| {
@@ -699,13 +700,14 @@ pub mod tests {
                 public
             })
             .collect();
-        return (privs, pubs.into());
+
+        (privs, pubs.into())
     }
 
     fn reconstruct<C: Curve>(
         thr: usize,
-        shares: &Vec<DKGOutput<C>>,
-    ) -> Result<PrivatePoly<C>, InvalidRecovery> {
+        shares: &[DKGOutput<C>],
+    ) -> Result<PrivatePoly<C>, PolyError> {
         let evals: Vec<_> = shares
             .iter()
             .map(|o| Eval {
@@ -721,11 +723,10 @@ pub mod tests {
         let n = 6;
         //let thr = default_threshold(n);
         let (privs, group) = setup_group(n);
-        let cloned = group.clone();
         for private in privs {
             let mut public = G1::one();
             public.mul(&private);
-            cloned.index(&public).expect("should find public key");
+            group.index(&public).expect("should find public key");
         }
     }
 
@@ -738,44 +739,41 @@ pub mod tests {
             .into_iter()
             .map(|p| DKG::new(p, group.clone()).unwrap())
             .collect();
+
         let mut all_shares = Vec::with_capacity(n);
         let dkgs: Vec<_> = dkgs
             .into_iter()
             .map(|dkg| {
-                let (ndkg, shares) = dkg.shares();
+                let (ndkg, shares) = dkg.encrypt_shares(&mut thread_rng()).unwrap();
                 all_shares.push(shares);
                 ndkg
             })
             .collect();
+
         let response_bundles = Vec::with_capacity(n);
         let dkgs: Vec<_> = dkgs
             .into_iter()
             .map(|dkg| {
-                // TODO clone inneficient for test but likely use case for API
-                // Make that take a reference
                 let (ndkg, bundle_o) = dkg.process_shares(&all_shares).unwrap();
-                if let Some(_) = bundle_o {
-                    panic!("full dkg should not return any complaint")
-                    //response_bundles.push(bundle);
-                }
+                assert!(
+                    bundle_o.is_none(),
+                    "full dkg should not have any complaints"
+                );
                 ndkg
             })
             .collect();
-        let outputs: Vec<_> = dkgs
+
+        let outputs = dkgs
             .into_iter()
-            // TODO implement debug for err return so we can use unwrap
-            .map(|dkg| match dkg.process_responses(&response_bundles) {
-                Ok(out) => out,
-                // Err((ndkg,justifs)) =>
-                Err((_, _)) => panic!("should not happen"),
-            })
-            .collect();
+            .map(|dkg| dkg.process_responses(&response_bundles).unwrap())
+            .collect::<Vec<_>>();
+
         let recovered_private = reconstruct(thr, &outputs).unwrap();
         let recovered_public = recovered_private.commit::<G1>();
-        let recovered_key = recovered_public.free_coeff();
+        let recovered_key = recovered_public.public_key();
         for out in outputs.iter() {
             let public = &out.public;
-            assert_eq!(public.free_coeff(), recovered_key);
+            assert_eq!(public.public_key(), recovered_key);
         }
     }
 
@@ -794,15 +792,15 @@ pub mod tests {
         let dkgs: Vec<_> = dkgs
             .into_iter()
             .map(|dkg| {
-                let (ndkg, shares) = dkg.shares();
+                let (ndkg, shares) = dkg.encrypt_shares(&mut thread_rng()).unwrap();
                 all_shares.push(shares);
                 ndkg
             })
             .collect();
 
         // modify a share
-        all_shares[0].shares[1].secret = ecies::encrypt(&BCurve::point(), &vec![1]);
-        all_shares[3].shares[4].secret = ecies::encrypt(&BCurve::point(), &vec![1]);
+        all_shares[0].shares[1].secret = ecies::encrypt(&BCurve::point(), &[1], &mut thread_rng());
+        all_shares[3].shares[4].secret = ecies::encrypt(&BCurve::point(), &[1], &mut thread_rng());
 
         let mut response_bundles = Vec::with_capacity(n);
         let dkgs: Vec<_> = dkgs
@@ -821,26 +819,18 @@ pub mod tests {
         let mut justifications = Vec::with_capacity(n);
         let dkgs: Vec<_> = dkgs
             .into_iter()
-            // TODO implement debug for err return so we can use unwrap
-            .map(|dkg| match dkg.process_responses(&response_bundles) {
-                // it shouldn't be ok if there are some justifications
-                // since some shares are invalid there should be
-                Ok(_out) => panic!("that should not happen"),
-                Err((ndkg, justifs)) => {
-                    if let Some(j) = justifs {
-                        justifications.push(j);
-                    }
-                    ndkg
+            .map(|dkg| {
+                let (ndkg, justifs) = dkg.process_responses(&response_bundles).unwrap_err();
+                if let Some(j) = justifs {
+                    justifications.push(j);
                 }
+                ndkg
             })
             .collect();
 
         let outputs: Vec<_> = dkgs
             .into_iter()
-            .map(|dkg| match dkg.process_justifications(&justifications) {
-                Ok(out) => out,
-                Err(e) => panic!("{}", e),
-            })
+            .map(|dkg| dkg.process_justifications(&justifications).unwrap())
             .collect();
 
         let recovered_private = reconstruct(thr, &outputs).unwrap();
@@ -848,7 +838,7 @@ pub mod tests {
         let recovered_key = recovered_public.public_key();
         for out in outputs.iter() {
             let public = &out.public;
-            assert_eq!(public.free_coeff(), recovered_key);
+            assert_eq!(public.public_key(), recovered_key);
         }
     }
 }
