@@ -136,6 +136,7 @@ impl StatusMatrix {
     ///
     /// - If the `share` index is greater than the number of shareholders
     /// - If the `dealer` index is greater than the number of dealers
+    #[allow(unused)]
     pub fn get(&self, dealer: Idx, share: Idx) -> Status {
         Status::from(
             *self.0[dealer as usize]

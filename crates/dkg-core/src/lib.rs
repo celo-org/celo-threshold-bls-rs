@@ -10,10 +10,10 @@
 /// Board trait and implementations for publishing data from each DKG phase
 pub mod board;
 
-/// Higher level objects for running a 3-phase DKG
+/// Higher level objects for running a JF-DKG
 pub mod node;
 
-/// Primitives for building a DKG
+/// Low level primitives which implement the JF-DKG
 pub mod primitives;
 
 #[cfg(test)]
