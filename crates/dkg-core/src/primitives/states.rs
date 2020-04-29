@@ -202,11 +202,15 @@ pub struct DKGWaitingShare<C: Curve> {
 }
 
 impl<C: Curve> DKGWaitingShare<C> {
-    /// (a) Report complaint on invalid dealer index
-    /// (b) Report complaint on absentee shares for us
-    /// (c) Report complaint on invalid encryption
-    /// (d) Report complaint on invalid length of public polynomial
-    /// (e) Report complaint on invalid share w.r.t. public polynomial
+    /// Tries to decrypt the provided shares and calculate the secret key and the
+    /// threshold public key.
+    ///
+    /// Will return a complaint in the responses on the following cases:
+    /// (a) invalid dealer index
+    /// (b) absentee shares for us
+    /// (c) invalid encryption
+    /// (d) invalid length of public polynomial
+    /// (e) invalid share w.r.t. public polynomial
     pub fn process_shares(
         self,
         bundles: &[BundledShares<C>],
@@ -310,20 +314,23 @@ impl<C: Curve> DKGWaitingShare<C> {
             })
             // try to decrypt it (ignore invalid decryptions)
             .filter_map(|(bundle, encrypted_share)| {
-                self.try_share(bundle.dealer_idx, &bundle.public, encrypted_share)
+                self.decrypt_and_check_share(bundle.dealer_idx, &bundle.public, encrypted_share)
                     .map(|share| (bundle, share))
                     .ok()
             })
-            // collect back to a vector
+            // TODO: Can we avoid this allocation and combine it with the `for_each`
+            // below while also being able to check the length?
             .collect::<Vec<_>>();
 
-        // thr - 1 because I have my own shares
+        // we check with `thr - 1` because we already have our shares
         if valid_shares.len() < thr - 1 {
             return Err(DKGError::NotEnoughValidShares(valid_shares.len(), thr));
         }
 
-        // add shares and public polynomial together for all ok deal
+        // The user's secret share is the sum of all received shares (remember: each share is
+        // an evaluation of a participant's private polynomial at our index)
         let mut fshare = self.info.secret.eval(self.info.index).value;
+        // The public key polynomial is the sum of all shared polynomials
         let mut fpub = self.info.public.clone();
         valid_shares.iter().for_each(|(bundle, share)| {
             statuses.set(bundle.dealer_idx, my_idx, Status::Success);
@@ -331,6 +338,8 @@ impl<C: Curve> DKGWaitingShare<C> {
             fshare.add(&share);
         });
 
+        // Convert the values in the status matrix for all other participants at
+        // our share to responses
         let responses = statuses
             .get_for_share(my_idx)
             .into_iter()
@@ -364,7 +373,7 @@ impl<C: Curve> DKGWaitingShare<C> {
         })
     }
 
-    fn try_share(
+    fn decrypt_and_check_share(
         &self,
         dealer: Idx,
         public: &PublicPoly<C>,
@@ -475,7 +484,9 @@ impl<C: Curve> DKGWaitingResponse<C> {
         let justifications_required = (0..n).any(|dealer| !statuses.all_true(dealer as Idx));
 
         if justifications_required {
-            // find out if some responses correspond to our deal
+            // If there were any complaints against our deal, then we should re-evaluate
+            // our secret polynomial at the indexes where the complaints were, and publish
+            // these as justifications (i.e. indicating that we are still behaving correctly).
             let my_idx = self.info.index;
             let bundled_justifications = if !statuses.all_true(my_idx) {
                 let justifications = statuses
@@ -585,6 +596,9 @@ where
         justifs: &[BundledJustification<C>],
     ) -> Result<DKGOutput<C>, DKGError> {
         let n = self.info.n();
+
+        // Calculate the share and public polynomial from the provided justifications
+        // (they will later be added to our existing share and public polynomial)
         let mut add_share = C::Scalar::zero();
         let mut add_public = PublicPoly::<C>::zero();
         justifs
@@ -594,34 +608,40 @@ where
             // get only the bundles for which we have a public polynomial for
             .filter_map(|b| self.publics.get(&b.dealer_idx).map(|public| (b, public)))
             .for_each(|(bundle, public)| {
-                bundle.justifications.iter().for_each(|justification| {
-                    if !share_correct::<C>(justification.share_idx, &justification.share, public) {
-                        return;
-                    }
+                bundle
+                    .justifications
+                    .iter()
+                    // ignore incorrect shares
+                    .filter(|justification| {
+                        share_correct::<C>(justification.share_idx, &justification.share, public)
+                    })
+                    .for_each(|justification| {
+                        // justification is valid, we mark it off from our matrix
+                        self.statuses.borrow_mut().set(
+                            bundle.dealer_idx,
+                            justification.share_idx,
+                            Status::Success,
+                        );
 
-                    // justification is valid, we mark it off from our matrix
-                    self.statuses.borrow_mut().set(
-                        bundle.dealer_idx,
-                        justification.share_idx,
-                        Status::Success,
-                    );
-
-                    // if it is for us, then add it to our final share and public poly
-                    if justification.share_idx == self.info.index {
-                        add_share.add(&justification.share);
-                        add_public.add(&bundle.public);
-                    }
-                })
+                        // if it is for us, then add it to our final share and public poly
+                        if justification.share_idx == self.info.index {
+                            add_share.add(&justification.share);
+                            add_public.add(&bundle.public);
+                        }
+                    })
             });
 
         // QUAL is the set of all entries in the matrix where all bits are set
         let statuses = self.statuses.borrow();
-        let qual_indices = (0..n).fold(Vec::new(), |mut acc, dealer| {
-            if statuses.all_true(dealer as Idx) {
-                acc.push(dealer);
-            }
-            acc
-        });
+        let qual_indices = (0..n)
+            .filter_map(|dealer| {
+                if statuses.all_true(dealer as Idx) {
+                    Some(dealer)
+                } else {
+                    None
+                }
+            })
+            .collect::<Vec<_>>();
 
         let thr = self.info.group.threshold;
         if qual_indices.len() < thr {

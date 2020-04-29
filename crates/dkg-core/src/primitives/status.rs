@@ -44,7 +44,7 @@ impl Status {
 ///
 /// # Examples
 ///
-/// ```rust
+/// ```rust,ignore
 /// use dkg_core::primitives::status::{Status, StatusMatrix};
 ///
 /// // initializes the matrix (diagonal elements are always set to Status::Success)
