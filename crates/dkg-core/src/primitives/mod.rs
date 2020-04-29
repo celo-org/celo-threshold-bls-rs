@@ -5,7 +5,7 @@ pub mod group;
 pub mod states;
 
 /// 2D binary array utilities for tracking successful (or not) participation in the DKG
-pub mod status;
+mod status;
 
 use thiserror::Error;
 use threshold_bls::{ecies::EciesError, poly::Idx};
