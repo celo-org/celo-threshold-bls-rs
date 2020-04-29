@@ -634,13 +634,7 @@ where
         // QUAL is the set of all entries in the matrix where all bits are set
         let statuses = self.statuses.borrow();
         let qual_indices = (0..n)
-            .filter_map(|dealer| {
-                if statuses.all_true(dealer as Idx) {
-                    Some(dealer)
-                } else {
-                    None
-                }
-            })
+            .filter(|&dealer| statuses.all_true(dealer as Idx))
             .collect::<Vec<_>>();
 
         let thr = self.info.group.threshold;
@@ -741,12 +735,12 @@ pub mod tests {
     #[test]
     fn group_index() {
         let n = 6;
-        //let thr = default_threshold(n);
         let (privs, group) = setup_group(n);
-        for private in privs {
+        for (i, private) in privs.iter().enumerate() {
             let mut public = G1::one();
             public.mul(&private);
-            group.index(&public).expect("should find public key");
+            let idx = group.index(&public).expect("should find public key");
+            assert_eq!(idx, i as Idx);
         }
     }
 
@@ -754,12 +748,14 @@ pub mod tests {
     fn full_dkg() {
         let n = 5;
         let thr = default_threshold(n);
+
         let (privs, group) = setup_group(n);
         let dkgs: Vec<_> = privs
             .into_iter()
             .map(|p| DKG::new(p, group.clone()).unwrap())
             .collect();
 
+        // Step 1. evaluate polynomial, encrypt shares and broadcast
         let mut all_shares = Vec::with_capacity(n);
         let dkgs: Vec<_> = dkgs
             .into_iter()
@@ -770,6 +766,7 @@ pub mod tests {
             })
             .collect();
 
+        // Step 2. verify the received shares (there should be no complaints)
         let response_bundles = Vec::with_capacity(n);
         let dkgs: Vec<_> = dkgs
             .into_iter()
@@ -783,17 +780,22 @@ pub mod tests {
             })
             .collect();
 
+        // Step 3. get the responses
         let outputs = dkgs
             .into_iter()
             .map(|dkg| dkg.process_responses(&response_bundles).unwrap())
             .collect::<Vec<_>>();
 
+        // Reconstruct the threshold private polynomial from all the outputs
         let recovered_private = reconstruct(thr, &outputs).unwrap();
+        // Get the threshold public key from the private polynomial
         let recovered_public = recovered_private.commit::<G1>();
         let recovered_key = recovered_public.public_key();
-        for out in outputs.iter() {
-            let public = &out.public;
-            assert_eq!(public.public_key(), recovered_key);
+
+        // it matches with the outputs of each DKG participant, even though they
+        // do not have access to the threshold private key
+        for out in outputs {
+            assert_eq!(out.public.public_key(), recovered_key);
         }
     }
 
@@ -822,12 +824,10 @@ pub mod tests {
         all_shares[0].shares[1].secret = ecies::encrypt(&BCurve::point(), &[1], &mut thread_rng());
         all_shares[3].shares[4].secret = ecies::encrypt(&BCurve::point(), &[1], &mut thread_rng());
 
-        let mut response_bundles = Vec::with_capacity(n);
+        let mut response_bundles = Vec::with_capacity(2);
         let dkgs: Vec<_> = dkgs
             .into_iter()
             .map(|dkg| {
-                // TODO clone inneficient for test but likely use case for API
-                // Make that take a reference
                 let (ndkg, bundle_o) = dkg.process_shares(&all_shares).unwrap();
                 if let Some(bundle) = bundle_o {
                     response_bundles.push(bundle);
@@ -835,6 +835,9 @@ pub mod tests {
                 ndkg
             })
             .collect();
+
+        // there should be exactly 2 complaints, one for each bad share where decryption failed
+        assert_eq!(response_bundles.len(), 2);
 
         let mut justifications = Vec::with_capacity(n);
         let dkgs: Vec<_> = dkgs
@@ -848,6 +851,11 @@ pub mod tests {
             })
             .collect();
 
+        // both participants whose encryptiosn were tampered with revealed their shares,
+        // so there should be exactly 2 justifications
+        assert_eq!(justifications.len(), 2);
+
+        // ...and the DKG finishes correctly as expected
         let outputs: Vec<_> = dkgs
             .into_iter()
             .map(|dkg| dkg.process_justifications(&justifications).unwrap())
