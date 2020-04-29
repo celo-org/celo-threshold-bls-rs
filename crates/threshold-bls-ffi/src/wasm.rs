@@ -6,7 +6,7 @@ use rand_core::{RngCore, SeedableRng};
 
 use threshold_bls::{
     poly::{Idx as Index, Poly},
-    sig::{Blinder, Scheme, Share, SignatureScheme, ThresholdScheme, ThresholdSchemeExt, Token},
+    sig::{Blinder, Scheme, Share, SignatureScheme, SignatureSchemeExt, ThresholdScheme, ThresholdSchemeExt, Token},
 };
 
 use crate::*;
@@ -82,6 +82,27 @@ pub fn verify(public_key_buf: &[u8], message: &[u8], signature: &[u8]) -> Result
         .map_err(|err| JsValue::from_str(&format!("signature verification failed: {}", err)))
 }
 
+
+#[wasm_bindgen(js_name = verifyBlindSignature)]
+/// Verifies the signature after it has been unblinded without hashing. Users will call this on the
+/// threshold signature against the full public key
+///
+/// * public_key: The public key used to sign the message
+/// * message: The message which was signed
+/// * signature: The signature which was produced on the message
+///
+/// # Throws
+///
+/// - If verification fails
+pub fn verify_blind_signature(public_key_buf: &[u8], message: &[u8], signature: &[u8]) -> Result<()> {
+    let public_key: PublicKey = bincode::deserialize(&public_key_buf)
+        .map_err(|err| JsValue::from_str(&format!("could not deserialize public key {}", err)))?;
+
+    // checks the signature on the message hash
+    SigScheme::verify_without_hashing(&public_key, &message, &signature)
+        .map_err(|err| JsValue::from_str(&format!("signature verification failed: {}", err)))
+}
+
 ///////////////////////////////////////////////////////////////////////////
 // Service -> Library
 ///////////////////////////////////////////////////////////////////////////
@@ -97,6 +118,20 @@ pub fn sign(private_key_buf: &[u8], message: &[u8]) -> Result<Vec<u8>> {
         .map_err(|err| JsValue::from_str(&format!("could not deserialize private key {}", err)))?;
 
     SigScheme::sign(&private_key, &message)
+        .map_err(|err| JsValue::from_str(&format!("could not sign message: {}", err)))
+}
+
+#[wasm_bindgen(js_name = signBlindedMessage)]
+/// Signs the message with the provided private key without hashing and returns the signature
+///
+/// # Throws
+///
+/// - If signing fails
+pub fn sign_blinded_message(private_key_buf: &[u8], message: &[u8]) -> Result<Vec<u8>> {
+    let private_key: PrivateKey = bincode::deserialize(&private_key_buf)
+        .map_err(|err| JsValue::from_str(&format!("could not deserialize private key {}", err)))?;
+
+    SigScheme::sign_without_hashing(&private_key, &message)
         .map_err(|err| JsValue::from_str(&format!("could not sign message: {}", err)))
 }
 
@@ -354,48 +389,88 @@ mod tests {
 
     #[test]
     fn threshold_wasm() {
-        let seed = b"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
-        let keys = threshold_keygen(5, 3, &seed[..]);
-
-        let msg = vec![1, 2, 3, 4, 6];
-
-        let sig1 = partial_sign(&keys.get_share(0), &msg).unwrap();
-        let sig2 = partial_sign(&keys.get_share(1), &msg).unwrap();
-        let sig3 = partial_sign(&keys.get_share(2), &msg).unwrap();
-
-        partial_verify(&keys.polynomial(), &msg, &sig1).unwrap();
-        partial_verify(&keys.polynomial(), &msg, &sig2).unwrap();
-        partial_verify(&keys.polynomial(), &msg, &sig3).unwrap();
-
-        let concatenated = [sig1, sig2, sig3].concat();
-        let asig = combine(3, concatenated).unwrap();
-
-        verify(&keys.threshold_public_key(), &msg, &asig).unwrap();
+        threshold_wasm_should_blind(true);
+        threshold_wasm_should_blind(false);
     }
 
     #[test]
-    fn blinded_threshold_wasm() {
+    fn signing() {
+        wasm_should_blind(true);
+        wasm_should_blind(false);
+
+    }
+
+    fn wasm_should_blind(should_blind: bool) {
         let seed = b"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
-        let keys = threshold_keygen(5, 3, &seed[..]);
+        let keypair = keygen(seed.to_vec());
 
         let msg = vec![1, 2, 3, 4, 6];
         let key = b"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
-        let blinded_message = blind(msg.clone(), &key[..]);
-        let blinded_msg = blinded_message.message.clone();
 
-        let sig1 = partial_sign_blinded_message(&keys.get_share(0), &blinded_msg).unwrap();
-        let sig2 = partial_sign_blinded_message(&keys.get_share(1), &blinded_msg).unwrap();
-        let sig3 = partial_sign_blinded_message(&keys.get_share(2), &blinded_msg).unwrap();
+        let (message, token) = if should_blind {
+            let ret = blind(msg.clone(), &key[..]);
+            (ret.message.clone(), ret.blinding_factor())
+        } else {
+            (msg.clone(), vec![])
+        };
+        
+        let sign_fn = if should_blind {
+            sign_blinded_message
+        } else {
+            sign
+        };
 
-        partial_verify_blind_signature(&keys.polynomial(), &blinded_msg, &sig1).unwrap();
-        partial_verify_blind_signature(&keys.polynomial(), &blinded_msg, &sig2).unwrap();
-        partial_verify_blind_signature(&keys.polynomial(), &blinded_msg, &sig3).unwrap();
+        let sig = sign_fn(&keypair.private_key(), &message).unwrap();
 
-        let concatenated = [sig1, sig2, sig3].concat();
+        if should_blind {
+            verify_blind_signature(&keypair.public_key(), &message, &sig).unwrap();
+            let unblinded = unblind(&sig, &token).unwrap();
+            verify(&keypair.public_key(), &msg, &unblinded).unwrap();
+        } else {
+            verify(&keypair.public_key(), &msg, &sig).unwrap();
+        }
+    }
+
+    fn threshold_wasm_should_blind(should_blind: bool) {
+        let (n, t) = (5, 3);
+        let seed = b"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+        let keys = threshold_keygen(n, t, &seed[..]);
+
+        let msg = vec![1, 2, 3, 4, 6];
+        let key = b"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
+
+        let (message, token) = if should_blind {
+            let ret = blind(msg.clone(), &key[..]);
+            (ret.message.clone(), ret.blinding_factor())
+        } else {
+            (msg.clone(), vec![])
+        };
+        
+        let sign_fn = if should_blind {
+            partial_sign_blinded_message
+        } else {
+            partial_sign
+        };
+
+        let verify_fn = if should_blind {
+            partial_verify_blind_signature
+        } else {
+            partial_verify
+        };
+
+        let sigs = (0..t).map(|i| sign_fn(&keys.get_share(i), &message).unwrap()).collect::<Vec<Vec<_>>>();
+
+        sigs.iter().for_each(|sig| verify_fn(&keys.polynomial(), &message, &sig).unwrap());
+
+        let concatenated = sigs.concat();
         let asig = combine(3, concatenated).unwrap();
 
-        let unblinded = unblind(&asig, &blinded_message.blinding_factor()).unwrap();
-
-        verify(&keys.threshold_public_key(), &msg, &unblinded).unwrap();
+        if should_blind {
+            verify_blind_signature(&keys.threshold_public_key(), &message, &asig).unwrap();
+            let unblinded = unblind(&asig, &token).unwrap();
+            verify(&keys.threshold_public_key(), &msg, &unblinded).unwrap();
+        } else {
+            verify(&keys.threshold_public_key(), &msg, &asig).unwrap();
+        }
     }
 }
