@@ -217,32 +217,43 @@ impl<C: Curve> DKGWaitingShare<C> {
         self,
         bundles: &[BundledShares<C>],
     ) -> DKGResult<(DKGWaitingResponse<C>, Option<BundledResponses>)> {
-        let myidx = self.info.index;
+        let my_idx = self.info.index;
 
-        let (newdkg, bundle) = self.process_shares_get_all(bundles)?;
+        let (fshare, fpub, statuses) = self.process_shares_get_all(bundles)?;
 
-        // complaints are unsuccessful responses
-        let complaints = bundle
-            .responses
+        let complaints = statuses
+            .get_for_share(my_idx)
             .into_iter()
+            .enumerate()
+            .map(|(i, b)| Response {
+                dealer_idx: i as Idx,
+                status: Status::from(b),
+            })
+            // only get the complaints
             .filter(|r| !r.status.is_success())
             .collect::<Vec<_>>();
 
         let bundle = if !complaints.is_empty() {
             Some(BundledResponses {
                 responses: complaints,
-                share_idx: myidx,
+                share_idx: my_idx,
             })
         } else {
             None
         };
 
-        Ok((newdkg, bundle))
+        let public_polynomials = Self::extract_poly(&bundles);
+        let new_dkg =
+            DKGWaitingResponse::new(self.info, fshare, fpub, statuses, public_polynomials);
+
+        Ok((new_dkg, bundle))
     }
 
-    /// Processes the shares and returns a list of responses which may either be Success
-    /// or Complaints. Depending on which variant of the DKG protocol, the responses may be
-    /// used in the following way:
+    /// Processes the shares and returns the private share of the user and a public polynomial, as
+    /// well as the status matrix of the protocol.
+    ///
+    /// Depending on which variant of the DKG protocol is used, the status matrix responses which
+    /// correspond to our index may be used in the following way:
     ///
     /// - All responses get broadcast: You assume that shares of other nodes are not good
     /// unless you hear otherwise. This allows running the deal and response phase together,
@@ -251,9 +262,9 @@ impl<C: Curve> DKGWaitingShare<C> {
     /// are good unless you hear otherwise. This requires running both a deal and a response
     /// phase.
     fn process_shares_get_all(
-        self,
+        &self,
         bundles: &[BundledShares<C>],
-    ) -> DKGResult<(DKGWaitingResponse<C>, BundledResponses)> {
+    ) -> DKGResult<(C::Scalar, PublicPoly<C>, StatusMatrix)> {
         let n = self.info.n();
         let thr = self.info.thr();
         let my_idx = self.info.index;
@@ -307,28 +318,7 @@ impl<C: Curve> DKGWaitingShare<C> {
             fshare.add(&share);
         });
 
-        // Convert the values in the status matrix for all other participants at
-        // our share to responses
-        let responses = statuses
-            .get_for_share(my_idx)
-            .into_iter()
-            .enumerate()
-            .map(|(i, b)| Response {
-                dealer_idx: i as Idx,
-                status: Status::from(b),
-            })
-            .collect::<Vec<_>>();
-
-        let bundle = BundledResponses {
-            share_idx: my_idx,
-            responses,
-        };
-
-        let public_polynomials = Self::extract_poly(&bundles);
-        let new_dkg =
-            DKGWaitingResponse::new(self.info, fshare, fpub, statuses, public_polynomials);
-
-        Ok((new_dkg, bundle))
+        Ok((fshare, fpub, statuses))
     }
 
     // extract_poly maps the bundles into a map: Idx -> public poly for ease of
