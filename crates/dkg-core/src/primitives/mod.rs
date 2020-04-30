@@ -1,8 +1,23 @@
 /// Primitives for grouping together vectors of nodes with an associated threshold
 pub mod group;
 
-/// Core DKG logic, implemented as a state machine
-pub mod states;
+mod states;
+
+/// DKG state machine phases
+pub mod phases {
+    use super::states;
+
+    pub use states::{
+        DKGOutput, DKGWaitingJustification, DKGWaitingResponse, DKGWaitingShare, DKG,
+    };
+}
+
+/// DKG argument datatypes
+pub mod bundles {
+    use super::states;
+
+    pub use states::{BundledJustification, BundledResponses, BundledShares};
+}
 
 /// 2D binary array utilities for tracking successful (or not) participation in the DKG
 mod status;
