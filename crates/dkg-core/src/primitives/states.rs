@@ -89,7 +89,7 @@ impl<C: Curve> DKG<C> {
     /// Creates a new DKG instance from the provided private key and group.
     ///
     /// The private key must be part of the group, otherwise this will return an error.
-    pub fn new(private_key: C::Scalar, group: Group<C>) -> Result<DKG<C>, DKGError> {
+    pub(crate) fn new(private_key: C::Scalar, group: Group<C>) -> Result<DKG<C>, DKGError> {
         use rand::prelude::*;
         Self::new_rand(private_key, group, &mut thread_rng())
     }
@@ -97,7 +97,7 @@ impl<C: Curve> DKG<C> {
     /// Creates a new DKG instance from the provided private key, group and RNG.
     ///
     /// The private key must be part of the group, otherwise this will return an error.
-    pub fn new_rand<R: RngCore>(
+    pub(crate) fn new_rand<R: RngCore>(
         private_key: C::Scalar,
         group: Group<C>,
         rng: &mut R,
@@ -129,7 +129,7 @@ impl<C: Curve> DKG<C> {
     /// Evaluates the secret polynomial at the index of each DKG participant and encrypts
     /// the result with the corresponding public key. Returns the bundled encrypted shares
     /// as well as the next phase of the DKG.
-    pub fn encrypt_shares<R: RngCore>(
+    pub(crate) fn encrypt_shares<R: RngCore>(
         self,
         rng: &mut R,
     ) -> DKGResult<(DKGWaitingShare<C>, BundledShares<C>)> {
@@ -205,96 +205,74 @@ impl<C: Curve> DKGWaitingShare<C> {
     /// Tries to decrypt the provided shares and calculate the secret key and the
     /// threshold public key.
     ///
-    /// Will return a complaint in the responses on the following cases:
-    /// (a) invalid dealer index
-    /// (b) absentee shares for us
-    /// (c) invalid encryption
-    /// (d) invalid length of public polynomial
-    /// (e) invalid share w.r.t. public polynomial
-    pub fn process_shares(
+    /// Note: This function returns only responses which were complaints.
+    ///
+    /// A complaint is returned in the following cases:
+    /// - invalid dealer index
+    /// - absentee shares for us
+    /// - invalid encryption
+    /// - invalid length of public polynomial
+    /// - invalid share w.r.t. public polynomial
+    pub(crate) fn process_shares(
         self,
         bundles: &[BundledShares<C>],
     ) -> DKGResult<(DKGWaitingResponse<C>, Option<BundledResponses>)> {
-        self.process_shares_get_complaint(bundles)
-    }
+        let my_idx = self.info.index;
 
-    fn process_shares_get_complaint(
-        self,
-        bundles: &[BundledShares<C>],
-    ) -> DKGResult<(DKGWaitingResponse<C>, Option<BundledResponses>)> {
-        // true means we suppose every missing responses is a success at the end of
-        // the period. Hence we only need to get & broadcast the complaints.
-        // See DKGWaitingResponse::new for more information.
-        let myidx = self.info.index;
+        let (fshare, fpub, statuses) = self.process_shares_get_all(bundles)?;
 
-        let (newdkg, bundle) = self.process_shares_get_all(bundles)?;
-
-        // complaints are unsuccessful responses
-        let complaints = bundle
-            .responses
+        let complaints = statuses
+            .get_for_share(my_idx)
             .into_iter()
+            .enumerate()
+            .map(|(i, b)| Response {
+                dealer_idx: i as Idx,
+                status: Status::from(b),
+            })
+            // only get the complaints
             .filter(|r| !r.status.is_success())
             .collect::<Vec<_>>();
 
         let bundle = if !complaints.is_empty() {
             Some(BundledResponses {
                 responses: complaints,
-                share_idx: myidx,
+                share_idx: my_idx,
             })
         } else {
             None
         };
 
-        Ok((newdkg, bundle))
+        let public_polynomials = Self::extract_poly(&bundles);
+        let new_dkg =
+            DKGWaitingResponse::new(self.info, fshare, fpub, statuses, public_polynomials);
+
+        Ok((new_dkg, bundle))
     }
 
-    // get_all exists to make the dkg impl. handle the case where we don't want
-    // to wait until the end of the period to progress: if all inputs are
-    // are valid, we can already broadcast "Success" responses. If all peers
-    // receive all "Sucess" responses from everybody then the protocol can
-    // short-circuit and directly finish.
+    /// Processes the shares and returns the private share of the user and a public polynomial, as
+    /// well as the status matrix of the protocol.
+    ///
+    /// Depending on which variant of the DKG protocol is used, the status matrix responses which
+    /// correspond to our index may be used in the following way:
+    ///
+    /// - All responses get broadcast: You assume that shares of other nodes are not good
+    /// unless you hear otherwise.
+    /// - Broadcast only responses which are complaints: You assume that shares of other nodes
+    /// are good unless you hear otherwise.
     fn process_shares_get_all(
-        self,
+        &self,
         bundles: &[BundledShares<C>],
-    ) -> DKGResult<(DKGWaitingResponse<C>, BundledResponses)> {
+    ) -> DKGResult<(C::Scalar, PublicPoly<C>, StatusMatrix)> {
         let n = self.info.n();
         let thr = self.info.thr();
         let my_idx = self.info.index;
-        // the default defines the capability of the protocol to finish
-        // before an epoch or not if all responses are correct.  A `true`
-        // value indicates that participants should only broadcast their
-        // complaint (negative response) in the event they have complaints
-        // and "do nothing" in case there is no complaints to broadcast. At
-        // the end of the period, each participant will call this method
-        // with all responses seen so far. At the end of the period, all
-        // absent responses are assumed to have the success status meaning
-        // their issuer have not found any problem with their received
-        // shares. Hence, it forces the protocol to wait until the end of
-        // the period, to make sure there is no complaint unseen. This case
-        // follows the paper specification of the protocol and is especially
-        // relevant in the context of having a blockchain as a bulletin
-        // board, where periods are clearly delimited,for example with block
-        // heights.  **Note**: this is the default behavior of this
-        // implementation.
-        //
-        // On the other hand, a `false` value indicates miners MUST
-        // broadcast all of their responses, regardless of their status for
-        // them to be considered. Otherwise, a participant risk to be
-        // considered absent. This specific case is useful in the context of
-        // streamlining the protocol, so it can move to the next period
-        // before the end, in case all responses are success. Note this mode
-        // is currently *not* used.
-        //
-        // Currently: all responses are set to true except for my own indexes so
-        // by default this node requires to have all shares and will issue a
-        // response if any share is missing or wrong
+
         let mut statuses = StatusMatrix::new(n, n, Status::Success);
-        for dealer_idx in 0..n {
-            if dealer_idx == my_idx as usize {
-                continue;
-            }
-            statuses.set(dealer_idx as Idx, my_idx, Status::Complaint);
-        }
+        (0..n)
+            .filter(|&dealer_idx| dealer_idx != my_idx as usize)
+            .for_each(|dealer_idx| {
+                statuses.set(dealer_idx as Idx, my_idx, Status::Complaint);
+            });
 
         let valid_shares = bundles
             .iter()
@@ -338,28 +316,7 @@ impl<C: Curve> DKGWaitingShare<C> {
             fshare.add(&share);
         });
 
-        // Convert the values in the status matrix for all other participants at
-        // our share to responses
-        let responses = statuses
-            .get_for_share(my_idx)
-            .into_iter()
-            .enumerate()
-            .map(|(i, b)| Response {
-                dealer_idx: i as Idx,
-                status: Status::from(b),
-            })
-            .collect::<Vec<_>>();
-
-        let bundle = BundledResponses {
-            share_idx: my_idx,
-            responses,
-        };
-
-        let public_polynomials = Self::extract_poly(&bundles);
-        let new_dkg =
-            DKGWaitingResponse::new(self.info, fshare, fpub, statuses, public_polynomials);
-
-        Ok((new_dkg, bundle))
+        Ok((fshare, fpub, statuses))
     }
 
     // extract_poly maps the bundles into a map: Idx -> public poly for ease of
@@ -471,7 +428,7 @@ impl<C: Curve> DKGWaitingResponse<C> {
     ///
     /// If there are complaints in the Status matrix, then it will return an error with the
     /// justifications required for Phase 3 of the DKG.
-    pub fn process_responses(
+    pub(crate) fn process_responses(
         mut self,
         responses: &[BundledResponses],
     ) -> Result<DKGOutput<C>, (DKGWaitingJustification<C>, Option<BundledJustification<C>>)> {
