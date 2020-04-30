@@ -60,6 +60,12 @@ pub struct PublishSharesOpts {
 
     #[options(help = "the shares will be written to this file")]
     pub output: String,
+
+    #[options(
+        help = "publish all responses or just the complaints? Defaults to publishing complaints only",
+        default = "false"
+    )]
+    pub publish_all: bool,
 }
 
 #[derive(Debug, Options, Clone)]

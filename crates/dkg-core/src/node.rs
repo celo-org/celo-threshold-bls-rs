@@ -53,12 +53,16 @@ pub trait DKGPhase<C: Curve, B: BoardPublisher<C>, T> {
 /// encrypt the shares and then publish them to the board
 pub struct Phase0<C: Curve> {
     inner: DKG<C>,
+    publish_all: bool,
 }
 
 impl<C: Curve> Phase0<C> {
-    pub fn new(private_key: C::Scalar, group: Group<C>) -> NodeResult<Self> {
+    pub fn new(private_key: C::Scalar, group: Group<C>, publish_all: bool) -> NodeResult<Self> {
         let dkg = DKG::new(private_key, group)?;
-        Ok(Self { inner: dkg })
+        Ok(Self {
+            inner: dkg,
+            publish_all,
+        })
     }
 }
 
@@ -68,6 +72,7 @@ impl<C: Curve> Phase0<C> {
 pub struct Phase1<C: Curve> {
     #[serde(bound = "C::Scalar: Serialize + DeserializeOwned")]
     inner: DKGWaitingShare<C>,
+    publish_all: bool,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -94,7 +99,10 @@ where
             .publish_shares(shares)
             .map_err(|_| NodeError::PublisherError)?;
 
-        Ok(Phase1 { inner: next })
+        Ok(Phase1 {
+            inner: next,
+            publish_all: self.publish_all,
+        })
     }
 }
 
@@ -106,7 +114,7 @@ where
     type Next = Phase2<C>;
 
     fn run(self, board: &mut B, shares: &[BundledShares<C>]) -> NodeResult<Self::Next> {
-        let (next, bundle) = self.inner.process_shares(shares)?;
+        let (next, bundle) = self.inner.process_shares(shares, self.publish_all)?;
 
         if let Some(bundle) = bundle {
             board
@@ -161,7 +169,10 @@ mod tests {
     // shares to the board
     fn bad_phase0<C: Curve, R: RngCore>(phase0: Phase0<C>, rng: &mut R) -> Phase1<C> {
         let (next, _) = phase0.inner.encrypt_shares(rng).unwrap();
-        Phase1 { inner: next }
+        Phase1 {
+            inner: next,
+            publish_all: phase0.publish_all,
+        }
     }
 
     #[test]
@@ -392,6 +403,8 @@ mod tests {
         // We need to bind the Curve's Point and Scalars to the Scheme
         S: Scheme<Public = <C as Curve>::Point, Private = <C as Curve>::Scalar>,
     {
+        let publish_all = false;
+
         // generate a keypair per participant
         let keypairs = (0..n).map(|_| S::keypair(rng)).collect::<Vec<_>>();
 
@@ -408,7 +421,7 @@ mod tests {
         // Create the Phase 0 for each participant
         let phase0s = keypairs
             .iter()
-            .map(|(private, _)| Phase0::new(private.clone(), group.clone()).unwrap())
+            .map(|(private, _)| Phase0::new(private.clone(), group.clone(), publish_all).unwrap())
             .collect::<Vec<_>>();
 
         // Create the board
