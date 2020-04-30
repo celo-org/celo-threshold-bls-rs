@@ -4,10 +4,10 @@ use rand::RngCore;
 use std::fs::File;
 
 use dkg_core::{
-    node::{DKGPhase, Phase0, Phase1, Phase2, Phase2Result},
+    node::{DKGPhase, Phase0, Phase1, Phase2, Phase2Result, Phase3},
     primitives::{
+        bundles::{BundledJustification, BundledResponses, BundledShares},
         group::Group,
-        states::{BundledJustification, BundledResponses, BundledShares, DKGWaitingJustification},
     },
 };
 
@@ -101,13 +101,14 @@ pub fn try_finalize<C: Curve>(opts: StateOpts) -> CLIResult<()> {
 
 pub fn phase3<C: Curve>(opts: FinalizeOpts) -> CLIResult<()> {
     let phase3_file = File::open(opts.in_phase)?;
-    let phase3: DKGWaitingJustification<C> = bincode::deserialize_from(phase3_file)?;
+    let phase3: Phase3<C> = bincode::deserialize_from(phase3_file)?;
 
     let justifications_file = File::open(opts.input)?;
     let justifications: Vec<BundledJustification<C>> =
         bincode::deserialize_from(justifications_file)?;
 
-    match phase3.process_justifications(&justifications) {
+    // dummy writer instance with `vec!`
+    match phase3.run(&mut vec![], &justifications) {
         Ok(out) => {
             println!("Success. Your share and threshold pubkey are written to the output.");
             let output_file = File::create(opts.output)?;

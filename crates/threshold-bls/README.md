@@ -68,12 +68,3 @@ threshold = { version = "0.1", default-features = false, features = ["bls12_377"
 # Both
 threshold = { version = "0.1" }
 ```
-
-## TODOs
-
-- [ ] doc for signatures
-    + [ ] BLS
-    + [ ] Threshold BLS
-    + [ ] "Blind BLS"
-    + [ ] Threshold Blind BLS
-
