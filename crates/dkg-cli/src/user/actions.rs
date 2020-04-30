@@ -44,7 +44,7 @@ where
     let group_file = File::open(opts.group)?;
     let group: Group<C> = bincode::deserialize_from(group_file)?;
 
-    let phase0 = Phase0::new(pk, group)?;
+    let phase0 = Phase0::new(pk, group, opts.publish_all)?;
 
     // writes the shares to the board
     let mut board = File::create(opts.output)?;

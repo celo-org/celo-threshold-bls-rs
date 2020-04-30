@@ -203,9 +203,9 @@ pub struct DKGWaitingShare<C: Curve> {
 
 impl<C: Curve> DKGWaitingShare<C> {
     /// Tries to decrypt the provided shares and calculate the secret key and the
-    /// threshold public key.
-    ///
-    /// Note: This function returns only responses which were complaints.
+    /// threshold public key. If `publish_all` is set to true then the returned
+    /// responses will include both complaints and successful statuses. Consider setting
+    /// it to false when communication complexity is high.
     ///
     /// A complaint is returned in the following cases:
     /// - invalid dealer index
@@ -216,26 +216,33 @@ impl<C: Curve> DKGWaitingShare<C> {
     pub(crate) fn process_shares(
         self,
         bundles: &[BundledShares<C>],
+        publish_all: bool,
     ) -> DKGResult<(DKGWaitingResponse<C>, Option<BundledResponses>)> {
         let my_idx = self.info.index;
 
         let (fshare, fpub, statuses) = self.process_shares_get_all(bundles)?;
 
-        let complaints = statuses
+        let responses = statuses
             .get_for_share(my_idx)
             .into_iter()
             .enumerate()
             .map(|(i, b)| Response {
                 dealer_idx: i as Idx,
                 status: Status::from(b),
-            })
-            // only get the complaints
-            .filter(|r| !r.status.is_success())
-            .collect::<Vec<_>>();
+            });
 
-        let bundle = if !complaints.is_empty() {
+        let responses = if !publish_all {
+            // only get the complaints
+            responses
+                .filter(|r| !r.status.is_success())
+                .collect::<Vec<_>>()
+        } else {
+            responses.collect::<Vec<_>>()
+        };
+
+        let bundle = if !responses.is_empty() {
             Some(BundledResponses {
-                responses: complaints,
+                responses,
                 share_idx: my_idx,
             })
         } else {
@@ -728,7 +735,7 @@ pub mod tests {
         let dkgs: Vec<_> = dkgs
             .into_iter()
             .map(|dkg| {
-                let (ndkg, bundle_o) = dkg.process_shares(&all_shares).unwrap();
+                let (ndkg, bundle_o) = dkg.process_shares(&all_shares, false).unwrap();
                 assert!(
                     bundle_o.is_none(),
                     "full dkg should not have any complaints"
@@ -785,7 +792,7 @@ pub mod tests {
         let dkgs: Vec<_> = dkgs
             .into_iter()
             .map(|dkg| {
-                let (ndkg, bundle_o) = dkg.process_shares(&all_shares).unwrap();
+                let (ndkg, bundle_o) = dkg.process_shares(&all_shares, false).unwrap();
                 if let Some(bundle) = bundle_o {
                     response_bundles.push(bundle);
                 }
