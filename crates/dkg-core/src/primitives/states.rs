@@ -89,7 +89,7 @@ impl<C: Curve> DKG<C> {
     /// Creates a new DKG instance from the provided private key and group.
     ///
     /// The private key must be part of the group, otherwise this will return an error.
-    pub fn new(private_key: C::Scalar, group: Group<C>) -> Result<DKG<C>, DKGError> {
+    pub(crate) fn new(private_key: C::Scalar, group: Group<C>) -> Result<DKG<C>, DKGError> {
         use rand::prelude::*;
         Self::new_rand(private_key, group, &mut thread_rng())
     }
@@ -97,7 +97,7 @@ impl<C: Curve> DKG<C> {
     /// Creates a new DKG instance from the provided private key, group and RNG.
     ///
     /// The private key must be part of the group, otherwise this will return an error.
-    pub fn new_rand<R: RngCore>(
+    pub(crate) fn new_rand<R: RngCore>(
         private_key: C::Scalar,
         group: Group<C>,
         rng: &mut R,
@@ -129,7 +129,7 @@ impl<C: Curve> DKG<C> {
     /// Evaluates the secret polynomial at the index of each DKG participant and encrypts
     /// the result with the corresponding public key. Returns the bundled encrypted shares
     /// as well as the next phase of the DKG.
-    pub fn encrypt_shares<R: RngCore>(
+    pub(crate) fn encrypt_shares<R: RngCore>(
         self,
         rng: &mut R,
     ) -> DKGResult<(DKGWaitingShare<C>, BundledShares<C>)> {
@@ -213,7 +213,7 @@ impl<C: Curve> DKGWaitingShare<C> {
     /// - invalid encryption
     /// - invalid length of public polynomial
     /// - invalid share w.r.t. public polynomial
-    pub fn process_shares(
+    pub(crate) fn process_shares(
         self,
         bundles: &[BundledShares<C>],
     ) -> DKGResult<(DKGWaitingResponse<C>, Option<BundledResponses>)> {
@@ -256,11 +256,9 @@ impl<C: Curve> DKGWaitingShare<C> {
     /// correspond to our index may be used in the following way:
     ///
     /// - All responses get broadcast: You assume that shares of other nodes are not good
-    /// unless you hear otherwise. This allows running the deal and response phase together,
-    /// at the cost of higher communication.
+    /// unless you hear otherwise.
     /// - Broadcast only responses which are complaints: You assume that shares of other nodes
-    /// are good unless you hear otherwise. This requires running both a deal and a response
-    /// phase.
+    /// are good unless you hear otherwise.
     fn process_shares_get_all(
         &self,
         bundles: &[BundledShares<C>],
@@ -430,7 +428,7 @@ impl<C: Curve> DKGWaitingResponse<C> {
     ///
     /// If there are complaints in the Status matrix, then it will return an error with the
     /// justifications required for Phase 3 of the DKG.
-    pub fn process_responses(
+    pub(crate) fn process_responses(
         mut self,
         responses: &[BundledResponses],
     ) -> Result<DKGOutput<C>, (DKGWaitingJustification<C>, Option<BundledJustification<C>>)> {
