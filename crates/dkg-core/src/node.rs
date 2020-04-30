@@ -1,11 +1,9 @@
 use super::{
     board::BoardPublisher,
     primitives::{
+        bundles::{BundledJustification, BundledResponses, BundledShares},
         group::Group,
-        states::{
-            BundledResponses, BundledShares, DKGOutput, DKGWaitingJustification,
-            DKGWaitingResponse, DKGWaitingShare, DKG,
-        },
+        phases::{DKGOutput, DKGWaitingJustification, DKGWaitingResponse, DKGWaitingShare, DKG},
         DKGError,
     },
 };
