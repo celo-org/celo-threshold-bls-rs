@@ -555,7 +555,7 @@ where
     /// - share corresponds to public polynomial received in the bundled shares during
     /// first period.
     /// Return an output if `len(qual) > thr`
-    pub fn process_justifications(
+    pub(crate) fn process_justifications(
         self,
         justifs: &[BundledJustification<C>],
     ) -> Result<DKGOutput<C>, DKGError> {

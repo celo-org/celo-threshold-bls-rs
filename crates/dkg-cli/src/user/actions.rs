@@ -107,7 +107,8 @@ pub fn phase3<C: Curve>(opts: FinalizeOpts) -> CLIResult<()> {
     let justifications: Vec<BundledJustification<C>> =
         bincode::deserialize_from(justifications_file)?;
 
-    match phase3.process_justifications(&justifications) {
+    // dummy writer instance with `vec!`
+    match phase3.run(&mut vec![], &justifications) {
         Ok(out) => {
             println!("Success. Your share and threshold pubkey are written to the output.");
             let output_file = File::create(opts.output)?;

@@ -30,7 +30,7 @@ pub enum Phase2Result<C: Curve> {
     /// The final DKG output
     Output(DKGOutput<C>),
     /// Indicates that Phase 2 failed and that the protocol must proceed to Phase 3
-    GoToPhase3(DKGWaitingJustification<C>),
+    GoToPhase3(Phase3<C>),
 }
 
 type NodeResult<T> = std::result::Result<T, NodeError>;
@@ -67,8 +67,8 @@ impl<C: Curve> Phase0<C> {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 /// Phase 1 of the DKG. This phase reads the shares generated from Phase 0 and if there were
 /// complaints, it generates responses which are published to the board.
+#[serde(bound = "C::Scalar: DeserializeOwned")]
 pub struct Phase1<C: Curve> {
-    #[serde(bound = "C::Scalar: Serialize + DeserializeOwned")]
     inner: DKGWaitingShare<C>,
     publish_all: bool,
 }
@@ -77,9 +77,16 @@ pub struct Phase1<C: Curve> {
 /// Phase 2 of the DKG. This phase reads the responses generated from Phase 1, and if processing
 /// is successful outputs the result of the DKG. If processing returns an error, then any
 /// justifications get published to the board and it produces the necessary data for Phase 3.
+#[serde(bound = "C::Scalar: DeserializeOwned")]
 pub struct Phase2<C: Curve> {
-    #[serde(bound = "C::Scalar: Serialize + DeserializeOwned")]
     inner: DKGWaitingResponse<C>,
+}
+
+/// Phase 3 produces the final result or an error
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(bound = "C::Scalar: DeserializeOwned")]
+pub struct Phase3<C: Curve> {
+    inner: DKGWaitingJustification<C>,
 }
 
 impl<C, B, R> DKGPhase<C, B, &mut R> for Phase0<C>
@@ -145,9 +152,21 @@ where
                         .map_err(|_| NodeError::PublisherError)?;
                 }
 
-                Ok(Phase2Result::GoToPhase3(next))
+                Ok(Phase2Result::GoToPhase3(Phase3 { inner: next }))
             }
         }
+    }
+}
+
+impl<C, B> DKGPhase<C, B, &[BundledJustification<C>]> for Phase3<C>
+where
+    C: Curve,
+    B: BoardPublisher<C>,
+{
+    type Next = DKGOutput<C>;
+
+    fn run(self, _: &mut B, responses: &[BundledJustification<C>]) -> NodeResult<Self::Next> {
+        Ok(self.inner.process_justifications(responses)?)
     }
 }
 
@@ -369,11 +388,11 @@ mod tests {
             })
             .collect::<Vec<_>>();
 
-        let justifications = board.justifs;
+        let justifications = board.justifs.clone();
 
         let outputs = phase3s
             .into_iter()
-            .map(|phase3| phase3.process_justifications(&justifications).unwrap())
+            .map(|phase3| phase3.run(&mut board, &justifications).unwrap())
             .collect::<Vec<_>>();
 
         // everyone knows who qualified correctly and who did not
