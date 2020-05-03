@@ -95,26 +95,6 @@ pub mod common {
             T::internal_verify(public, msg_bytes, sig_bytes, true)
         }
     }
-
-    impl<T> SignatureSchemeExt for T
-    where
-        T: BLSScheme,
-    {
-        fn sign_without_hashing(
-            private: &Self::Private,
-            msg: &[u8],
-        ) -> Result<Vec<u8>, Self::Error> {
-            T::internal_sign(private, msg, false)
-        }
-
-        fn verify_without_hashing(
-            public: &Self::Public,
-            msg_bytes: &[u8],
-            sig_bytes: &[u8],
-        ) -> Result<(), Self::Error> {
-            T::internal_verify(public, msg_bytes, sig_bytes, false)
-        }
-    }
 }
 
 /// G1Scheme implements the BLS signature scheme with G1 as private / public

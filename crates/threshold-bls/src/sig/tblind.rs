@@ -1,6 +1,8 @@
-use crate::poly::Eval;
-use crate::sig::{BlindThresholdScheme, Blinder, Partial, ThresholdSchemeExt};
-
+use crate::poly::{Poly, Eval,PolyError};
+use crate::sig::{BlindThresholdScheme, ThresholdScheme,BlindScheme, Partial};
+use crate::sig::blind::BlindError;
+use serde::{Deserialize, Serialize};
+use crate::sig::tbls::Share;
 use thiserror::Error;
 
 #[derive(Debug, Error)]
@@ -9,7 +11,7 @@ use thiserror::Error;
 pub enum BlindThresholdError<E: 'static + std::error::Error> {
     /// Raised when unblinding fails
     #[error(transparent)]
-    BlinderError(E),
+    BlindError(E),
 
     /// Raised when (de)serialization fails
     #[error(transparent)]
@@ -18,11 +20,24 @@ pub enum BlindThresholdError<E: 'static + std::error::Error> {
 
 impl<T> BlindThresholdScheme for T
 where
-    T: 'static + ThresholdSchemeExt + Blinder,
+    T: 'static + ThresholdScheme + BlindScheme,
 {
-    type Error = BlindThresholdError<<T as Blinder>::Error>;
+    type Error = BlindThresholdError<<T as BlindScheme>::Error>;
 
-    fn unblind_partial(
+    fn blind_partial_sign(private: &Share<Self::Private>, blinded_msg: &[u8]) -> Result<Partial, <Self as BlindThresholdScheme>::Error> {
+        let sig = Self::blind_sign(&private.private,blinded_msg).map_err(BlindThresholdError::BlindError);
+        let partial = Eval {
+            value: sig,
+            index: private.index,
+        };
+        //let ret = bincode::serialize(&partial).map_err(BlindThresholdError::BincodeError)?;
+        match bincode::serialize(&partial) {
+            Ok(ret) => Ok(ret),
+            Err(e) => Err(BlindThresholdError::BincodeError(e)),
+        }
+    }
+
+    fn unblind_partial_sig(
         t: &Self::Token,
         partial: &[u8],
     ) -> Result<Partial, <Self as BlindThresholdScheme>::Error> {
@@ -31,15 +46,22 @@ where
 
         let partially_unblinded =
             Self::unblind(t, &partial.value).map_err(BlindThresholdError::BlinderError)?;
-
         let partially_unblinded = Eval {
             index: partial.index,
             value: partially_unblinded,
         };
-
         let injected = bincode::serialize(&partially_unblinded)?;
-
         Ok(injected)
+    }
+
+    fn blind_partial_verify(
+        public: &Poly<Self::Public>,
+        blind_msg: &[u8],
+        blind_partial: &[u8],
+    ) -> Result<(), <Self as BlindThresholdScheme>::Error> {
+        let blinded_partial: Eval<Vec<u8>> = bincode::deserialize(blind_partial)?;
+        let public_i = public.eval(blinded_partial.index);
+        Self::blind_verify(public_i,blind_msg,blinded_partial.value).map_err(BlindThresholdError::BlindError)
     }
 }
 
@@ -54,6 +76,7 @@ mod tests {
     use crate::sig::{
         bls::{G1Scheme, G2Scheme},
         tbls::Share,
+        SignatureScheme,
     };
     use rand::thread_rng;
 
@@ -98,7 +121,7 @@ mod tests {
 
     fn aggregate_partially_unblinded<B>()
     where
-        B: BlindThresholdScheme,
+        B: BlindThresholdScheme + SignatureScheme,
     {
         let n = 5;
         let thr = 4;

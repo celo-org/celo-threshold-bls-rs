@@ -2,10 +2,10 @@
 //! [`SignatureScheme`](../trait.SignatureScheme.html)
 use crate::poly::{Eval, Idx, Poly, PolyError};
 use crate::sig::{
-    Partial, SignatureScheme, SignatureSchemeExt, ThresholdScheme, ThresholdSchemeExt,
-};
+    Partial, SignatureScheme, SignatureSchemeExt, ThresholdScheme};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
+use std::error;
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 /// A private share which is part of the threshold signing key
@@ -92,41 +92,6 @@ impl<I: SignatureScheme> ThresholdScheme for I {
             .map_err(ThresholdError::PolyError)?;
         Ok(bincode::serialize(&recovered_sig).expect("could not serialize"))
     }
-
-    fn verify(public: &Self::Public, msg: &[u8], sig: &[u8]) -> Result<(), Self::Error> {
-        <Self as SignatureScheme>::verify(public, msg, sig).map_err(ThresholdError::SignatureError)
-    }
-}
-
-impl<I: SignatureSchemeExt> ThresholdSchemeExt for I {
-    fn partial_sign_without_hashing(
-        private: &Share<Self::Private>,
-        msg: &[u8],
-    ) -> Result<Vec<u8>, <Self as ThresholdScheme>::Error> {
-        let sig = Self::sign_without_hashing(&private.private, msg)
-            .map_err(ThresholdError::SignatureError)?;
-
-        let partial = Eval {
-            index: private.index,
-            value: sig,
-        };
-
-        let ret = bincode::serialize(&partial)?;
-
-        Ok(ret)
-    }
-
-    fn partial_verify_without_hashing(
-        public: &Poly<Self::Public>,
-        msg: &[u8],
-        partial: &[u8],
-    ) -> Result<(), <Self as ThresholdScheme>::Error> {
-        let partial: Eval<Vec<u8>> = bincode::deserialize(partial)?;
-
-        let public_i = public.eval(partial.index);
-        Self::verify_without_hashing(&public_i.value, msg, &partial.value)
-            .map_err(ThresholdError::SignatureError)
-    }
 }
 
 #[cfg(feature = "bls12_381")]
@@ -137,7 +102,7 @@ mod tests {
         curve::bls12381::PairingCurve as PCurve,
         sig::{
             bls::{G1Scheme, G2Scheme},
-            Scheme,
+            Scheme, SignatureScheme,
         },
     };
 
@@ -161,7 +126,7 @@ mod tests {
         (shares, private.commit())
     }
 
-    fn test_threshold_scheme<T: ThresholdScheme>(creator: ShareCreator<T>) {
+    fn test_threshold_scheme<T: ThresholdScheme + SignatureScheme>(creator: ShareCreator<T>) {
         let threshold = 4;
         let (shares, public) = creator(5, threshold);
         let msg = vec![1, 9, 6, 9];

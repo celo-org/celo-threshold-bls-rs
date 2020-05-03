@@ -92,10 +92,6 @@ impl<I> BlindScheme for I where I: Scheme + common::BLSScheme {
         hm.mul(private);
         Ok(bincode::serialize(&hm).expect("serialization should not fail"))
     }
-
-    fn verify(public: &Self::Public, msg: &[u8], sig: &[u8]) -> Result<(), Self::Error> {
-        I::internal_verify(public,msg,sig,true).map_err(|e| BlindError::from(e)) 
-    }
 }
 
 #[cfg(test)]
@@ -104,6 +100,7 @@ mod tests {
     use super::*;
     use crate::curve::bls12381::PairingCurve as PCurve;
     use crate::sig::bls::{G1Scheme, G2Scheme};
+    use crate::sig::SignatureScheme;
     use rand::thread_rng;
 
     #[cfg(feature = "bls12_381")]
@@ -120,7 +117,7 @@ mod tests {
 
     fn blind_test<B>()
     where
-        B: BlindScheme,
+        B: BlindScheme + SignatureScheme,
     {
         let (private, public) = B::keypair(&mut thread_rng());
         let msg = vec![1, 9, 6, 9];

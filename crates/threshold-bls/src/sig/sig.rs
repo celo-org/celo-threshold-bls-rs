@@ -1,4 +1,4 @@
-//pub use super::tbls::Share; // import and re-export it for easier access
+pub use super::tbls::Share; // import and re-export it for easier access
 use crate::{
     group::{Element, Point, Scalar},
     poly::Poly,
@@ -104,69 +104,54 @@ pub trait BlindScheme: Scheme {
 
     fn blind_sign(private: &Self::Private, blinded_msg: &[u8]) -> Result<Vec<u8>, Self::Error>;
 
-    fn verify(public: &Self::Public, msg: &[u8], sig: &[u8]) -> Result<(), Self::Error>;
     fn blind_verify(public: &Self::Public, blinded_msg: &[u8], blinded_sig: &[u8]) -> Result<(), Self::Error>;
 }
-/*/// Partial is simply an alias to denote a partial signature.*/
-//pub type Partial = Vec<u8>;
+/// Partial is simply an alias to denote a partial signature.
+pub type Partial = Vec<u8>;
 
-///// ThresholdScheme is a threshold-based `t-n` signature scheme. The security of
-///// such a scheme means at least `t` participants are required produce a "partial
-///// signature" to then produce a regular signature.
-///// The `dkg-core` module allows participants to create a distributed private/public key
-/*/// that can be used with implementations `ThresholdScheme`.*/
-/*pub trait ThresholdScheme: Scheme {*/
-    ///// Error produced when partially signing, aggregating or verifying
-    //type Error: Error;
+/// ThresholdScheme is a threshold-based `t-n` signature scheme. The security of
+/// such a scheme means at least `t` participants are required produce a "partial
+/// signature" to then produce a regular signature.
+/// The `dkg-core` module allows participants to create a distributed private/public key
+/// that can be used with implementations `ThresholdScheme`.
+pub trait ThresholdScheme: Scheme {
+    /// Error produced when partially signing, aggregating or verifying
+    type Error: Error;
 
-    ///// Partially signs a message with a share of the private key
-    //fn partial_sign(private: &Share<Self::Private>, msg: &[u8]) -> Result<Partial, Self::Error>;
+    /// Partially signs a message with a share of the private key
+    fn partial_sign(private: &Share<Self::Private>, msg: &[u8]) -> Result<Partial, Self::Error>;
 
-    ///// Verifies a partial signature on a message against the public polynomial
-    //fn partial_verify(
-        //public: &Poly<Self::Public>,
-        //msg: &[u8],
-        //partial: &[u8],
-    //) -> Result<(), Self::Error>;
+    /// Verifies a partial signature on a message against the public polynomial
+    fn partial_verify(
+        public: &Poly<Self::Public>,
+        msg: &[u8],
+        partial: &[u8],
+    ) -> Result<(), Self::Error>;
 
-    ///// Aggregates all partials signature together. Note that this method does
-    ///// not verify if the partial signatures are correct or not; it only
-    ///// aggregates them.
-    //fn aggregate(threshold: usize, partials: &[Partial]) -> Result<Vec<u8>, Self::Error>;
+    /// Aggregates all partials signature together. Note that this method does
+    /// not verify if the partial signatures are correct or not; it only
+    /// aggregates them.
+    fn aggregate(threshold: usize, partials: &[Partial]) -> Result<Vec<u8>, Self::Error>;
+}
 
-    ///// Verifies a threshold signature on a message against the public key which corresponds
-    ///// to the public polynomial of the shares that produced the partial signatures
-    //fn verify(public: &Self::Public, msg: &[u8], sig: &[u8]) -> Result<(), Self::Error>;
-//}
+/// BlindThreshold is ThresholdScheme that allows to verify a partially blinded
+/// signature as well blinded message, to aggregate them into one blinded signature
+/// such that it can be unblinded after and verified as a regular signature.
+pub trait BlindThresholdScheme: BlindScheme {
+    type Error: Error;
 
-///// Extension trait over `ThresholdScheme` which provides partial signing & verification methods
-///// which do not hash the message.
-//pub trait ThresholdSchemeExt: ThresholdScheme {
-    ///// Partially signs a message with a share of the private key **without hashing the message**
-    //fn partial_sign_without_hashing(
-        //private: &Share<Self::Private>,
-        //msg: &[u8],
-    //) -> Result<Partial, Self::Error>;
+    fn blind_partial_sign(private: &Share<Self::Private>, msg: &[u8]) -> Result<Partial, <Self as BlindThresholdScheme>::Error>;
 
-    ///// Verifies a partial signature on a message against the public polynomial **without hashing
-    ///// the message**
-    //fn partial_verify_without_hashing(
-        //public: &Poly<Self::Public>,
-        //msg: &[u8],
-        //partial: &[u8],
-    //) -> Result<(), Self::Error>;
-//}
+    /// Given the blinding factor that was used to blind a message that was blind partially
+    /// signed, it will unblind it and return the cleartext signature
+    fn unblind_partial_sig(
+        t: &Self::Token,
+        partial: &[u8],
+    ) -> Result<Partial, <Self as BlindThresholdScheme>::Error>;
 
-///// BlindThreshold is ThresholdScheme that allows to verify a partially blinded
-///// signature as well blinded message, to aggregate them into one blinded signature
-///// such that it can be unblinded after and verified as a regular signature.
-//pub trait BlindThresholdScheme: ThresholdSchemeExt + Blinder {
-    //type Error: Error;
-
-    ///// Given the blinding factor that was used to blind a message that was blind partially
-    ///// signed, it will unblind it and return the cleartext signature
-    //fn unblind_partial(
-        //t: &Self::Token,
-        //partial: &[u8],
-    //) -> Result<Partial, <Self as BlindThresholdScheme>::Error>;
-/*}*/
+    fn blind_partial_verify(
+        public: &Poly<Self::Public>,
+        blind_msg: &[u8],
+        blind_partial: &[u8],
+    ) -> Result<(), <Self as BlindThresholdScheme>::Error>;
+}
