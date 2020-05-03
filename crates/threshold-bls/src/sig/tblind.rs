@@ -24,7 +24,7 @@ where
 {
     type Error = BlindThresholdError<<T as BlindScheme>::Error>;
 
-    fn blind_partial_sign(private: &Share<Self::Private>, blinded_msg: &[u8]) -> Result<Partial, <Self as BlindThresholdScheme>::Error> {
+    fn sign_blind_partial(private: &Share<Self::Private>, blinded_msg: &[u8]) -> Result<Partial, <Self as BlindThresholdScheme>::Error> {
         let sig = Self::blind_sign(&private.private,blinded_msg).map_err(BlindThresholdError::BlindError)?;
         let partial = Eval {
             value: sig,
@@ -49,7 +49,7 @@ where
         bincode::serialize(&partially_unblinded).map_err(BlindThresholdError::BincodeError)
     }
 
-    fn blind_partial_verify(
+    fn verify_blind_partial(
         public: &Poly<Self::Public>,
         blind_msg: &[u8],
         blind_partial: &[u8],
@@ -129,8 +129,14 @@ mod tests {
         // partially sign it
         let partials: Vec<_> = shares
             .iter()
-            .map(|share| B::blind_partial_sign(share, &blinded).unwrap())
+            .map(|share| B::sign_blind_partial(share, &blinded).unwrap())
             .collect();
+
+        // verify if each blind partial signatures is correct
+        assert_eq!(false,partials
+            .iter()
+            .any(|p| B::verify_blind_partial(&public, &blinded,p).is_err()));
+
 
         // unblind each partial sig
         let unblindeds: Vec<_> = partials

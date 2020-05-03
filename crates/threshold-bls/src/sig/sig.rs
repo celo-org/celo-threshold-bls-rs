@@ -140,7 +140,7 @@ pub trait ThresholdScheme: Scheme {
 pub trait BlindThresholdScheme: BlindScheme {
     type Error: Error;
 
-    fn blind_partial_sign(private: &Share<Self::Private>, msg: &[u8]) -> Result<Partial, <Self as BlindThresholdScheme>::Error>;
+    fn sign_blind_partial(private: &Share<Self::Private>, msg: &[u8]) -> Result<Partial, <Self as BlindThresholdScheme>::Error>;
 
     /// Given the blinding factor that was used to blind a message that was blind partially
     /// signed, it will unblind it and return the cleartext signature
@@ -149,7 +149,7 @@ pub trait BlindThresholdScheme: BlindScheme {
         partial: &[u8],
     ) -> Result<Partial, <Self as BlindThresholdScheme>::Error>;
 
-    fn blind_partial_verify(
+    fn verify_blind_partial(
         public: &Poly<Self::Public>,
         blind_msg: &[u8],
         blind_partial: &[u8],
