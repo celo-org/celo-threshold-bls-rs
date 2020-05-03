@@ -25,16 +25,12 @@ where
     type Error = BlindThresholdError<<T as BlindScheme>::Error>;
 
     fn blind_partial_sign(private: &Share<Self::Private>, blinded_msg: &[u8]) -> Result<Partial, <Self as BlindThresholdScheme>::Error> {
-        let sig = Self::blind_sign(&private.private,blinded_msg).map_err(BlindThresholdError::BlindError);
+        let sig = Self::blind_sign(&private.private,blinded_msg).map_err(BlindThresholdError::BlindError)?;
         let partial = Eval {
             value: sig,
             index: private.index,
         };
-        //let ret = bincode::serialize(&partial).map_err(BlindThresholdError::BincodeError)?;
-        match bincode::serialize(&partial) {
-            Ok(ret) => Ok(ret),
-            Err(e) => Err(BlindThresholdError::BincodeError(e)),
-        }
+        bincode::serialize(&partial).map_err(BlindThresholdError::BincodeError)
     }
 
     fn unblind_partial_sig(
@@ -45,13 +41,12 @@ where
         let partial: Eval<Vec<u8>> = bincode::deserialize(partial)?;
 
         let partially_unblinded =
-            Self::unblind(t, &partial.value).map_err(BlindThresholdError::BlinderError)?;
+            Self::unblind_sig(t, &partial.value).map_err(BlindThresholdError::BlindError)?;
         let partially_unblinded = Eval {
             index: partial.index,
             value: partially_unblinded,
         };
-        let injected = bincode::serialize(&partially_unblinded)?;
-        Ok(injected)
+        bincode::serialize(&partially_unblinded).map_err(BlindThresholdError::BincodeError)
     }
 
     fn blind_partial_verify(
@@ -61,7 +56,7 @@ where
     ) -> Result<(), <Self as BlindThresholdScheme>::Error> {
         let blinded_partial: Eval<Vec<u8>> = bincode::deserialize(blind_partial)?;
         let public_i = public.eval(blinded_partial.index);
-        Self::blind_verify(public_i,blind_msg,blinded_partial.value).map_err(BlindThresholdError::BlindError)
+        Self::blind_verify(&public_i.value,blind_msg,&blinded_partial.value).map_err(BlindThresholdError::BlindError)
     }
 }
 
@@ -121,7 +116,7 @@ mod tests {
 
     fn aggregate_partially_unblinded<B>()
     where
-        B: BlindThresholdScheme + SignatureScheme,
+        B: BlindThresholdScheme + SignatureScheme + ThresholdScheme,
     {
         let n = 5;
         let thr = 4;
@@ -129,18 +124,18 @@ mod tests {
         let msg = vec![1, 9, 6, 9];
 
         // blind the msg
-        let (token, blinded) = B::blind(&msg, &mut thread_rng());
+        let (token, blinded) = B::blind_msg(&msg, &mut thread_rng());
 
         // partially sign it
         let partials: Vec<_> = shares
             .iter()
-            .map(|share| B::partial_sign_without_hashing(share, &blinded).unwrap())
+            .map(|share| B::blind_partial_sign(share, &blinded).unwrap())
             .collect();
 
         // unblind each partial sig
         let unblindeds: Vec<_> = partials
             .iter()
-            .map(|p| B::unblind_partial(&token, p).unwrap())
+            .map(|p| B::unblind_partial_sig(&token, p).unwrap())
             .collect();
 
         // aggregate

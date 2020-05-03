@@ -1,6 +1,6 @@
 use crate::group::{Element, Point, Scalar};
 use crate::sig::bls::{common,BLSError};
-use crate::sig::{Scheme,BlindScheme, SignatureScheme, SignatureSchemeExt};
+use crate::sig::{Scheme,BlindScheme, SignatureScheme};
 use rand::RngCore;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
