@@ -22,7 +22,7 @@ pub enum BLSError {
 // trait into a public trait
 // see https://github.com/rust-lang/rust/issues/34537
 // XXX another way to pull it off without this hack?
-mod common {
+pub mod common {
     use super::*;
 
     /// BLSScheme is an internal trait that encompasses the common work between a
