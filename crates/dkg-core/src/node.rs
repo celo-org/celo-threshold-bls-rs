@@ -179,7 +179,8 @@ mod tests {
         curve::bls12381::{self, PairingCurve as BLS12_381},
         curve::zexe::{self as bls12_377, PairingCurve as BLS12_377},
         poly::Idx,
-        sig::{BlindThresholdScheme, G1Scheme, G2Scheme, Scheme},
+        sig::{BlindThresholdScheme, G1Scheme, G2Scheme, Scheme,ThresholdScheme,
+        SignatureScheme},
     };
 
     // helper to simulate a phase0 where a participant does not publish their
@@ -207,7 +208,7 @@ mod tests {
         C: Curve,
         // We need to bind the Curve's Point and Scalars to the Scheme
         S: Scheme<Public = <C as Curve>::Point, Private = <C as Curve>::Scalar>
-            + BlindThresholdScheme,
+            + BlindThresholdScheme + ThresholdScheme + SignatureScheme,
     {
         let msg = rand::random::<[u8; 32]>().to_vec();
 
@@ -215,19 +216,19 @@ mod tests {
         let outputs = run_dkg::<C, S>(n, t);
 
         // blinds the message
-        let (token, blinded_msg) = S::blind(&msg[..], &mut rand::thread_rng());
+        let (token, blinded_msg) = S::blind_msg(&msg[..], &mut rand::thread_rng());
 
         // generates a partial sig with each share from the dkg
         let partial_sigs = outputs
             .iter()
-            .map(|output| S::partial_sign_without_hashing(&output.share, &blinded_msg[..]).unwrap())
+            .map(|output| S::sign_blind_partial(&output.share, &blinded_msg[..]).unwrap())
             .collect::<Vec<_>>();
 
         // aggregates them
         let blinded_sig = S::aggregate(t, &partial_sigs).unwrap();
 
         // the user unblinds it
-        let unblinded_sig = S::unblind(&token, &blinded_sig).unwrap();
+        let unblinded_sig = S::unblind_sig(&token, &blinded_sig).unwrap();
 
         // get the public key (we have already checked that all outputs' pubkeys are the same)
         let pubkey = outputs[0].public.public_key();
