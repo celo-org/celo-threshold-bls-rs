@@ -2,10 +2,9 @@
 //! [`SignatureScheme`](../trait.SignatureScheme.html)
 use crate::poly::{Eval, Idx, Poly, PolyError};
 use crate::sig::{
-    Partial, SignatureScheme, SignatureSchemeExt, ThresholdScheme};
+    Partial, SignatureScheme, ThresholdScheme};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
-use std::error;
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 /// A private share which is part of the threshold signing key

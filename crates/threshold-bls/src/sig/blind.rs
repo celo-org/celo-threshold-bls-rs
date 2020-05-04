@@ -1,10 +1,9 @@
 use crate::group::{Element, Point, Scalar};
 use crate::sig::bls::{common,BLSError};
-use crate::sig::{Scheme,BlindScheme, SignatureScheme};
+use crate::sig::{Scheme,BlindScheme};
 use rand::RngCore;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
-use std::error;
 
 /// BlindError are errors which may be returned from a blind signature scheme
 #[derive(Debug, Error)]
@@ -77,9 +76,9 @@ impl<I> BlindScheme for I where I: Scheme + common::BLSScheme {
     
     fn blind_verify(public: &I::Public, blinded_msg: &[u8], blinded_sig: &[u8]) -> Result<(), Self::Error> {
         // message point
-        let mut hm: I::Signature = bincode::deserialize(blinded_msg)?;
+        let hm: I::Signature = bincode::deserialize(blinded_msg)?;
         // signature point
-        let mut hs: I::Signature = bincode::deserialize(blinded_sig)?;
+        let hs: I::Signature = bincode::deserialize(blinded_sig)?;
         if !I::final_exp(public,&hs,&hm) {
             return Err(BlindError::from(BLSError::InvalidSig));
         }

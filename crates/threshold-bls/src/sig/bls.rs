@@ -1,5 +1,5 @@
 use crate::group::{Element, PairingCurve, Point};
-use crate::sig::{Scheme, SignatureScheme, SignatureSchemeExt};
+use crate::sig::{Scheme, SignatureScheme};
 use std::{fmt::Debug, marker::PhantomData};
 use thiserror::Error;
 
