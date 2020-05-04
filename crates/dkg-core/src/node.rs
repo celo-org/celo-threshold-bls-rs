@@ -179,8 +179,7 @@ mod tests {
         curve::bls12381::{self, PairingCurve as BLS12_381},
         curve::zexe::{self as bls12_377, PairingCurve as BLS12_377},
         poly::Idx,
-        sig::{BlindThresholdScheme, G1Scheme, G2Scheme, Scheme,ThresholdScheme,
-        SignatureScheme},
+        sig::{BlindThresholdScheme, G1Scheme, G2Scheme, Scheme, SignatureScheme, ThresholdScheme},
     };
 
     // helper to simulate a phase0 where a participant does not publish their
@@ -208,7 +207,9 @@ mod tests {
         C: Curve,
         // We need to bind the Curve's Point and Scalars to the Scheme
         S: Scheme<Public = <C as Curve>::Point, Private = <C as Curve>::Scalar>
-            + BlindThresholdScheme + ThresholdScheme + SignatureScheme,
+            + BlindThresholdScheme
+            + ThresholdScheme
+            + SignatureScheme,
     {
         let msg = rand::random::<[u8; 32]>().to_vec();
 

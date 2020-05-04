@@ -1,8 +1,7 @@
 //! Threshold Signatures implementation for any type which implements
 //! [`SignatureScheme`](../trait.SignatureScheme.html)
 use crate::poly::{Eval, Idx, Poly, PolyError};
-use crate::sig::{
-    Partial, SignatureScheme, ThresholdScheme};
+use crate::sig::{Partial, SignatureScheme, ThresholdScheme};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 

@@ -1,6 +1,6 @@
-use crate::poly::{Poly, Eval};
-use crate::sig::{BlindThresholdScheme, ThresholdScheme,BlindScheme, Partial};
+use crate::poly::{Eval, Poly};
 use crate::sig::tbls::Share;
+use crate::sig::{BlindScheme, BlindThresholdScheme, Partial, ThresholdScheme};
 use thiserror::Error;
 
 #[derive(Debug, Error)]
@@ -22,8 +22,12 @@ where
 {
     type Error = BlindThresholdError<<T as BlindScheme>::Error>;
 
-    fn sign_blind_partial(private: &Share<Self::Private>, blinded_msg: &[u8]) -> Result<Partial, <Self as BlindThresholdScheme>::Error> {
-        let sig = Self::blind_sign(&private.private,blinded_msg).map_err(BlindThresholdError::BlindError)?;
+    fn sign_blind_partial(
+        private: &Share<Self::Private>,
+        blinded_msg: &[u8],
+    ) -> Result<Partial, <Self as BlindThresholdScheme>::Error> {
+        let sig = Self::blind_sign(&private.private, blinded_msg)
+            .map_err(BlindThresholdError::BlindError)?;
         let partial = Eval {
             value: sig,
             index: private.index,
@@ -54,7 +58,8 @@ where
     ) -> Result<(), <Self as BlindThresholdScheme>::Error> {
         let blinded_partial: Eval<Vec<u8>> = bincode::deserialize(blind_partial)?;
         let public_i = public.eval(blinded_partial.index);
-        Self::blind_verify(&public_i.value,blind_msg,&blinded_partial.value).map_err(BlindThresholdError::BlindError)
+        Self::blind_verify(&public_i.value, blind_msg, &blinded_partial.value)
+            .map_err(BlindThresholdError::BlindError)
     }
 }
 
@@ -132,10 +137,12 @@ mod tests {
             .collect();
 
         // verify if each blind partial signatures is correct
-        assert_eq!(false,partials
-            .iter()
-            .any(|p| B::verify_blind_partial(&public, &blinded,p).is_err()));
-
+        assert_eq!(
+            false,
+            partials
+                .iter()
+                .any(|p| B::verify_blind_partial(&public, &blinded, p).is_err())
+        );
 
         // unblind each partial sig
         let unblindeds: Vec<_> = partials
@@ -168,19 +175,19 @@ mod tests {
             .collect();
 
         // verify if each blind partial signatures is correct
-        assert_eq!(false,partials
-            .iter()
-            .any(|p| B::verify_blind_partial(&public, &blinded,p).is_err()));
-
+        assert_eq!(
+            false,
+            partials
+                .iter()
+                .any(|p| B::verify_blind_partial(&public, &blinded, p).is_err())
+        );
 
         // aggregate blinded partials
         let blinded_final = B::aggregate(thr, &partials).unwrap();
         // unblind the final signature
-        let final_sig = B::unblind_sig(&token,&blinded_final).unwrap();
+        let final_sig = B::unblind_sig(&token, &blinded_final).unwrap();
 
         // verify the final signature
         B::verify(&public.public_key(), &msg, &final_sig).unwrap();
     }
-
 }
-

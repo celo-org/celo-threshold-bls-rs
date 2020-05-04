@@ -1,6 +1,6 @@
 use crate::group::{Element, Point, Scalar};
-use crate::sig::bls::{common,BLSError};
-use crate::sig::{Scheme,BlindScheme};
+use crate::sig::bls::{common, BLSError};
+use crate::sig::{BlindScheme, Scheme};
 use rand::RngCore;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
@@ -45,7 +45,10 @@ impl<S: Scalar> Token<S> {
 
 /// The blinder follows the protocol described
 /// in this [paper](https://eprint.iacr.org/2018/733.pdf).
-impl<I> BlindScheme for I where I: Scheme + common::BLSScheme {
+impl<I> BlindScheme for I
+where
+    I: Scheme + common::BLSScheme,
+{
     type Token = Token<I::Private>;
     type Error = BlindError;
 
@@ -73,13 +76,17 @@ impl<I> BlindScheme for I where I: Scheme + common::BLSScheme {
         let serialized = bincode::serialize(&sig)?;
         Ok(serialized)
     }
-    
-    fn blind_verify(public: &I::Public, blinded_msg: &[u8], blinded_sig: &[u8]) -> Result<(), Self::Error> {
+
+    fn blind_verify(
+        public: &I::Public,
+        blinded_msg: &[u8],
+        blinded_sig: &[u8],
+    ) -> Result<(), Self::Error> {
         // message point
         let hm: I::Signature = bincode::deserialize(blinded_msg)?;
         // signature point
         let hs: I::Signature = bincode::deserialize(blinded_sig)?;
-        if !I::final_exp(public,&hs,&hm) {
+        if !I::final_exp(public, &hs, &hm) {
             return Err(BlindError::from(BLSError::InvalidSig));
         }
         Ok(())

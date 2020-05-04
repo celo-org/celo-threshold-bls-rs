@@ -75,7 +75,7 @@ pub trait SignatureScheme: Scheme {
 ///  # {
 ///  use rand::prelude::*;
 ///  use threshold_bls::{
-///     sig::{BlindScheme,SignatureScheme, Scheme, G2Scheme}, 
+///     sig::{BlindScheme,SignatureScheme, Scheme, G2Scheme},
 ///     group::{Element, Point}
 ///  };
 ///  use threshold_bls::curve::bls12381::PairingCurve as PC;
@@ -124,7 +124,11 @@ pub trait BlindScheme: Scheme {
     /// blind_verify takes the blinded message and the blinded signature and
     /// checks if the latter is correct. One must then unblind the signature so
     /// it can be verified using the regular `SignatureScheme::verify` method.
-    fn blind_verify(public: &Self::Public, blinded_msg: &[u8], blinded_sig: &[u8]) -> Result<(), Self::Error>;
+    fn blind_verify(
+        public: &Self::Public,
+        blinded_msg: &[u8],
+        blinded_sig: &[u8],
+    ) -> Result<(), Self::Error>;
 }
 
 /// Partial is simply an alias to denote a partial signature.
@@ -162,8 +166,11 @@ pub trait BlindThresholdScheme: BlindScheme {
     type Error: Error;
 
     /// sign_blind_partial partially signs a blinded message and returns a
-    /// partial signatures over this blinded message. 
-    fn sign_blind_partial(private: &Share<Self::Private>, blinded_msg: &[u8]) -> Result<Partial, <Self as BlindThresholdScheme>::Error>;
+    /// partial signatures over this blinded message.
+    fn sign_blind_partial(
+        private: &Share<Self::Private>,
+        blinded_msg: &[u8],
+    ) -> Result<Partial, <Self as BlindThresholdScheme>::Error>;
 
     /// Given the blinding factor that was used to blind a message that was blind partially
     /// signed, it will unblind it and return the cleartext signature

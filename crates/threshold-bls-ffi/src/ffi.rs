@@ -6,8 +6,7 @@ use serde::{de::DeserializeOwned, Serialize};
 use threshold_bls::{
     poly::{Idx as Index, Poly},
     sig::{
-        BlindScheme, Scheme, Share, SignatureScheme, ThresholdScheme, Token, 
-        BlindThresholdScheme
+        BlindScheme, BlindThresholdScheme, Scheme, Share, SignatureScheme, ThresholdScheme, Token,
     },
 };
 
