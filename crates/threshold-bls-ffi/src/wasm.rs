@@ -6,7 +6,9 @@ use rand_core::{RngCore, SeedableRng};
 
 use threshold_bls::{
     poly::{Idx as Index, Poly},
-    sig::{BlindScheme, Scheme, Share, SignatureScheme, ThresholdScheme, Token},
+    sig::{
+        BlindScheme, BlindThresholdScheme, Scheme, Share, SignatureScheme, ThresholdScheme, Token,
+    },
 };
 
 use crate::*;
