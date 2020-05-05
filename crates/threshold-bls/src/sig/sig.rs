@@ -66,7 +66,7 @@ pub trait SignatureScheme: Scheme {
 }
 
 /// BlindScheme is a signature scheme where the message can be blinded before
-/// signature so the signer does not know the real message. The signature can
+/// signing so the signer does not know the real message. The signature can
 /// later be "unblinded" as to reveal a valid signature over the initial
 /// message.
 ///
@@ -85,13 +85,14 @@ pub trait SignatureScheme: Scheme {
 ///  // we first blind the message so the signers don't know the real underlying
 ///  // message they are signing.
 ///  let (token, blinded_msg) = G2Scheme::<PC>::blind_msg(&msg,&mut thread_rng());
-///  // this method is called on the signers, that sign blindly.
+///  // this method is called by the signers, that sign blindly.
 ///  let blinded_sig = G2Scheme::<PC>::blind_sign(&private,&blinded_msg).unwrap();
 ///  // this method can be called by a third party that is able to verify if a
 ///  // blinded signature is a a valid one even without having access to the
 ///  // clear message.
 ///  G2Scheme::<PC>::blind_verify(&public,&blinded_msg,&blinded_sig)
 ///        .expect("blinded signatures should be correct");
+
 ///  // the owner of the message can then unblind the signature to reveal a
 ///  // regular signature that can be verified using the regular method of the
 ///  // SignatureScheme.
@@ -122,7 +123,7 @@ pub trait BlindScheme: Scheme {
     fn blind_sign(private: &Self::Private, blinded_msg: &[u8]) -> Result<Vec<u8>, Self::Error>;
 
     /// blind_verify takes the blinded message and the blinded signature and
-    /// checks if the latter is correct. One must then unblind the signature so
+    /// checks if the latter is a valid signature by the provided public key. One must then unblind the signature so
     /// it can be verified using the regular `SignatureScheme::verify` method.
     fn blind_verify(
         public: &Self::Public,
@@ -166,7 +167,7 @@ pub trait BlindThresholdScheme: BlindScheme {
     type Error: Error;
 
     /// sign_blind_partial partially signs a blinded message and returns a
-    /// partial signatures over this blinded message.
+    /// partial blind signature over it.
     fn sign_blind_partial(
         private: &Share<Self::Private>,
         blinded_msg: &[u8],
@@ -179,7 +180,7 @@ pub trait BlindThresholdScheme: BlindScheme {
         partial: &[u8],
     ) -> Result<Partial, <Self as BlindThresholdScheme>::Error>;
 
-    /// verify_blind_partial checks if a given blinded partial signatures is
+    /// verify_blind_partial checks if a given blinded partial signature is
     /// correct given the blinded message. This can be called by any third party
     /// given the two parameters which are not private (since they are blinded).
     fn verify_blind_partial(

@@ -1,5 +1,5 @@
 use crate::group::{Element, Point, Scalar};
-use crate::sig::bls::{common, BLSError};
+use crate::sig::bls::{common::BLSScheme, BLSError};
 use crate::sig::{BlindScheme, Scheme};
 use rand::RngCore;
 use serde::{Deserialize, Serialize};
@@ -47,7 +47,7 @@ impl<S: Scalar> Token<S> {
 /// in this [paper](https://eprint.iacr.org/2018/733.pdf).
 impl<I> BlindScheme for I
 where
-    I: Scheme + common::BLSScheme,
+    I: Scheme + BLSScheme,
 {
     type Token = Token<I::Private>;
     type Error = BlindError;
@@ -83,10 +83,11 @@ where
         blinded_sig: &[u8],
     ) -> Result<(), Self::Error> {
         // message point
-        let hm: I::Signature = bincode::deserialize(blinded_msg)?;
+        let blinded_msg: I::Signature = bincode::deserialize(blinded_msg)?;
         // signature point
-        let hs: I::Signature = bincode::deserialize(blinded_sig)?;
-        if !I::final_exp(public, &hs, &hm) {
+        let blinded_sig: I::Signature = bincode::deserialize(blinded_sig)?;
+
+        if !I::final_exp(public, &blinded_sig, &blinded_msg) {
             return Err(BlindError::from(BLSError::InvalidSig));
         }
         Ok(())
@@ -96,7 +97,7 @@ where
         // (r * H(m))^x
         let mut hm: I::Signature = bincode::deserialize(blinded_msg)?;
         hm.mul(private);
-        Ok(bincode::serialize(&hm).expect("serialization should not fail"))
+        Ok(bincode::serialize(&hm)?)
     }
 }
 

@@ -42,10 +42,10 @@
 //!
 //! // sign the blinded message
 //! let blinded_sig = SigScheme::blind_sign(&private, &blinded).unwrap();
-//! // verify the blinded signature with the blinded message. This can be ran
+//! // verify the blinded signature with the blinded message. This can be done
 //! // by any third party given the blinded signature & message, since they are
 //! // not private.
-//! SigScheme::blind_verify(&public,&blinded,&blinded_sig).expect("blinded signature should verify");
+//! SigScheme::blind_verify(&public, &blinded, &blinded_sig).expect("blinded signature should verify");
 //!
 //! // unblind the signature
 //! let clear_sig = SigScheme::unblind_sig(&blinding_factor, &blinded_sig).expect("unblind should not fail");
