@@ -115,7 +115,7 @@ mod tests {
     #[test]
     fn tblind_g2_bellman_unblind() {
         aggregate_partially_unblinded::<G2Scheme<PCurve>>();
-        aggregate_partially_blinded::<G2Scheme<PCurve>>();
+        //aggregate_partially_blinded::<G2Scheme<PCurve>>();
     }
 
     fn aggregate_partially_unblinded<B>()
@@ -145,49 +145,24 @@ mod tests {
         );
 
         // unblind each partial sig
-        let unblindeds: Vec<_> = partials
+        let unblindeds_partials: Vec<_> = partials
             .iter()
             .map(|p| B::unblind_partial_sig(&token, p).unwrap())
             .collect();
 
         // aggregate
-        let final_sig = B::aggregate(thr, &unblindeds).unwrap();
+        let final_sig1 = B::aggregate(thr, &unblindeds_partials).unwrap();
 
-        B::verify(&public.public_key(), &msg, &final_sig).unwrap();
-    }
+        B::verify(&public.public_key(), &msg, &final_sig1).unwrap();
 
-    fn aggregate_partially_blinded<B>()
-    where
-        B: BlindThresholdScheme + SignatureScheme + ThresholdScheme,
-    {
-        let n = 5;
-        let thr = 4;
-        let (shares, public) = shares::<B>(n, thr);
-        let msg = vec![1, 9, 6, 9];
-
-        // blind the msg
-        let (token, blinded) = B::blind_msg(&msg, &mut thread_rng());
-
-        // partially sign it
-        let partials: Vec<_> = shares
-            .iter()
-            .map(|share| B::sign_blind_partial(share, &blinded).unwrap())
-            .collect();
-
-        // verify if each blind partial signatures is correct
-        assert_eq!(
-            false,
-            partials
-                .iter()
-                .any(|p| B::verify_blind_partial(&public, &blinded, p).is_err())
-        );
-
-        // aggregate blinded partials
+        // Another method is to aggregate the blinded partials directly. This
+        // can be done by a third party
         let blinded_final = B::aggregate(thr, &partials).unwrap();
         // unblind the final signature
-        let final_sig = B::unblind_sig(&token, &blinded_final).unwrap();
+        let final_sig2 = B::unblind_sig(&token, &blinded_final).unwrap();
 
         // verify the final signature
-        B::verify(&public.public_key(), &msg, &final_sig).unwrap();
+        B::verify(&public.public_key(), &msg, &final_sig2).unwrap();
+        assert_eq!(final_sig1, final_sig2);
     }
 }
