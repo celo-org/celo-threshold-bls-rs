@@ -96,29 +96,28 @@ mod tests {
     #[cfg(feature = "bls12_377")]
     #[test]
     fn tblind_g1_zexe_unblind() {
-        aggregate_partially_unblinded::<G1Scheme<Zexe>>();
+        tblind_test::<G1Scheme<Zexe>>();
     }
 
     #[cfg(feature = "bls12_377")]
     #[test]
     fn tblind_g2_zexe_unblind() {
-        aggregate_partially_unblinded::<G2Scheme<Zexe>>();
+        tblind_test::<G2Scheme<Zexe>>();
     }
 
     #[cfg(feature = "bls12_381")]
     #[test]
     fn tblind_g1_bellman_unblind() {
-        aggregate_partially_unblinded::<G1Scheme<PCurve>>();
+        tblind_test::<G1Scheme<PCurve>>();
     }
 
     #[cfg(feature = "bls12_381")]
     #[test]
     fn tblind_g2_bellman_unblind() {
-        aggregate_partially_unblinded::<G2Scheme<PCurve>>();
-        //aggregate_partially_blinded::<G2Scheme<PCurve>>();
+        tblind_test::<G2Scheme<PCurve>>();
     }
 
-    fn aggregate_partially_unblinded<B>()
+    fn tblind_test<B>()
     where
         B: BlindThresholdScheme + SignatureScheme + ThresholdScheme,
     {
@@ -150,15 +149,15 @@ mod tests {
             .map(|p| B::unblind_partial_sig(&token, p).unwrap())
             .collect();
 
-        // aggregate
+        // aggregate & verify the unblinded partials
         let final_sig1 = B::aggregate(thr, &unblindeds_partials).unwrap();
-
         B::verify(&public.public_key(), &msg, &final_sig1).unwrap();
 
         // Another method is to aggregate the blinded partials directly. This
         // can be done by a third party
         let blinded_final = B::aggregate(thr, &partials).unwrap();
-        // unblind the final signature
+
+        // unblind the aggregated signature
         let final_sig2 = B::unblind_sig(&token, &blinded_final).unwrap();
 
         // verify the final signature
