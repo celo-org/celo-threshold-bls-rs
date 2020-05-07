@@ -1,5 +1,5 @@
 mod blind;
-pub use blind::{BlinderError, Token};
+pub use blind::{BlindError, Token};
 
 mod bls;
 pub use bls::{BLSError, G1Scheme, G2Scheme};

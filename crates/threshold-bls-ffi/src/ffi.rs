@@ -6,8 +6,7 @@ use serde::{de::DeserializeOwned, Serialize};
 use threshold_bls::{
     poly::{Idx as Index, Poly},
     sig::{
-        Blinder, Scheme, Share, SignatureScheme, SignatureSchemeExt, ThresholdScheme,
-        ThresholdSchemeExt, Token,
+        BlindScheme, BlindThresholdScheme, Scheme, Share, SignatureScheme, ThresholdScheme, Token,
     },
 };
 
@@ -60,7 +59,7 @@ pub unsafe extern "C" fn blind(
 
     // blind the message with this randomness
     let message = <&[u8]>::from(unsafe { &*message });
-    let (blinding_factor, blinded_message_bytes) = SigScheme::blind(&message, &mut rng);
+    let (blinding_factor, blinded_message_bytes) = SigScheme::blind_msg(&message, &mut rng);
 
     unsafe { *blinded_message_out = Buffer::from(&blinded_message_bytes[..]) };
     std::mem::forget(blinded_message_bytes);
@@ -95,7 +94,7 @@ pub unsafe extern "C" fn unblind(
     let blinded_signature = <&[u8]>::from(unsafe { &*blinded_signature });
     let blinding_factor = unsafe { &*blinding_factor };
 
-    let sig = match SigScheme::unblind(blinding_factor, blinded_signature) {
+    let sig = match SigScheme::unblind_sig(blinding_factor, blinded_signature) {
         Ok(s) => s,
         Err(_) => return false,
     };
@@ -134,7 +133,7 @@ pub unsafe extern "C" fn verify(
 
     // checks the signature on the message hash
     let signature = <&[u8]>::from(unsafe { &*signature });
-    <SigScheme as SignatureScheme>::verify(public_key, &message, signature).is_ok()
+    SigScheme::verify(public_key, &message, signature).is_ok()
 }
 
 ///////////////////////////////////////////////////////////////////////////
@@ -194,7 +193,7 @@ pub unsafe extern "C" fn sign_blinded_message(
     let private_key = unsafe { &*private_key };
     let message = <&[u8]>::from(unsafe { &*message });
 
-    let sig = match SigScheme::sign_without_hashing(&private_key, &message) {
+    let sig = match SigScheme::blind_sign(&private_key, &message) {
         Ok(s) => s,
         Err(_) => return false,
     };
@@ -258,7 +257,7 @@ pub unsafe extern "C" fn partial_sign_blinded_message(
 
     let share = unsafe { &*share };
     let message = unsafe { &*blinded_message };
-    let sig = match SigScheme::partial_sign_without_hashing(share, <&[u8]>::from(message)) {
+    let sig = match SigScheme::sign_blind_partial(share, <&[u8]>::from(message)) {
         Ok(s) => s,
         Err(_) => return false,
     };
@@ -326,7 +325,7 @@ pub unsafe extern "C" fn partial_verify_blind_signature(
     let blinded_message = <&[u8]>::from(unsafe { &*blinded_message });
     let signature = <&[u8]>::from(unsafe { &*signature });
 
-    SigScheme::partial_verify_without_hashing(&polynomial, blinded_message, signature).is_ok()
+    SigScheme::verify_blind_partial(&polynomial, blinded_message, signature).is_ok()
 }
 
 /// Combines a flattened vector of partial signatures to a single threshold signature

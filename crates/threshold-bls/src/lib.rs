@@ -31,20 +31,24 @@
 //! // import the instantiated scheme and the traits for signing and generating keys
 //! use threshold_bls::{
 //!     schemes::bls12_381::G1Scheme as SigScheme,
-//!     sig::{Scheme, SignatureSchemeExt, SignatureScheme, Blinder}
+//!     sig::{Scheme, SignatureScheme, BlindScheme}
 //! };
 //!
 //! let (private, public) = SigScheme::keypair(&mut rand::thread_rng());
 //! let msg = b"hello";
 //!
 //! // the blinding factor needs to be saved for unblinding later
-//! let (blinding_factor, blinded) = SigScheme::blind(&msg[..], &mut rand::thread_rng());
+//! let (blinding_factor, blinded) = SigScheme::blind_msg(&msg[..], &mut rand::thread_rng());
 //!
 //! // sign the blinded message
-//! let blinded_sig = SigScheme::sign_without_hashing(&private, &blinded).unwrap();
+//! let blinded_sig = SigScheme::blind_sign(&private, &blinded).unwrap();
+//! // verify the blinded signature with the blinded message. This can be done
+//! // by any third party given the blinded signature & message, since they are
+//! // not private.
+//! SigScheme::blind_verify(&public, &blinded, &blinded_sig).expect("blinded signature should verify");
 //!
 //! // unblind the signature
-//! let clear_sig = SigScheme::unblind(&blinding_factor, &blinded_sig).expect("unblind should not fail");
+//! let clear_sig = SigScheme::unblind_sig(&blinding_factor, &blinded_sig).expect("unblind should not fail");
 //!
 //! SigScheme::verify(&public, &msg[..], &clear_sig).expect("signature should be verified");
 //! ```
@@ -99,7 +103,7 @@
 //! // generate the threshold sig
 //! let threshold_sig = SigScheme::aggregate(t, &partials).unwrap();
 //!
-//! <SigScheme as ThresholdScheme>::verify(
+//! SigScheme::verify(
 //!     &threshold_public_key,
 //!     &msg[..],
 //!     &threshold_sig

@@ -1,5 +1,5 @@
 use crate::group::{Element, PairingCurve, Point};
-use crate::sig::{Scheme, SignatureScheme, SignatureSchemeExt};
+use crate::sig::{Scheme, SignatureScheme};
 use std::{fmt::Debug, marker::PhantomData};
 use thiserror::Error;
 
@@ -22,7 +22,7 @@ pub enum BLSError {
 // trait into a public trait
 // see https://github.com/rust-lang/rust/issues/34537
 // XXX another way to pull it off without this hack?
-mod common {
+pub mod common {
     use super::*;
 
     /// BLSScheme is an internal trait that encompasses the common work between a
@@ -93,26 +93,6 @@ mod common {
             sig_bytes: &[u8],
         ) -> Result<(), Self::Error> {
             T::internal_verify(public, msg_bytes, sig_bytes, true)
-        }
-    }
-
-    impl<T> SignatureSchemeExt for T
-    where
-        T: BLSScheme,
-    {
-        fn sign_without_hashing(
-            private: &Self::Private,
-            msg: &[u8],
-        ) -> Result<Vec<u8>, Self::Error> {
-            T::internal_sign(private, msg, false)
-        }
-
-        fn verify_without_hashing(
-            public: &Self::Public,
-            msg_bytes: &[u8],
-            sig_bytes: &[u8],
-        ) -> Result<(), Self::Error> {
-            T::internal_verify(public, msg_bytes, sig_bytes, false)
         }
     }
 }

@@ -1,12 +1,13 @@
 use crate::group::{Element, Point, Scalar};
-use crate::sig::{BlindScheme, Blinder, SignatureScheme, SignatureSchemeExt};
+use crate::sig::bls::{common::BLSScheme, BLSError};
+use crate::sig::{BlindScheme, Scheme};
 use rand::RngCore;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
 /// BlindError are errors which may be returned from a blind signature scheme
 #[derive(Debug, Error)]
-pub enum BlinderError {
+pub enum BlindError {
     /// InvalidToken is thrown out when the token used to unblind can not be
     /// inversed. This error should not happen if you use the Token that was
     /// returned by the blind operation.
@@ -16,6 +17,9 @@ pub enum BlinderError {
     /// Raised when (de)serialization fails
     #[error("could not deserialize: {0}")]
     BincodeError(#[from] bincode::Error),
+
+    #[error("invalid signature verification: {0}")]
+    SignatureError(#[from] BLSError),
 }
 
 /// Blinding a message before requesting a signature requires the usage of a
@@ -39,17 +43,16 @@ impl<S: Scalar> Token<S> {
     }
 }
 
-// We implement Blinder for anything that implements Signature scheme, so we also
-// enable the BlindScheme for all these, for convenience
-impl<I> BlindScheme for I where I: SignatureSchemeExt {}
-
 /// The blinder follows the protocol described
 /// in this [paper](https://eprint.iacr.org/2018/733.pdf).
-impl<I: SignatureScheme> Blinder for I {
+impl<I> BlindScheme for I
+where
+    I: Scheme + BLSScheme,
+{
     type Token = Token<I::Private>;
-    type Error = BlinderError;
+    type Error = BlindError;
 
-    fn blind<R: RngCore>(msg: &[u8], rng: &mut R) -> (Self::Token, Vec<u8>) {
+    fn blind_msg<R: RngCore>(msg: &[u8], rng: &mut R) -> (Self::Token, Vec<u8>) {
         let r = I::Private::rand(rng);
 
         let mut h = I::Signature::new();
@@ -63,15 +66,38 @@ impl<I: SignatureScheme> Blinder for I {
         (Token(r), serialized)
     }
 
-    fn unblind(t: &Self::Token, sigbuff: &[u8]) -> Result<Vec<u8>, Self::Error> {
+    fn unblind_sig(t: &Self::Token, sigbuff: &[u8]) -> Result<Vec<u8>, Self::Error> {
         let mut sig: I::Signature = bincode::deserialize(sigbuff)?;
 
         // r^-1 * ( r * H(m)^x) = H(m)^x
-        let ri = t.0.inverse().ok_or(BlinderError::InvalidToken)?;
+        let ri = t.0.inverse().ok_or(BlindError::InvalidToken)?;
         sig.mul(&ri);
 
         let serialized = bincode::serialize(&sig)?;
         Ok(serialized)
+    }
+
+    fn blind_verify(
+        public: &I::Public,
+        blinded_msg: &[u8],
+        blinded_sig: &[u8],
+    ) -> Result<(), Self::Error> {
+        // message point
+        let blinded_msg: I::Signature = bincode::deserialize(blinded_msg)?;
+        // signature point
+        let blinded_sig: I::Signature = bincode::deserialize(blinded_sig)?;
+
+        if !I::final_exp(public, &blinded_sig, &blinded_msg) {
+            return Err(BlindError::from(BLSError::InvalidSig));
+        }
+        Ok(())
+    }
+
+    fn blind_sign(private: &I::Private, blinded_msg: &[u8]) -> Result<Vec<u8>, Self::Error> {
+        // (r * H(m))^x
+        let mut hm: I::Signature = bincode::deserialize(blinded_msg)?;
+        hm.mul(private);
+        Ok(bincode::serialize(&hm)?)
     }
 }
 
@@ -81,8 +107,10 @@ mod tests {
     use super::*;
     use crate::curve::bls12381::PairingCurve as PCurve;
     use crate::sig::bls::{G1Scheme, G2Scheme};
+    use crate::sig::SignatureScheme;
     use rand::thread_rng;
 
+    #[cfg(feature = "bls12_381")]
     #[test]
     fn blind_g1() {
         blind_test::<G1Scheme<PCurve>>();
@@ -96,18 +124,18 @@ mod tests {
 
     fn blind_test<B>()
     where
-        B: BlindScheme,
+        B: BlindScheme + SignatureScheme,
     {
         let (private, public) = B::keypair(&mut thread_rng());
         let msg = vec![1, 9, 6, 9];
 
-        let (token, blinded) = B::blind(&msg, &mut thread_rng());
+        let (token, blinded) = B::blind_msg(&msg, &mut thread_rng());
 
         // signs the blinded message w/o hashing
-        let blinded_sig = B::sign_without_hashing(&private, &blinded).unwrap();
+        let blinded_sig = B::blind_sign(&private, &blinded).unwrap();
+        B::blind_verify(&public, &blinded, &blinded_sig).unwrap();
 
-        let clear_sig = B::unblind(&token, &blinded_sig).expect("unblind should go well");
-
+        let clear_sig = B::unblind_sig(&token, &blinded_sig).expect("unblind should go well");
         B::verify(&public, &msg, &clear_sig).unwrap();
     }
 }

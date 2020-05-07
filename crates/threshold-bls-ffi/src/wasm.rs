@@ -6,7 +6,9 @@ use rand_core::{RngCore, SeedableRng};
 
 use threshold_bls::{
     poly::{Idx as Index, Poly},
-    sig::{Blinder, Scheme, Share, SignatureScheme, SignatureSchemeExt, ThresholdScheme, ThresholdSchemeExt, Token},
+    sig::{
+        BlindScheme, BlindThresholdScheme, Scheme, Share, SignatureScheme, ThresholdScheme, Token,
+    },
 };
 
 use crate::*;
@@ -33,7 +35,7 @@ pub fn blind(message: Vec<u8>, seed: &[u8]) -> BlindedMessage {
     let mut rng = get_rng(&seed);
 
     // blind the message with this randomness
-    let (blinding_factor, blinded_message) = SigScheme::blind(&message, &mut rng);
+    let (blinding_factor, blinded_message) = SigScheme::blind_msg(&message, &mut rng);
 
     // return the message and the blinding_factor used for blinding
     BlindedMessage {
@@ -58,7 +60,7 @@ pub fn unblind(blinded_signature: &[u8], blinding_factor_buf: &[u8]) -> Result<V
             JsValue::from_str(&format!("could not deserialize blinding factor {}", err))
         })?;
 
-    SigScheme::unblind(&blinding_factor, blinded_signature)
+    SigScheme::unblind_sig(&blinding_factor, blinded_signature)
         .map_err(|err| JsValue::from_str(&format!("could not unblind signature {}", err)))
 }
 
@@ -78,10 +80,9 @@ pub fn verify(public_key_buf: &[u8], message: &[u8], signature: &[u8]) -> Result
         .map_err(|err| JsValue::from_str(&format!("could not deserialize public key {}", err)))?;
 
     // checks the signature on the message hash
-    <SigScheme as SignatureScheme>::verify(&public_key, &message, &signature)
+    SigScheme::verify(&public_key, &message, &signature)
         .map_err(|err| JsValue::from_str(&format!("signature verification failed: {}", err)))
 }
-
 
 #[wasm_bindgen(js_name = verifyBlindSignature)]
 /// Verifies the signature after it has been unblinded without hashing. Users will call this on the
@@ -94,12 +95,16 @@ pub fn verify(public_key_buf: &[u8], message: &[u8], signature: &[u8]) -> Result
 /// # Throws
 ///
 /// - If verification fails
-pub fn verify_blind_signature(public_key_buf: &[u8], message: &[u8], signature: &[u8]) -> Result<()> {
+pub fn verify_blind_signature(
+    public_key_buf: &[u8],
+    message: &[u8],
+    signature: &[u8],
+) -> Result<()> {
     let public_key: PublicKey = bincode::deserialize(&public_key_buf)
         .map_err(|err| JsValue::from_str(&format!("could not deserialize public key {}", err)))?;
 
     // checks the signature on the message hash
-    SigScheme::verify_without_hashing(&public_key, &message, &signature)
+    SigScheme::blind_verify(&public_key, &message, &signature)
         .map_err(|err| JsValue::from_str(&format!("signature verification failed: {}", err)))
 }
 
@@ -131,7 +136,7 @@ pub fn sign_blinded_message(private_key_buf: &[u8], message: &[u8]) -> Result<Ve
     let private_key: PrivateKey = bincode::deserialize(&private_key_buf)
         .map_err(|err| JsValue::from_str(&format!("could not deserialize private key {}", err)))?;
 
-    SigScheme::sign_without_hashing(&private_key, &message)
+    SigScheme::blind_sign(&private_key, &message)
         .map_err(|err| JsValue::from_str(&format!("could not sign message: {}", err)))
 }
 
@@ -169,7 +174,7 @@ pub fn partial_sign_blinded_message(share_buf: &[u8], message: &[u8]) -> Result<
         JsValue::from_str(&format!("could not deserialize private key share {}", err))
     })?;
 
-    SigScheme::partial_sign_without_hashing(&share, &message)
+    SigScheme::sign_blind_partial(&share, &message)
         .map_err(|err| JsValue::from_str(&format!("could not partially sign message: {}", err)))
 }
 
@@ -207,7 +212,7 @@ pub fn partial_verify_blind_signature(
     let polynomial: Poly<PublicKey> = bincode::deserialize(&polynomial_buf)
         .map_err(|err| JsValue::from_str(&format!("could not deserialize polynomial {}", err)))?;
 
-    SigScheme::partial_verify_without_hashing(&polynomial, blinded_message, sig)
+    SigScheme::verify_blind_partial(&polynomial, blinded_message, sig)
         .map_err(|err| JsValue::from_str(&format!("could not partially verify message: {}", err)))
 }
 
@@ -397,7 +402,6 @@ mod tests {
     fn signing() {
         wasm_should_blind(true);
         wasm_should_blind(false);
-
     }
 
     fn wasm_should_blind(should_blind: bool) {
@@ -413,7 +417,7 @@ mod tests {
         } else {
             (msg.clone(), vec![])
         };
-        
+
         let sign_fn = if should_blind {
             sign_blinded_message
         } else {
@@ -445,7 +449,7 @@ mod tests {
         } else {
             (msg.clone(), vec![])
         };
-        
+
         let sign_fn = if should_blind {
             partial_sign_blinded_message
         } else {
@@ -458,9 +462,12 @@ mod tests {
             partial_verify
         };
 
-        let sigs = (0..t).map(|i| sign_fn(&keys.get_share(i), &message).unwrap()).collect::<Vec<Vec<_>>>();
+        let sigs = (0..t)
+            .map(|i| sign_fn(&keys.get_share(i), &message).unwrap())
+            .collect::<Vec<Vec<_>>>();
 
-        sigs.iter().for_each(|sig| verify_fn(&keys.polynomial(), &message, &sig).unwrap());
+        sigs.iter()
+            .for_each(|sig| verify_fn(&keys.polynomial(), &message, &sig).unwrap());
 
         let concatenated = sigs.concat();
         let asig = combine(3, concatenated).unwrap();
