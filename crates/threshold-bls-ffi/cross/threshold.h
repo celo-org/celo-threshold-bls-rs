@@ -41,11 +41,11 @@ typedef struct {
   int len;
 } Buffer;
 
-typedef Private PrivateKey;
+typedef struct Private PrivateKey;
 
-typedef Public PublicKey;
+typedef struct Public PublicKey;
 
-typedef Signature Signature;
+typedef struct Signature Signature;
 
 /**
  * Given a message and a seed, it will blind it and return the blinded message
