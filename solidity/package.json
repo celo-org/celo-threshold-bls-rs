@@ -1,9 +1,10 @@
 {
   "name": "celo-dkg-contracts",
   "version": "1.0.0",
-  "description": "Contracts acting as a broadcast layer for a JF-DKG",
+  "description": "Contract acting as a broadcast layer for a JF-DKG",
   "scripts": {
     "build": "npx buidler compile",
+    "lint": "prettier --write **/*.sol",
     "test": "npx buidler test"
   },
   "author": "Georgios Konstantopoulos <me@gakonst.com>",
