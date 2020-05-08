@@ -65,13 +65,17 @@ describe('DKG', () => {
             await dkg.connect(deployer).start()
         })
 
-        // TODO: Why does `dkg.shares()` hang? Is this a buidlerevm issue?
-        it.skip('publishes to shares', async () => {
+        it('publishes to shares', async () => {
             await dkg.publish(data)
-            const shares = await dkg.shares(participants[0]).call();
-            expect(shares).to.equal(data)
-        })
+            const shares = await dkg.getShares()
+            expect(shares[0]).to.equal(data)
 
+            const responses = await dkg.getResponses()
+            expect(responses[0]).to.equal("0x");
+
+            const justifications = await dkg.getJustifications()
+            expect(justifications[0]).to.equal("0x");
+        })
 
         it('cannot publish to shares twice', async () => {
             await dkg.publish(data)
@@ -79,5 +83,69 @@ describe('DKG', () => {
         })
     })
 
-    // TODO: Timetravel to each of the other periods
+    describe('Responses', async () => {
+        beforeEach(async () => {
+            dkg = dkg.connect(participants[0])
+            await dkg.register(data)
+
+            await dkg.connect(deployer).start()
+
+            await timeTravel(PHASE_DURATION)
+        })
+
+        it('publishes to responses', async () => {
+            await dkg.publish(data)
+            const responses = await dkg.getResponses()
+            expect(responses[0]).to.equal(data)
+
+            const shares = await dkg.getShares()
+            expect(shares[0]).to.equal("0x");
+
+            const justifications = await dkg.getJustifications()
+            expect(justifications[0]).to.equal("0x");
+
+        })
+
+        it('cannot publish twice', async () => {
+            await dkg.publish(data)
+            await expect(dkg.publish(data)).revertedWith("you have already published your responses")
+        })
+    })
+
+    describe('Responses', async () => {
+        beforeEach(async () => {
+            dkg = dkg.connect(participants[0])
+            await dkg.register(data)
+
+            await dkg.connect(deployer).start()
+
+            await timeTravel(2 * PHASE_DURATION)
+        })
+
+        it('publishes to justifications', async () => {
+            await dkg.publish(data)
+            const justifications = await dkg.getJustifications()
+            expect(justifications[0]).to.equal(data)
+
+            const shares = await dkg.getShares()
+            expect(shares[0]).to.equal("0x");
+
+            const responses = await dkg.getResponses()
+            expect(responses[0]).to.equal("0x");
+
+        })
+
+        it('cannot publish twice', async () => {
+            await dkg.publish(data)
+            await expect(dkg.publish(data)).revertedWith("you have already published your justifications")
+        })
+    })
+
+    it('Ended', async () => {
+        dkg = dkg.connect(participants[0])
+        await dkg.register(data)
+        await dkg.connect(deployer).start()
+        await timeTravel(3 * PHASE_DURATION)
+        await expect(dkg.publish(data)).revertedWith("DKG has ended")
+    })
 })

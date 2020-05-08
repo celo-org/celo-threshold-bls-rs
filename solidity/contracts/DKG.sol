@@ -1,3 +1,6 @@
+// Using the ABIEncoderV2 poses little risk here because we only use it for fetching the byte arrays
+// of shares/responses/justifications
+pragma experimental ABIEncoderV2;
 pragma solidity ^0.6.6;
 
 import "@nomiclabs/buidler/console.sol";
@@ -12,11 +15,13 @@ contract DKG {
 
     mapping(address => bytes) public justifications;
 
+    address[] public participants;
+
     uint256 immutable PHASE_DURATION;
 
     uint256 public startBlock = 0;
 
-    address owner;
+    address public owner;
 
     modifier onlyRegistered() {
         require(keys[msg.sender].length > 0, "you are not registered!");
@@ -45,6 +50,7 @@ contract DKG {
     /// This function ties a DKG participant's on-chain address with their BLS Public Key
     function register(bytes calldata blsPublicKey) external onlyWhenNotStarted {
         require(keys[msg.sender].length == 0, "user is already registered");
+        participants.push(msg.sender);
         keys[msg.sender] = blsPublicKey;
     }
 
@@ -73,5 +79,34 @@ contract DKG {
         } else {
             revert("DKG has ended");
         }
+    }
+
+    // Helpers to fetch data in the mappings
+
+    function getShares() external view returns (bytes[] memory) {
+        bytes[] memory _shares = new bytes[](participants.length);
+        for (uint256 i = 0; i < participants.length; i++) {
+            _shares[i] = shares[participants[i]];
+        }
+
+        return _shares;
+    }
+
+    function getResponses() external view returns (bytes[] memory) {
+        bytes[] memory _responses = new bytes[](participants.length);
+        for (uint256 i = 0; i < participants.length; i++) {
+            _responses[i] = responses[participants[i]];
+        }
+
+        return _responses;
+    }
+
+    function getJustifications() external view returns (bytes[] memory) {
+        bytes[] memory _justifications = new bytes[](participants.length);
+        for (uint256 i = 0; i < participants.length; i++) {
+            _justifications[i] = justifications[participants[i]];
+        }
+
+        return _justifications;
     }
 }
