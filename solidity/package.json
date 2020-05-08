@@ -5,7 +5,8 @@
   "scripts": {
     "build": "npx buidler compile",
     "lint": "prettier --write **/*.sol",
-    "test": "npx buidler test"
+    "test": "npx buidler test",
+    "deploy": "npx buidler run --network mainnet scripts/deploy.ts"
   },
   "author": "Georgios Konstantopoulos <me@gakonst.com>",
   "license": "ISC",

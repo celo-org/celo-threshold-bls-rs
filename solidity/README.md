@@ -10,16 +10,18 @@ yarn build
 yarn test
 ```
 
+## Deploy
+
+3 environment variables are requierd. 
+- `ENDPOINT`: your Web3 json-rpc compatible endpoint
+- `PRIVATE_KEY`: the address which will deploy the DKG contract
+- `PHASE_DURATION`: the duration _in blocks_ of each DKG phase
+
+## Methods to call
+
 Methods are provided for each DKG participant to call in each phase:
 - `register`
-- `publishShares`
-- `publishResponses`
-- `publishJustifications`
-
-## Privileged Account
-
-The contract's deployer is the on who is able to start the DKG procedure by calling `start` after
-enough participants have registered.
+- `publish` (depending on the time it will save the provided data as shares, responses or justifications)
 
 ## Phase 0
 
@@ -43,3 +45,9 @@ The DKG transition automatically to Phase 3 after `N` blocks have passed since t
 since the `start` function was called). Each of the registered participants MAY publish their justifications ONCE.
 
 _note: This phase should not be required by users published all their shares in Phase 1._
+
+## Privileged Account
+
+The contract's deployer is the on who is able to start the DKG procedure by calling `start` after
+enough participants have registered.
+
