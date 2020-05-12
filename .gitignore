@@ -17,3 +17,6 @@ pkg/
 NDK
 .cargo
 react-native
+
+solidity/cache
+solidity/build
