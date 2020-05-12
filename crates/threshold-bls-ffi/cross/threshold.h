@@ -34,11 +34,11 @@ typedef struct {
   /**
    * Pointer to the message
    */
-  const uint8_t *ptr;
+  uint8_t *ptr;
   /**
    * The length of the buffer
    */
-  int len;
+  size_t len;
 } Buffer;
 
 typedef struct Private PrivateKey;
@@ -89,7 +89,7 @@ void destroy_sig(Signature *signature);
 
 void destroy_token(Token_PrivateKey *token);
 
-void free_vector(uint8_t *bytes, uintptr_t len);
+void free_vector(uint8_t *bytes, size_t len);
 
 /**
  * Generates a single private key from the provided seed.
