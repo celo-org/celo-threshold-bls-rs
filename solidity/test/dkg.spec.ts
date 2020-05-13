@@ -26,11 +26,12 @@ describe('DKG', () => {
 
     // Each phase lasts 30 blocks
     const PHASE_DURATION = 30;
+    const THRESHOLD = 3;
 
     let dkg: ethers.Contract;
 
     beforeEach(async () => {
-        dkg = await deployContract(deployer, DKG, [PHASE_DURATION]);
+        dkg = await deployContract(deployer, DKG, [THRESHOLD, PHASE_DURATION]);
     })
 
     describe('Registration', async () => {
@@ -139,6 +140,18 @@ describe('DKG', () => {
             await dkg.publish(data)
             await expect(dkg.publish(data)).revertedWith("you have already published your justifications")
         })
+    })
+
+    it('Phases are correct', async () => {
+        expect(await dkg.inPhase()).to.equal(0);
+        await dkg.start()
+        expect(await dkg.inPhase()).to.equal(1);
+        await timeTravel(PHASE_DURATION + 1)
+        expect(await dkg.inPhase()).to.equal(2);
+        await timeTravel(PHASE_DURATION + 1)
+        expect(await dkg.inPhase()).to.equal(3);
+        await timeTravel(PHASE_DURATION + 1)
+        await expect(dkg.inPhase()).revertedWith("DKG ended")
     })
 
     it('Ended', async () => {

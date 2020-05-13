@@ -17,7 +17,8 @@ contract DKG {
 
     address[] public participants;
 
-    uint256 immutable PHASE_DURATION;
+    uint256 public immutable PHASE_DURATION;
+    uint256 public immutable THRESHOLD;
 
     uint256 public startBlock = 0;
 
@@ -33,8 +34,9 @@ contract DKG {
         _;
     }
 
-    constructor(uint256 duration) public {
+    constructor(uint256 threshold, uint256 duration) public {
         PHASE_DURATION = duration;
+        THRESHOLD = threshold;
         owner = msg.sender;
     }
 
@@ -108,5 +110,40 @@ contract DKG {
         }
 
         return _justifications;
+    }
+
+    function getParticipants() external view returns (address[] memory) {
+        return participants;
+    }
+
+    function getBlsKeys() external view returns (uint256, bytes[] memory) {
+        bytes[] memory _keys = new bytes[](participants.length);
+        for (uint256 i = 0; i < participants.length; i++) {
+            _keys[i] = keys[participants[i]];
+        }
+
+        return (THRESHOLD, _keys);
+    }
+
+    function inPhase() public view returns (uint256) {
+        if (startBlock == 0) {
+            return 0;
+        }
+
+        uint256 blocksSinceStart = block.number - startBlock;
+
+        if (blocksSinceStart <= PHASE_DURATION) {
+            return 1;
+        }
+
+        if (blocksSinceStart <= 2 * PHASE_DURATION) {
+            return 2;
+        }
+
+        if (blocksSinceStart <= 3 * PHASE_DURATION) {
+            return 3;
+        }
+
+        revert("DKG Ended");
     }
 }
