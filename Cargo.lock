@@ -217,7 +217,7 @@ dependencies = [
  "crypto-primitives",
  "csv",
  "env_logger",
- "hex",
+ "hex 0.3.2",
  "log",
  "lru",
  "once_cell",
@@ -466,8 +466,10 @@ dependencies = [
  "dkg-core",
  "glob",
  "gumdrop",
+ "hex 0.4.2",
  "rand 0.7.3",
  "serde",
+ "serde_json",
  "thiserror",
  "threshold-bls",
 ]
@@ -669,6 +671,12 @@ name = "hex"
 version = "0.3.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "805026a5d0141ffc30abb3be3173848ad46a1b1664fe632428479619a3644d77"
+
+[[package]]
+name = "hex"
+version = "0.4.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "644f9158b2f133fd50f5fb3242878846d9eb792e445c893805ff0e3824006e35"
 
 [[package]]
 name = "hkdf"
@@ -1243,6 +1251,17 @@ dependencies = [
  "proc-macro2 1.0.10",
  "quote 1.0.3",
  "syn 1.0.17",
+]
+
+[[package]]
+name = "serde_json"
+version = "1.0.53"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "993948e75b189211a9b31a7528f950c6adc21f9720b6438ff80a7fa2f864cea2"
+dependencies = [
+ "itoa",
+ "ryu",
+ "serde",
 ]
 
 [[package]]

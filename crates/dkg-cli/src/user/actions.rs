@@ -7,10 +7,11 @@ use dkg_core::{
     node::{DKGPhase, Phase0, Phase1, Phase2, Phase2Result, Phase3},
     primitives::{
         bundles::{BundledJustification, BundledResponses, BundledShares},
-        group::Group,
+        group::{Group, Node},
     },
 };
 
+use threshold_bls::poly::Idx;
 use threshold_bls::{group::Curve, sig::Scheme};
 
 pub fn keygen<S, R>(opts: NewOpts, rng: &mut R) -> CLIResult<()>
@@ -25,10 +26,16 @@ where
 
     // write both the index of the node and the pubkey
     let f = File::create(opts.public_key)?;
-    bincode::serialize_into(&f, &opts.index)?;
     bincode::serialize_into(&f, &public_key)?;
 
     Ok(())
+}
+
+#[derive(serde::Deserialize, Debug)]
+struct GroupJson {
+    threshold: String,
+    #[serde(rename = "blsKeys")]
+    bls_pubkeys: Vec<String>,
 }
 
 pub fn phase1<S, C, R>(opts: PublishSharesOpts, rng: &mut R) -> CLIResult<()>
@@ -42,7 +49,28 @@ where
     let pk: S::Private = bincode::deserialize_from(private_key_file)?;
 
     let group_file = File::open(opts.group)?;
-    let group: Group<C> = bincode::deserialize_from(group_file)?;
+    let group: GroupJson = serde_json::from_reader(group_file)?;
+
+    let nodes = group
+        .bls_pubkeys
+        .into_iter()
+        .filter(|pubkey| pubkey.len() > 2)
+        .enumerate()
+        .map(|(i, pubkey)| {
+            // TODO: This assumes that the first 2 characters of the string will be "0x"
+            let pubkey = hex::decode(&pubkey[2..])?;
+            let pubkey: C::Point = bincode::deserialize(&pubkey)?;
+            Ok(Node::<C>::new(i as Idx, pubkey))
+        })
+        .collect::<CLIResult<_>>()?;
+
+    let group = Group {
+        threshold: group
+            .threshold
+            .parse()
+            .expect("threshold was not an integer"),
+        nodes,
+    };
 
     let phase0 = Phase0::new(pk, group, opts.publish_all)?;
 
@@ -59,9 +87,7 @@ where
 pub fn phase2<C: Curve>(opts: StateOpts) -> CLIResult<()> {
     let phase1_file = File::open(opts.in_phase)?;
     let phase1: Phase1<C> = bincode::deserialize_from(phase1_file)?;
-
-    let shares_file = File::open(opts.input)?;
-    let shares: Vec<BundledShares<C>> = bincode::deserialize_from(shares_file)?;
+    let shares: Vec<BundledShares<C>> = parse_bundle(&opts.input)?;
 
     // writes the responses to the board
     let mut board = File::create(opts.output)?;
@@ -76,9 +102,7 @@ pub fn phase2<C: Curve>(opts: StateOpts) -> CLIResult<()> {
 pub fn try_finalize<C: Curve>(opts: StateOpts) -> CLIResult<()> {
     let phase2_file = File::open(opts.in_phase)?;
     let phase2: Phase2<C> = bincode::deserialize_from(phase2_file)?;
-
-    let responses_file = File::open(opts.input)?;
-    let responses: Vec<BundledResponses> = bincode::deserialize_from(responses_file)?;
+    let responses: Vec<BundledResponses> = parse_bundle(&opts.input)?;
 
     // writes the justifications to the board
     let mut board = File::create(opts.output)?;
@@ -102,10 +126,7 @@ pub fn try_finalize<C: Curve>(opts: StateOpts) -> CLIResult<()> {
 pub fn phase3<C: Curve>(opts: FinalizeOpts) -> CLIResult<()> {
     let phase3_file = File::open(opts.in_phase)?;
     let phase3: Phase3<C> = bincode::deserialize_from(phase3_file)?;
-
-    let justifications_file = File::open(opts.input)?;
-    let justifications: Vec<BundledJustification<C>> =
-        bincode::deserialize_from(justifications_file)?;
+    let justifications: Vec<BundledJustification<C>> = parse_bundle(&opts.input)?;
 
     // dummy writer instance with `vec!`
     match phase3.run(&mut vec![], &justifications) {
@@ -120,4 +141,17 @@ pub fn phase3<C: Curve>(opts: FinalizeOpts) -> CLIResult<()> {
     };
 
     Ok(())
+}
+
+fn parse_bundle<D: serde::de::DeserializeOwned>(path: &str) -> CLIResult<Vec<D>> {
+    let data: String = std::fs::read_to_string(path)?;
+    let data: Vec<String> = serde_json::from_str(&data)?;
+    data.into_iter()
+        .filter(|bundle| bundle.len() > 2)
+        .map(|bundle| {
+            let bundle = hex::decode(&bundle[2..])?;
+            let bundle: D = bincode::deserialize(&bundle)?;
+            Ok(bundle)
+        })
+        .collect()
 }
