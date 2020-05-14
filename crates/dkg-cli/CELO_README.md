@@ -29,7 +29,8 @@ celocli dkg:deploy \
     --phaseDuration $DURATION_IN_BLOCKS \
     --threshold $THRESHOLD \
     --node $NODE_URL \
-    --privateKey $PRIVATE_KEY
+    --privateKey $PRIVATE_KEY \
+    --from $FROM
 ```
 
 This command will output the deployed contract's address.
@@ -52,14 +53,15 @@ celocli dkg:register \
   --address $DKG_ADDRESS \
   --node $NODE_URL \
   --privateKey $PRIVATE_KEY \
-  --blsKey ./dkg_pubkey
+  --blsKey ./dkg_pubkey \
+  --from $FROM
 ```
 
 Now you must wait until the DKG is started. You can do that by calling
 
 ```
 celocli dkg:get \
-  --method started \
+  --method phase \
   --address $DKG_ADDRESS \
   --node $NODE_URL
 ```
@@ -122,7 +124,9 @@ Finally, you must publish your responses to Celo, by calling:
 celocli dkg:publish \
   --address $DKG_ADDRESS \
   --node $NODE_URL \
-  --data ./responses
+  --data ./responses \
+  --privateKey $PRIVATE_KEY \
+  --from $FROM
 ```
 
 ### 4a. Try to get DKG Result 
