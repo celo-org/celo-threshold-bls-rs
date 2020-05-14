@@ -1,13 +1,14 @@
 use super::opts::{FinalizeOpts, NewOpts, PublishSharesOpts, StateOpts};
 use crate::CLIResult;
 use rand::RngCore;
-use std::fs::File;
+use std::{fs::File, io::Write};
 
 use dkg_core::{
     node::{DKGPhase, Phase0, Phase1, Phase2, Phase2Result, Phase3},
     primitives::{
         bundles::{BundledJustification, BundledResponses, BundledShares},
         group::{Group, Node},
+        phases::DKGOutput,
     },
 };
 
@@ -36,6 +37,16 @@ struct GroupJson {
     threshold: String,
     #[serde(rename = "blsKeys")]
     bls_pubkeys: Vec<String>,
+}
+
+#[derive(serde::Serialize, Debug)]
+struct OutputJson {
+    #[serde(rename = "publicKey")]
+    public_key: String,
+    #[serde(rename = "publicPolynomial")]
+    public_polynomial: String,
+    #[serde(rename = "share")]
+    share: String,
 }
 
 pub fn phase1<S, C, R>(opts: PublishSharesOpts, rng: &mut R) -> CLIResult<()>
@@ -112,7 +123,7 @@ pub fn try_finalize<C: Curve>(opts: StateOpts) -> CLIResult<()> {
     match output {
         Phase2Result::Output(out) => {
             println!("Success. Your share and threshold pubkey are written to the output.");
-            bincode::serialize_into(&output_file, &out)?;
+            write_output(&output_file, &out)?;
         }
         Phase2Result::GoToPhase3(p3) => {
             println!("There were complaints. Please run Phase 3.");
@@ -133,7 +144,7 @@ pub fn phase3<C: Curve>(opts: FinalizeOpts) -> CLIResult<()> {
         Ok(out) => {
             println!("Success. Your share and threshold pubkey are written to the output.");
             let output_file = File::create(opts.output)?;
-            bincode::serialize_into(&output_file, &out)?;
+            write_output(&output_file, &out)?;
         }
         Err(err) => {
             eprintln!("DKG failed: {}", err);
@@ -154,4 +165,14 @@ fn parse_bundle<D: serde::de::DeserializeOwned>(path: &str) -> CLIResult<Vec<D>>
             Ok(bundle)
         })
         .collect()
+}
+
+fn write_output<C: Curve, W: Write>(writer: W, out: &DKGOutput<C>) -> CLIResult<()> {
+    let output = OutputJson {
+        public_key: hex::encode(&bincode::serialize(&out.public.public_key())?),
+        public_polynomial: hex::encode(&bincode::serialize(&out.public)?),
+        share: hex::encode(&bincode::serialize(&out.share)?),
+    };
+    serde_json::to_writer(writer, &output)?;
+    Ok(())
 }
