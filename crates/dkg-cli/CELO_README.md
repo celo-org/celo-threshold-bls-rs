@@ -97,7 +97,9 @@ You must then publish your shares to Celo, by calling:
 celocli dkg:publish \
   --address $DKG_ADDRESS \
   --node $NODE_URL \
-  --data ./shares
+  --data ./shares \
+  --privateKey $PRIVATE_KEY \
+  --from $FROM
 ```
 
 ### 3. Response Generation
@@ -157,7 +159,9 @@ If you received an error from the `try-finalize` command, then you must publish 
 celocli dkg:publish \
   --address $DKG_ADDRESS \
   --node $NODE_URL \
-  --data ./justifications
+  --data ./justifications \
+  --privateKey $PRIVATE_KEY \
+  --from $FROM
 ```
 
 Once all justifications are published for each participant, you can download them by calling:
