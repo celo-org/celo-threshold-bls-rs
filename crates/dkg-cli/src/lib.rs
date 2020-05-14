@@ -7,12 +7,16 @@ pub type CLIResult<T> = std::result::Result<T, CLIError>;
 
 #[derive(Debug, Error)]
 pub enum CLIError {
-    #[error("{0}")]
+    #[error(transparent)]
     IoError(#[from] std::io::Error),
-    #[error("{0}")]
+    #[error(transparent)]
     GlobError(#[from] glob::GlobError),
-    #[error("{0}")]
+    #[error(transparent)]
     BincodeError(#[from] bincode::Error),
-    #[error("{0}")]
+    #[error(transparent)]
     NodeError(#[from] dkg_core::node::NodeError),
+    #[error(transparent)]
+    Serde(#[from] serde_json::Error),
+    #[error(transparent)]
+    HexError(#[from] hex::FromHexError),
 }
