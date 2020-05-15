@@ -1,5 +1,10 @@
 #!/bin/bash -e
 
+if [[ ! -f dkg_phase ]]; then
+  echo -1 > dkg_phase
+fi
+touch dkg_config
+source dkg_config
 # In order to run this example, your environment must have the following variables set:
 # 1. DKG_ADDRESS:  Address of the DKG contract
 # 2. NODE_URL: Your Celo node
@@ -26,44 +31,88 @@ function wait_for_phase () {
   done
 }
 
-### 1. Preparation
+function do_phase0 () {
+  $DKG new --private-key privkey --public-key pubkey
+  $CELO dkg:register --node $NODE_URL --address $DKG_ADDRESS --privateKey $PRIVATE_KEY --from $FROM --blsKey pubkey
+  
+  echo "Registration complete"
+  echo 0 > dkg_phase
+}
 
-wait_for_phase 0
-### 2. Share Generation (3 parties registed but only 2 appeared!)
+function do_phase1 () {
+  #wait_for_phase 0
+  ### 2. Share Generation (3 parties registed but only 2 appeared!)
 
-$CELO dkg:get --node $NODE_URL --address $DKG_ADDRESS --method group > dkg_group
+  $CELO dkg:get --node $NODE_URL --address $DKG_ADDRESS --method group > dkg_group
 
-$DKG publish-shares --private-key privkey --group ./dkg_group --out-phase phase1_node --output shares
-$CELO dkg:publish --node $NODE_URL --address $DKG_ADDRESS --privateKey $PRIVATE_KEY --from $FROM --data ./shares
+  $DKG publish-shares --private-key privkey --group ./dkg_group --out-phase phase1_node --output shares
+  $CELO dkg:publish --node $NODE_URL --address $DKG_ADDRESS --privateKey $PRIVATE_KEY --from $FROM --data ./shares
+  echo "Shares published"
 
-echo "Shares published"
-wait_for_phase 1
-$CELO dkg:get --node $NODE_URL --address $DKG_ADDRESS --method shares > combined_shares
+  echo 1 > dkg_phase
+  #do_phase1
+}
 
-# 3. Response Generation
+function do_phase2 () {
+  #wait_for_phase 1
+  ### 3. Response Generation
+  $CELO dkg:get --node $NODE_URL --address $DKG_ADDRESS --method shares > combined_shares
 
-$DKG publish-responses --in-phase phase1_node --out-phase phase2_node --input ./combined_shares --output responses
-$CELO dkg:publish --node $NODE_URL --address $DKG_ADDRESS --privateKey $PRIVATE_KEY --from $FROM --data ./responses
+  $DKG publish-responses --in-phase phase1_node --out-phase phase2_node --input ./combined_shares --output responses
+  $CELO dkg:publish --node $NODE_URL --address $DKG_ADDRESS --privateKey $PRIVATE_KEY --from $FROM --data ./responses
+  echo "Responses published"
 
-echo "Responses published"
-wait_for_phase 2
-$CELO dkg:get --node $NODE_URL --address $DKG_ADDRESS --method responses > combined_responses
+  echo 2 > dkg_phase
+  #do_phase2
+}
 
-### 4. Since the 3rd participant didn't publish, we have to go to phase 3
+function do_phase3 () {
+  #wait_for_phase 2
+  $CELO dkg:get --node $NODE_URL --address $DKG_ADDRESS --method responses > combined_responses
 
-PHASE3_OUTPUT=`$DKG try-finalize --in-phase phase2_node --out-phase phase3_node --input ./combined_responses --output justifications`
-if  [[ "$PHASE3_OUTPUT" == "Success"* ]]
-then
-  echo $PHASE3_OUTPUT
+  ### 4. Since the 3rd participant didn't publish, we have to go to phase 3
+
+  PHASE3_OUTPUT=`$DKG try-finalize --in-phase phase2_node --out-phase phase3_node --input ./combined_responses --output justifications`
+  if  [[ "$PHASE3_OUTPUT" == "Success"* ]]
+  then
+    echo $PHASE3_OUTPUT
+    exit 0
+  fi
+
+  $CELO dkg:publish --node $NODE_URL --address $DKG_ADDRESS --privateKey $PRIVATE_KEY --from $FROM --data ./justifications
+  echo "Justifications Published"
+  echo 3 > dkg_phase
+  #do_phase3
+}
+
+function do_phase4 () {
+  ### 5. Justifications
+
+  #wait_for_phase 3
+  $CELO dkg:get --node $NODE_URL --address $DKG_ADDRESS --method justifications > combined_justifications
+
+  $DKG finalize --in-phase phase3_node --input combined_justifications --output result
+  echo 4 > dkg_phase
+}
+
+function do_phase5() {
+  echo "DKG done!"
   exit 0
-fi
+}
 
-$CELO dkg:publish --node $NODE_URL --address $DKG_ADDRESS --privateKey $PRIVATE_KEY --from $FROM --data ./justifications
+echo "Participating in DKG at address $DKG_ADDRESS"
 
-### 5. Justifications
-
-echo "Justifications Published"
-wait_for_phase 3
-$CELO dkg:get --node $NODE_URL --address $DKG_ADDRESS --method justifications > combined_justifications
-
-$DKG finalize --in-phase phase3_node --input combined_justifications --output result
+while true; do
+  phase="$(get_phase)"
+  done_phase=$(<dkg_phase)
+  if  [[ "$done_phase" == "$phase" ]]; then
+    echo "Phase is still $phase. Sleeping for $SLEEP_TIME seconds."
+    sleep $SLEEP_TIME
+    continue
+  fi
+  if  [[ "0" == "$phase" ]]; then
+    do_phase0
+    continue
+  fi
+  do_phase$((done_phase + 1))
+done
