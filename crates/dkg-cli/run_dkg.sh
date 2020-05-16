@@ -1,5 +1,10 @@
 #!/bin/bash -e
 
+if [[ $1 == "create-account" ]]; then
+  $CELO account:new
+  exit 0
+fi
+
 if [[ ! -f dkg_phase ]]; then
   echo -1 > dkg_phase
 fi

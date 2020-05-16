@@ -1,5 +1,21 @@
 # Onchain DKG
 
+## Using Docker
+
+1. Create an empty directory and go into it
+2. Run `docker run -ti -v $PWD:/dkg kobigurk/celo-dkg create-account`
+3. Give the address to the DKG coordinator to provide you with cGLD
+4. Prepare `dkg_config` with the contents:
+  ```
+  DKG_ADDRESS=
+  FROM=
+  PRIVATE_KEY=
+  NODE_URL=
+  ```
+5. After you have cGLD in your address, run `docker run -ti -v $PWD:/dkg kobigurk/celo-dkg`
+
+## Manually
+
 1. Install the DKG CLI, hereafter called `dkg` which is used to perform the offline part of the computation
 2. Install the Celo CLI, which will be used as a broadcast layer
 
@@ -10,7 +26,7 @@ The general pattern is:
 2. perform transformation on the data via `dkg`
 3. publish new data via `celocli`
 
-## Joining Celo
+### Joining Celo
 
 You must have an account on the Celo network. You can do that by running:
 
@@ -38,7 +54,7 @@ This command will output the deployed contract's address.
 `DURATION_IN_BLOCKS` is the number of blocks each phase will be active for.
 `THRESHOLD` is the DKG's threshold.
 
-## 1. DKG Preparation
+### 1. DKG Preparation
 
 First, you must generate your DKG keypair:
 
