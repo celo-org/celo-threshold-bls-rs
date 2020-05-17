@@ -7,6 +7,7 @@ use super::{
 use rand_core::RngCore;
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use std::collections::HashMap;
+use std::fmt::Debug;
 use threshold_bls::{
     ecies::{self, EciesCipher},
     group::{Curve, Element},
@@ -16,9 +17,30 @@ use threshold_bls::{
 
 use std::cell::RefCell;
 
-// TODO
-// - check VSS-forgery article
-// - zeroise
+pub(crate) trait Phase0<'a, C: Curve>: Clone + Debug + Serialize + Deserialize<'a> {
+    fn encrypt_shares<R: RngCore>(self) -> DKGResult<(Phase1<C>, BundledShares<C>)>;
+}
+
+pub(crate) trait Phase1<'a, C: Curve>: Clone + Debug + Serialize + Deserialize<'a> {
+    fn process_shares(
+        self,
+        bundles: &[BundledShares<C>],
+    ) -> DKGResult<(Phase2<C>, Option<BundledResponses>)>;
+}
+
+pub(crate) trait Phase2<'a, C: Curve>: Clone + Debug + Serialize + Deserialize<'a> {
+    fn process_responses(
+        self,
+        responses: &[BundledResponses],
+    ) -> Result<DKGOutput<C>, (Phase3<C>, Option<BundledJustification<C>>)>;
+}
+
+pub(crate) trait Phase3<'a, C: Curve>: Clone + Debug + Serialize + Deserialize<'a> {
+    fn process_justifications(
+        self,
+        justifs: &[BundledJustification<C>],
+    ) -> Result<DKGOutput<C>, DKGError>;
+}
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(bound = "C::Scalar: DeserializeOwned")]
@@ -28,6 +50,26 @@ struct DKGInfo<C: Curve> {
     group: Group<C>,
     secret: Poly<C::Scalar>,
     public: Poly<C::Point>,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(bound = "C::Scalar: DeserializeOwned")]
+struct ReshareInfo<C: Curve> {
+    private_key: C::Scalar,
+    // our previous index in the group - it can be none if we are a new member
+    prev_index: Option<Idx>,
+    // previous group on which to reshare
+    prev_group: Group<C>,
+    // previous group distributed public polynomial
+    prev_public: Poly<C::Point>,
+    // secret and public polynomial of a dealer
+    secret: Option<Poly<C::Scalar>>,
+    public: Option<Poly<C::Point>>,
+
+    // our new index in the group - it can be none if we are a leaving member
+    new_index: Option<Idx>,
+    // new group that is receiving the refreshed shares
+    new_group: Group<C>,
 }
 
 impl<C: Curve> DKGInfo<C> {
@@ -125,11 +167,13 @@ impl<C: Curve> DKG<C> {
 
         Ok(DKG { info })
     }
+}
 
+impl<C: Curve> Phase0<'_, C> for DKG<C> {
     /// Evaluates the secret polynomial at the index of each DKG participant and encrypts
     /// the result with the corresponding public key. Returns the bundled encrypted shares
     /// as well as the next phase of the DKG.
-    pub(crate) fn encrypt_shares<R: RngCore>(
+    fn encrypt_shares<R: RngCore>(
         self,
         rng: &mut R,
     ) -> DKGResult<(DKGWaitingShare<C>, BundledShares<C>)> {
@@ -201,7 +245,7 @@ pub struct DKGWaitingShare<C: Curve> {
     info: DKGInfo<C>,
 }
 
-impl<C: Curve> DKGWaitingShare<C> {
+impl<C: Curve> Phase1<'_, C> for DKGWaitingShare<C> {
     /// Tries to decrypt the provided shares and calculate the secret key and the
     /// threshold public key. If `publish_all` is set to true then the returned
     /// responses will include both complaints and successful statuses. Consider setting
@@ -213,11 +257,11 @@ impl<C: Curve> DKGWaitingShare<C> {
     /// - invalid encryption
     /// - invalid length of public polynomial
     /// - invalid share w.r.t. public polynomial
-    pub(crate) fn process_shares(
+    fn process_shares(
         self,
         bundles: &[BundledShares<C>],
         publish_all: bool,
-    ) -> DKGResult<(DKGWaitingResponse<C>, Option<BundledResponses>)> {
+    ) -> DKGResult<(Phase2<C>, Option<BundledResponses>)> {
         let my_idx = self.info.index;
 
         let (fshare, fpub, statuses) = self.process_shares_get_all(bundles)?;
@@ -255,7 +299,9 @@ impl<C: Curve> DKGWaitingShare<C> {
 
         Ok((new_dkg, bundle))
     }
+}
 
+impl<C: Curve> DKGWaitingShare<C> {
     /// Processes the shares and returns the private share of the user and a public polynomial, as
     /// well as the status matrix of the protocol.
     ///
@@ -429,16 +475,41 @@ impl<C: Curve> DKGWaitingResponse<C> {
         }
     }
 
+    /// set_statuses set the status of the given responses on the status matrix.
+    fn set_statuses(&mut self, responses: &[BundledResponses]) {
+        let my_idx = self.info.index;
+        let n = self.info.n();
+
+        // makes sure the API doesn't take into account our own responses!
+        let not_from_me = responses.iter().filter(|r| r.share_idx != my_idx);
+        let valid_idx = not_from_me.filter(|r| {
+            let good_holder = r.share_idx < n as Idx;
+            let good_dealers = !r.responses.iter().any(|resp| resp.dealer_idx >= n as Idx);
+            good_dealers && good_holder
+        });
+
+        for bundle in valid_idx {
+            let holder_index = bundle.share_idx;
+            for response in bundle.responses.iter() {
+                let dealer_index = response.dealer_idx;
+                self.statuses
+                    .set(dealer_index, holder_index, response.status);
+            }
+        }
+    }
+}
+
+impl<C: Curve> Phase2<'_, C> for DKGWaitingResponse<C> {
     #[allow(clippy::type_complexity)]
     /// Checks if the responses when applied to the status matrix result in a matrix with only
     /// `Success` elements. If so, the protocol terminates.
     ///
     /// If there are complaints in the Status matrix, then it will return an error with the
     /// justifications required for Phase 3 of the DKG.
-    pub(crate) fn process_responses(
+    fn process_responses(
         mut self,
         responses: &[BundledResponses],
-    ) -> Result<DKGOutput<C>, (DKGWaitingJustification<C>, Option<BundledJustification<C>>)> {
+    ) -> Result<DKGOutput<C>, (Phase3<C>, Option<BundledJustification<C>>)> {
         let n = self.info.n();
         self.set_statuses(responses);
         let statuses = &self.statuses;
@@ -505,29 +576,6 @@ impl<C: Curve> DKGWaitingResponse<C> {
             share,
         })
     }
-
-    /// set_statuses set the status of the given responses on the status matrix.
-    fn set_statuses(&mut self, responses: &[BundledResponses]) {
-        let my_idx = self.info.index;
-        let n = self.info.n();
-
-        // makes sure the API doesn't take into account our own responses!
-        let not_from_me = responses.iter().filter(|r| r.share_idx != my_idx);
-        let valid_idx = not_from_me.filter(|r| {
-            let good_holder = r.share_idx < n as Idx;
-            let good_dealers = !r.responses.iter().any(|resp| resp.dealer_idx >= n as Idx);
-            good_dealers && good_holder
-        });
-
-        for bundle in valid_idx {
-            let holder_index = bundle.share_idx;
-            for response in bundle.responses.iter() {
-                let dealer_index = response.dealer_idx;
-                self.statuses
-                    .set(dealer_index, holder_index, response.status);
-            }
-        }
-    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -545,7 +593,7 @@ pub struct DKGWaitingJustification<C: Curve> {
     publics: HashMap<Idx, PublicPoly<C>>,
 }
 
-impl<C> DKGWaitingJustification<C>
+impl<C> Phase3<'_, C> for DKGWaitingJustification<C>
 where
     C: Curve,
 {
@@ -555,7 +603,7 @@ where
     /// - share corresponds to public polynomial received in the bundled shares during
     /// first period.
     /// Return an output if `len(qual) > thr`
-    pub(crate) fn process_justifications(
+    fn process_justifications(
         self,
         justifs: &[BundledJustification<C>],
     ) -> Result<DKGOutput<C>, DKGError> {
