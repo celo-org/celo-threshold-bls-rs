@@ -17,13 +17,15 @@ use threshold_bls::{
 
 use std::cell::RefCell;
 
-pub trait Phase0<C: Curve>: Clone + Debug + Serialize + for<'a> Deserialize<'a> {
-    type Next: Clone + Debug + Serialize + for<'b> Deserialize<'b>;
+pub trait Phase<C: Curve>: Clone + Debug + Serialize + for<'a> Deserialize<'a> {
+    type Next;
+}
+
+pub trait Phase0<C: Curve>: Phase<C> {
     fn encrypt_shares<R: RngCore>(self, rng: &mut R) -> DKGResult<(Self::Next, BundledShares<C>)>;
 }
 
-pub trait Phase1<C: Curve>: Clone + Debug + Serialize + for<'a> Deserialize<'a> {
-    type Next: Clone + Debug + Serialize + for<'b> Deserialize<'b>;
+pub trait Phase1<C: Curve>: Phase<C> {
     fn process_shares(
         self,
         bundles: &[BundledShares<C>],
@@ -31,15 +33,14 @@ pub trait Phase1<C: Curve>: Clone + Debug + Serialize + for<'a> Deserialize<'a> 
     ) -> DKGResult<(Self::Next, Option<BundledResponses>)>;
 }
 
-pub trait Phase2<C: Curve>: Clone + Debug + Serialize + for<'a> Deserialize<'a> {
-    type Next: Clone + Debug + Serialize + for<'b> Deserialize<'b>;
+pub trait Phase2<C: Curve>: Phase<C> {
     fn process_responses(
         self,
         responses: &[BundledResponses],
     ) -> Result<DKGOutput<C>, (Self::Next, Option<BundledJustification<C>>)>;
 }
 
-pub trait Phase3<C: Curve>: Clone + Debug + Serialize + for<'a> Deserialize<'a> {
+pub trait Phase3<C: Curve> {
     fn process_justifications(
         self,
         justifs: &[BundledJustification<C>],
@@ -173,8 +174,11 @@ impl<C: Curve> DKG<C> {
     }
 }
 
-impl<C: Curve> Phase0<C> for DKG<C> {
+impl<C: Curve> Phase<C> for DKG<C> {
     type Next = DKGWaitingShare<C>;
+}
+
+impl<C: Curve> Phase0<C> for DKG<C> {
     /// Evaluates the secret polynomial at the index of each DKG participant and encrypts
     /// the result with the corresponding public key. Returns the bundled encrypted shares
     /// as well as the next phase of the DKG.
@@ -250,8 +254,11 @@ pub struct DKGWaitingShare<C: Curve> {
     info: DKGInfo<C>,
 }
 
-impl<C: Curve> Phase1<C> for DKGWaitingShare<C> {
+impl<C: Curve> Phase<C> for DKGWaitingShare<C> {
     type Next = DKGWaitingResponse<C>;
+}
+
+impl<C: Curve> Phase1<C> for DKGWaitingShare<C> {
     /// Tries to decrypt the provided shares and calculate the secret key and the
     /// threshold public key. If `publish_all` is set to true then the returned
     /// responses will include both complaints and successful statuses. Consider setting
@@ -505,8 +512,11 @@ impl<C: Curve> DKGWaitingResponse<C> {
     }
 }
 
-impl<C: Curve> Phase2<C> for DKGWaitingResponse<C> {
+impl<C: Curve> Phase<C> for DKGWaitingResponse<C> {
     type Next = DKGWaitingJustification<C>;
+}
+
+impl<C: Curve> Phase2<C> for DKGWaitingResponse<C> {
     #[allow(clippy::type_complexity)]
     /// Checks if the responses when applied to the status matrix result in a matrix with only
     /// `Success` elements. If so, the protocol terminates.
