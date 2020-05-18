@@ -8,7 +8,8 @@ pub mod phases {
     use super::states;
 
     pub use states::{
-        DKGOutput, DKGWaitingJustification, DKGWaitingResponse, DKGWaitingShare, DKG,
+        DKGOutput, DKGWaitingJustification, DKGWaitingResponse, DKGWaitingShare, Phase0, Phase1,
+        Phase2, Phase3, DKG,
     };
 }
 

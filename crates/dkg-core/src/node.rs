@@ -3,7 +3,10 @@ use super::{
     primitives::{
         bundles::{BundledJustification, BundledResponses, BundledShares},
         group::Group,
-        phases::{DKGOutput, DKGWaitingJustification, DKGWaitingResponse, DKGWaitingShare, DKG},
+        phases::{
+            DKGOutput, DKGWaitingJustification, DKGWaitingResponse, DKGWaitingShare,
+            Phase0 as DPhase0, Phase1 as DPhase1, Phase2 as DPhase2, Phase3 as DPhase3, DKG,
+        },
         DKGError,
     },
 };
