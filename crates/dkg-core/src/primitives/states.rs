@@ -17,25 +17,33 @@ use threshold_bls::{
 
 use std::cell::RefCell;
 
-pub(crate) trait Phase0<'a, C: Curve>: Clone + Debug + Serialize + Deserialize<'a> {
+pub(crate) trait Phase0<C: Curve>:
+    Clone + Debug + Serialize + for<'a> Deserialize<'a>
+{
     fn encrypt_shares<R: RngCore>(self) -> DKGResult<(Phase1<C>, BundledShares<C>)>;
 }
 
-pub(crate) trait Phase1<'a, C: Curve>: Clone + Debug + Serialize + Deserialize<'a> {
+pub(crate) trait Phase1<C: Curve>:
+    Clone + Debug + Serialize + for<'a> Deserialize<'a>
+{
     fn process_shares(
         self,
         bundles: &[BundledShares<C>],
     ) -> DKGResult<(Phase2<C>, Option<BundledResponses>)>;
 }
 
-pub(crate) trait Phase2<'a, C: Curve>: Clone + Debug + Serialize + Deserialize<'a> {
+pub(crate) trait Phase2<C: Curve>:
+    Clone + Debug + Serialize + for<'a> Deserialize<'a>
+{
     fn process_responses(
         self,
         responses: &[BundledResponses],
     ) -> Result<DKGOutput<C>, (Phase3<C>, Option<BundledJustification<C>>)>;
 }
 
-pub(crate) trait Phase3<'a, C: Curve>: Clone + Debug + Serialize + Deserialize<'a> {
+pub(crate) trait Phase3<C: Curve>:
+    Clone + Debug + Serialize + for<'a> Deserialize<'a>
+{
     fn process_justifications(
         self,
         justifs: &[BundledJustification<C>],
@@ -169,7 +177,7 @@ impl<C: Curve> DKG<C> {
     }
 }
 
-impl<C: Curve> Phase0<'_, C> for DKG<C> {
+impl<C: Curve> Phase0<C> for DKG<C> {
     /// Evaluates the secret polynomial at the index of each DKG participant and encrypts
     /// the result with the corresponding public key. Returns the bundled encrypted shares
     /// as well as the next phase of the DKG.
@@ -245,7 +253,7 @@ pub struct DKGWaitingShare<C: Curve> {
     info: DKGInfo<C>,
 }
 
-impl<C: Curve> Phase1<'_, C> for DKGWaitingShare<C> {
+impl<C: Curve> Phase1<C> for DKGWaitingShare<C> {
     /// Tries to decrypt the provided shares and calculate the secret key and the
     /// threshold public key. If `publish_all` is set to true then the returned
     /// responses will include both complaints and successful statuses. Consider setting
@@ -499,7 +507,7 @@ impl<C: Curve> DKGWaitingResponse<C> {
     }
 }
 
-impl<C: Curve> Phase2<'_, C> for DKGWaitingResponse<C> {
+impl<C: Curve> Phase2<C> for DKGWaitingResponse<C> {
     #[allow(clippy::type_complexity)]
     /// Checks if the responses when applied to the status matrix result in a matrix with only
     /// `Success` elements. If so, the protocol terminates.
@@ -593,7 +601,7 @@ pub struct DKGWaitingJustification<C: Curve> {
     publics: HashMap<Idx, PublicPoly<C>>,
 }
 
-impl<C> Phase3<'_, C> for DKGWaitingJustification<C>
+impl<C> Phase3<C> for DKGWaitingJustification<C>
 where
     C: Curve,
 {
