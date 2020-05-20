@@ -104,6 +104,20 @@ pub struct DKG<C: Curve> {
     info: DKGInfo<C>,
 }
 
+/// RDKG is the struct containing the logic to run the resharing scheme from
+/// Desmedt et al.
+/// ([paper](http://citeseerx.ist.psu.edu/viewdoc/download?doi=10.1.1.55.2968&rep=rep1&type=pdf)).
+/// The protoocol has the same phases of the DKG but requires additional checks
+/// to verify the resharing is performed correctly. The resharing scheme runs
+/// between two potentially distinct groups: the dealers (nodes that already
+/// have a share, that ran a DKG previously) and the share holders (nodes that
+/// receives a refreshed share of the same secret).
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(bound = "C::Scalar: DeserializeOwned")]
+pub struct RDKG<C: Curve> {
+    info: ReshareInfo<C>,
+}
+
 /// EncryptedShare holds the ECIES encryption of a share destined to the
 /// `share_idx`-th participant. When receiving the share, if the participant has
 /// the same specified index, the corresponding dkg state decrypts the share using
@@ -130,6 +144,61 @@ pub struct BundledShares<C: Curve> {
     /// In the context of using a blockchain as a broadcast channel,
     /// it can be posted only once.
     pub public: PublicPoly<C>,
+}
+
+impl<C: Curve> RDKG<C> {
+    pub(crate) fn new_from_share<R: RngCore>(
+        private_key: C::Scalar,
+        curr_share: DKGOutput<C>,
+        new_group: Group<C>,
+        rng: &mut R,
+    ) -> Result<RDKG<C>, DKGError> {
+        let oldi = Some(curr_share.share.index);
+        let prev_group = curr_share.qual;
+        let prev_public = curr_share.public;
+        // generate a secret polynomial with the share being the free
+        // coefficient
+        let mut secret = PrivatePoly::<C>::new_from(new_group.threshold - 1, rng);
+        secret.set(0, curr_share.share.private);
+        let public = secret.commit::<C::Point>();
+
+        let mut pubkey = C::point();
+        pubkey.mul(&private_key);
+        let new_idx = new_group.index(&pubkey);
+        let info = ReshareInfo {
+            private_key: private_key,
+            prev_index: oldi,
+            prev_group: prev_group,
+            prev_public: prev_public,
+            secret: Some(secret),
+            public: Some(public),
+            new_index: new_idx,
+            new_group: new_group,
+        };
+        Ok(RDKG { info: info })
+    }
+
+    pub(crate) fn new_member(
+        private_key: C::Scalar,
+        curr_group: Group<C>,
+        curr_public: PublicPoly<C>,
+        new_group: Group<C>,
+    ) -> Result<RDKG<C>, DKGError> {
+        let mut pubkey = C::point();
+        pubkey.mul(&private_key);
+        let new_idx = new_group.index(&pubkey);
+        let info = ReshareInfo {
+            private_key: private_key,
+            prev_index: None,
+            prev_group: curr_group,
+            prev_public: curr_public,
+            secret: None,
+            public: None,
+            new_index: new_idx,
+            new_group: new_group,
+        };
+        Ok(RDKG { info: info })
+    }
 }
 
 impl<C: Curve> DKG<C> {

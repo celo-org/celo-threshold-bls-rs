@@ -51,6 +51,12 @@ impl<C: Element> Poly<C> {
         Self::from(coeffs)
     }
 
+    /// set the given element at the specified index. The index 0 is the free
+    /// coefficient of the polynomial. It panics if the index is out of range.
+    pub fn set(&mut self, index: usize, value: C) {
+        self.0[index] = value;
+    }
+
     /// Returns a new polynomial of the given degree where each coefficients is
     /// sampled at random.
     ///
