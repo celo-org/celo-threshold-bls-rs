@@ -1,35 +1,59 @@
-FROM ubuntu:18.04
+FROM node:10-alpine
 
-RUN rm /bin/sh && ln -s /bin/bash /bin/sh
 ENV HOME=/root
 
-RUN apt-get update && apt-get install -y \
+RUN apk add --no-cache \
+    bash \
     automake \
-    build-essential \
+    make gcc g++ linux-headers eudev-dev \
     git \
     curl \
     python \
-    libusb-1.0-0-dev \
-    && rm -rf /var/lib/apt/lists/*
+    libusb-dev
 
-RUN curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.35.3/install.sh | bash
-ENV NVM_DIR $HOME/.nvm
-ENV NODE_VERSION 10.16.3
-RUN . $NVM_DIR/nvm.sh \
-    && nvm install $NODE_VERSION \
-    && nvm alias default $NODE_VERSION \
-    && nvm use default
-ENV NODE_PATH $NVM_DIR/v$NODE_VERSION/lib/node_modules
-ENV PATH $NVM_DIR/versions/node/v$NODE_VERSION/bin:$PATH
-RUN npm install -g yarn
 RUN git clone https://github.com/celo-org/celo-monorepo
-RUN cd celo-monorepo && yarn && yarn build && cd packages/cli && yarn build
+RUN cd celo-monorepo && yarn
+RUN cd celo-monorepo && cd packages/utils && yarn build && cd ../dev-utils && yarn build && cd ../protocol && yarn build && cd ../contractkit && yarn build && cd ../cli && yarn build
 RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
-ENV CELO=/celo-monorepo/packages/cli/bin/run
 ENV PATH $HOME/.cargo/bin:$PATH
 RUN rustup install 1.42.0 && rustup default 1.42.0
 RUN git clone https://github.com/celo-org/celo-threshold-bls-rs
-RUN cd celo-threshold-bls-rs/crates/dkg-cli && cargo build --release && cd / && cp celo-threshold-bls-rs/target/release/dkg /dkgbin && rm -rf celo-threshold-bls-rs/target
+RUN cd celo-threshold-bls-rs/crates/dkg-cli && RUSTFLAGS="-C target-feature=-crt-static" cargo build --release && cd / && cp celo-threshold-bls-rs/target/release/dkg /dkgbin && rm -rf celo-threshold-bls-rs/target
+
+
+FROM node:10-alpine
+RUN apk add --no-cache \
+    bash \
+    automake \
+    make gcc g++ linux-headers eudev-dev \
+    git \
+    curl \
+    python \
+    libusb-dev
+
+COPY --from=0 /celo-monorepo/package.json /celo-monorepo/yarn.lock  /celo-monorepo/lerna.json /monorepo/
+COPY --from=0 /celo-monorepo/scripts /monorepo/scripts
+COPY --from=0 /celo-monorepo/packages/cli/package.json /monorepo/packages/cli/
+COPY --from=0 /celo-monorepo/packages/protocol/package.json /monorepo/packages/protocol/
+COPY --from=0 /celo-monorepo/packages/typescript/package.json /monorepo/packages/typescript/
+COPY --from=0 /celo-monorepo/packages/dev-utils/package.json /monorepo/packages/dev-utils/
+COPY --from=0 /celo-monorepo/packages/contractkit/package.json /monorepo/packages/contractkit/
+COPY --from=0 /celo-monorepo/packages/utils/package.json /monorepo/packages/utils/
+
+RUN cd /monorepo && cd packages/cli && yarn install && yarn add @types/prompts && cd ../.. && yarn cache clean
+
+COPY --from=0 /celo-monorepo/packages/cli /monorepo/packages/cli/
+COPY --from=0 /celo-monorepo/packages/protocol /monorepo/packages/protocol/
+COPY --from=0 /celo-monorepo/packages/typescript /monorepo/packages/typescript/
+COPY --from=0 /celo-monorepo/packages/dev-utils /monorepo/packages/dev-utils/
+COPY --from=0 /celo-monorepo/packages/contractkit /monorepo/packages/contractkit/
+COPY --from=0 /celo-monorepo/packages/utils /monorepo/packages/utils/
+
+RUN cd /monorepo && yarn build
+
+COPY --from=0 /celo-monorepo/packages/cli/node_modules /cli/node_modules
+COPY --from=0 /dkgbin /
+ENV CELO=/monorepo/packages/cli/bin/run
 ENV DKG=/dkgbin
 ADD run_dkg.sh /
 WORKDIR /dkg
