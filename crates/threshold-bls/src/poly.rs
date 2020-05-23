@@ -1,7 +1,7 @@
 use crate::group::{Curve, Element, Point, Scalar};
 use rand_core::RngCore;
 use serde::{Deserialize, Serialize};
-use std::{collections::HashMap, fmt};
+use std::{collections::BTreeMap, fmt};
 use thiserror::Error;
 
 pub type PrivatePoly<C> = Poly<<C as Curve>::Scalar>;
@@ -196,7 +196,7 @@ where
     fn share_map(
         t: usize,
         mut shares: Vec<Eval<C>>,
-    ) -> Result<HashMap<Idx, (C::RHS, C)>, PolyError> {
+    ) -> Result<BTreeMap<Idx, (C::RHS, C)>, PolyError> {
         if shares.len() < t {
             return Err(PolyError::InvalidRecovery(shares.len(), t));
         }
@@ -209,7 +209,7 @@ where
         let xs = shares
             .into_iter()
             .take(t)
-            .fold(HashMap::new(), |mut m, sh| {
+            .fold(BTreeMap::new(), |mut m, sh| {
                 let mut xi = C::RHS::new();
                 xi.set_int((sh.index + 1).into());
                 m.insert(sh.index, (xi, sh.value));
@@ -279,7 +279,7 @@ impl<X: Scalar<RHS = X>> Poly<X> {
     }
 
     /// Computes the lagrange basis polynomial of index i
-    fn lagrange_basis<E: Element<RHS = X>>(i: Idx, xs: &HashMap<Idx, (X, E)>) -> Poly<X> {
+    fn lagrange_basis<E: Element<RHS = X>>(i: Idx, xs: &BTreeMap<Idx, (X, E)>) -> Poly<X> {
         let mut basis = Poly::<X>::from(vec![X::one()]);
 
         // accumulator of the denominator values
