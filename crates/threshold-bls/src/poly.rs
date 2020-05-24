@@ -51,6 +51,12 @@ impl<C: Element> Poly<C> {
         Self::from(coeffs)
     }
 
+    /// get returns the given coefficient at the requested index. It will panic
+    /// if the index is out of range,i.e. `if i > self.degree()`.
+    pub fn get(&self, i: Idx) -> C {
+        self.0[i as usize].clone()
+    }
+
     /// set the given element at the specified index. The index 0 is the free
     /// coefficient of the polynomial. It panics if the index is out of range.
     pub fn set(&mut self, index: usize, value: C) {

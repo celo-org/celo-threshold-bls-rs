@@ -24,7 +24,7 @@ pub mod bundles {
 mod status;
 
 use thiserror::Error;
-use threshold_bls::{ecies::EciesError, poly::Idx};
+use threshold_bls::{ecies::EciesError, poly, poly::Idx};
 
 /// The minimum allowed threshold is 51%
 pub fn minimum_threshold(n: usize) -> usize {
@@ -75,6 +75,20 @@ pub enum DKGError {
     /// ShareError is raised when a share is being processed
     #[error(transparent)]
     ShareError(#[from] ShareError),
+
+    /// NotDealer is raised when one attempts to call a method of a
+    /// dealer during a resharing when it is not a member of the current group.
+    #[error("this participant is not a dealer")]
+    NotDealer,
+
+    /// NotShareHolder is raised when one attemps to call a method of a share
+    /// holder during a resharing when it is a not a share holder in the new
+    /// group.
+    #[error("this participant is not a share holder")]
+    NotShareHolder,
+
+    #[error("invalid recovery during resharing: {0}")]
+    InvalidRecovery(#[from] poly::PolyError),
 }
 
 #[derive(Debug, Error)]

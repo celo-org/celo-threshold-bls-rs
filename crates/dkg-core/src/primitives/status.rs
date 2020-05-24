@@ -171,7 +171,7 @@ impl StatusMatrix {
     /// # Panics
     ///
     /// If the `dealer` index is greater than the number of dealers
-    pub fn all_true(&self, dealer: Idx) -> bool {
+    pub fn dealer_all_true(&self, dealer: Idx) -> bool {
         self.get_for_dealer(dealer).all()
     }
 
@@ -184,6 +184,11 @@ impl StatusMatrix {
         self.0
             .get(dealer as usize)
             .expect("dealer index out of bounds")
+    }
+
+    /// Returns `true` if alls rows are all 1s
+    pub fn all_true(&self) -> bool {
+        !self.0.any(|bs| !bs.all())
     }
 }
 

@@ -144,18 +144,23 @@ where
     fn run(self, board: &mut B, responses: &[BundledResponses]) -> NodeResult<Self::Next> {
         match self.inner.process_responses(responses) {
             Ok(output) => Ok(Phase2Result::Output(output)),
-            Err((next, justifications)) => {
-                // publish justifications if you have some
-                // Nodes may just see that justifications are needed but they
-                // don't have to create any, since no  complaint have been filed
-                // against their deal.
-                if let Some(justifications) = justifications {
-                    board
-                        .publish_justifications(justifications)
-                        .map_err(|_| NodeError::PublisherError)?;
-                }
+            Err(next) => {
+                match next {
+                    Ok((nextdkg, justifications)) => {
+                        // publish justifications if you have some
+                        // Nodes may just see that justifications are needed but they
+                        // don't have to create any, since no  complaint have been filed
+                        // against their deal.
+                        if let Some(justifications) = justifications {
+                            board
+                                .publish_justifications(justifications)
+                                .map_err(|_| NodeError::PublisherError)?;
+                        }
 
-                Ok(Phase2Result::GoToPhase3(Phase3 { inner: next }))
+                        Ok(Phase2Result::GoToPhase3(Phase3 { inner: nextdkg }))
+                    }
+                    Err(e) => Err(NodeError::DKGError(e)),
+                }
             }
         }
     }
