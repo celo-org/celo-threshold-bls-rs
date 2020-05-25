@@ -188,7 +188,6 @@ impl<C: Curve> RDKG<C> {
         let mut secret = PrivatePoly::<C>::new_from(new_group.threshold - 1, rng);
         secret.set(0, curr_share.share.private);
         let public = secret.commit::<C::Point>();
-
         let mut pubkey = C::point();
         pubkey.mul(&private_key);
         let new_idx = new_group.index(&pubkey);
@@ -238,14 +237,23 @@ impl<C: Curve> Phase0<C> for RDKG<C> {
         if !self.info.is_dealer() {
             return Err(DKGError::NotDealer);
         }
+        let info = self.info;
+        let public = info.public.unwrap();
+        let secret = info.secret.unwrap();
         let bundle = create_share_bundle(
-            self.info.prev_index.unwrap(),
-            &self.info.secret.unwrap(),
-            &self.info.public.unwrap(),
-            &self.info.prev_group,
+            info.prev_index.unwrap(),
+            &secret,
+            &public,
+            &info.prev_group,
             rng,
         )?;
-        let dw = RDKGWaitingShare { info: self.info };
+        let dw = RDKGWaitingShare {
+            info: ReshareInfo {
+                public: Some(public),
+                secret: Some(secret),
+                ..info
+            },
+        };
         Ok((dw, bundle))
     }
 }
@@ -376,16 +384,17 @@ impl<C: Curve> Phase1<C> for RDKGWaitingShare<C> {
         bundles: &[BundledShares<C>],
         publish_all: bool,
     ) -> DKGResult<(RDKGWaitingResponse<C>, Option<BundledResponses>)> {
-        // there are "old_n" dealers and for each dealer, "new_n" share holders
-        let mut statuses = StatusMatrix::new(self.info.old_n(), self.info.new_n(), Status::Success);
-
         if !self.info.is_share_holder() {
             return Ok((
                 RDKGWaitingResponse {
+                    statuses: StatusMatrix::new(
+                        self.info.prev_group.len(),
+                        self.info.new_group.len(),
+                        Status::Success,
+                    ),
                     info: self.info,
                     shares: ShareInfo::<C>::new(),
                     publics: PublicInfo::<C>::new(),
-                    statuses: statuses,
                 },
                 None,
             ));
@@ -397,8 +406,6 @@ impl<C: Curve> Phase1<C> for RDKGWaitingShare<C> {
             &self.info.new_group,
             my_idx,
             &self.info.private_key,
-            &self.info.public_key,
-            &statuses,
             bundles,
         )?;
 
@@ -439,18 +446,13 @@ impl<C: Curve> Phase1<C> for DKGWaitingShare<C> {
         bundles: &[BundledShares<C>],
         publish_all: bool,
     ) -> DKGResult<(DKGWaitingResponse<C>, Option<BundledResponses>)> {
-        let n = self.info.n();
         let thr = self.info.thr();
         let my_idx = self.info.index;
-        let mut statuses = StatusMatrix::new(n, n, Status::Success);
-
-        let (shares, publics, statuses) = process_shares_get_all(
+        let (shares, publics, mut statuses) = process_shares_get_all(
             &self.info.group,
             &self.info.group,
             my_idx,
             &self.info.private_key,
-            &self.info.public_key,
-            &statuses,
             bundles,
         )?;
 
@@ -572,7 +574,7 @@ impl<C: Curve> Phase2<C> for RDKGWaitingResponse<C> {
     /// If there are complaints in the Status matrix, then it will return an
     /// error with the justifications required for Phase 3 of the DKG.
     fn process_responses(
-        mut self,
+        self,
         responses: &[BundledResponses],
     ) -> Result<DKGOutput<C>, DKGResult<(Self::Next, Option<BundledJustification<C>>)>> {
         if !self.info.is_share_holder() {
@@ -586,42 +588,40 @@ impl<C: Curve> Phase2<C> for RDKGWaitingResponse<C> {
             return Err(Ok((dkg, None)));
         }
 
+        let info = self.info;
+        let mut statuses = self.statuses;
         set_statuses(
-            self.info.new_index.unwrap(),
-            &self.info.prev_group,
-            &self.info.new_group,
-            &self.statuses,
+            info.new_index.unwrap(),
+            &info.prev_group,
+            &info.new_group,
+            &mut statuses,
             responses,
         );
-        let statuses = &self.statuses;
 
         // find out if justifications are required
         // if there is a least one participant that issued one complaint
         let justifications_required = statuses.all_true();
 
         if justifications_required {
-            let bundled_justifications = get_justification(
-                self.info.prev_index.unwrap(),
-                &self.info.secret.unwrap(),
-                &self.info.public.unwrap(),
-                &self.statuses,
-            );
+            let public = info.public.unwrap();
+            let secret = info.secret.unwrap();
+            let bundled_justifications =
+                get_justification(info.prev_index.unwrap(), &secret, &public, &statuses);
             let dkg = RDKGWaitingJustification {
-                info: self.info,
+                info: ReshareInfo {
+                    public: Some(public),
+                    secret: Some(secret),
+                    ..info
+                },
                 shares: self.shares,
-                statuses: RefCell::new(self.statuses),
+                statuses: RefCell::new(statuses),
                 publics: self.publics,
             };
             return Err(Ok((dkg, bundled_justifications)));
         }
         // in case of error here, the protocol must be aborted
-        compute_resharing_output(
-            &self.info,
-            &self.shares,
-            &self.publics,
-            RefCell::new(self.statuses),
-        )
-        .map_err(|e| Err(e))
+        compute_resharing_output(info, self.shares, self.publics, RefCell::new(statuses))
+            .map_err(|e| Err(e))
     }
 }
 
@@ -633,34 +633,31 @@ impl<C: Curve> Phase2<C> for DKGWaitingResponse<C> {
     /// If there are complaints in the Status matrix, then it will return an
     /// error with the justifications required for Phase 3 of the DKG.
     fn process_responses(
-        mut self,
+        self,
         responses: &[BundledResponses],
     ) -> Result<DKGOutput<C>, DKGResult<(Self::Next, Option<BundledJustification<C>>)>> {
-        let n = self.info.n();
+        let info = self.info;
+        let mut statuses = self.statuses;
         set_statuses(
-            self.info.index,
-            &self.info.group,
-            &self.info.group,
-            &self.statuses,
+            info.index,
+            &info.group,
+            &info.group,
+            &mut statuses,
             responses,
         );
 
         // find out if justifications are required
         // if there is a least one participant that issued one complaint
-        let justifications_required = self.statuses.all_true();
+        let justifications_required = statuses.all_true();
 
         if justifications_required {
-            let bundled_justifications = get_justification(
-                self.info.index,
-                &self.info.secret,
-                &self.info.public,
-                &self.statuses,
-            );
+            let bundled_justifications =
+                get_justification(info.index, &info.secret, &info.public, &statuses);
             let dkg = DKGWaitingJustification {
-                info: self.info,
+                info: info,
                 dist_share: self.dist_share,
                 dist_pub: self.dist_pub,
-                statuses: RefCell::new(self.statuses),
+                statuses: RefCell::new(statuses),
                 publics: self.publics,
             };
 
@@ -669,14 +666,14 @@ impl<C: Curve> Phase2<C> for DKGWaitingResponse<C> {
 
         // bingo ! Returns the final share now and stop the protocol
         let share = Share {
-            index: self.info.index,
+            index: info.index,
             private: self.dist_share,
         };
 
         Ok(DKGOutput {
             // everybody is qualified in this case since there is no
             // complaint at all
-            qual: self.info.group.clone(),
+            qual: info.group.clone(),
             public: self.dist_pub,
             share,
         })
@@ -726,8 +723,8 @@ where
         let mut add_public = PublicPoly::<C>::zero();
         let valid_shares = internal_process_justifications(
             self.info.index,
-            self.info.group,
-            self.statuses,
+            &self.info.group,
+            &mut self.statuses.borrow_mut(),
             &self.publics,
             justifs,
         );
@@ -794,22 +791,21 @@ where
         }
         let valid_shares = internal_process_justifications(
             self.info.new_index.unwrap(),
-            self.info.prev_group,
-            self.statuses,
+            &self.info.prev_group,
+            &mut self.statuses.borrow_mut(),
             &self.publics,
             justifs,
         );
         compute_resharing_output(
-            &self.info,
-            &valid_shares.into_iter().chain(self.shares).collect(),
-            &self.publics,
+            self.info,
+            valid_shares.into_iter().chain(self.shares).collect(),
+            self.publics,
             self.statuses,
         )
     }
 }
 
 fn decrypt_and_check_share<C: Curve>(
-    thr: usize,
     private_key: &C::Scalar,
     own_idx: Idx,
     dealer_idx: Idx,
@@ -833,7 +829,7 @@ fn set_statuses<C: Curve>(
     holder_idx: Idx,
     dealers: &Group<C>,
     holders: &Group<C>,
-    statuses: &StatusMatrix,
+    statuses: &mut StatusMatrix,
     responses: &[BundledResponses],
 ) {
     // makes sure the API doesn't take into account our own responses!
@@ -969,10 +965,11 @@ fn process_shares_get_all<C: Curve>(
     share_holders: &Group<C>,
     my_idx: Idx,
     my_private: &C::Scalar,
-    pubkey: &C::Point,
-    statuses: &StatusMatrix,
     bundles: &[BundledShares<C>],
 ) -> DKGResult<(ShareInfo<C>, PublicInfo<C>, StatusMatrix)> {
+    // there are "old_n" dealers and for each dealer, "new_n" share holders
+    let mut statuses = StatusMatrix::new(dealers.len(), share_holders.len(), Status::Success);
+
     // set by default all the shares we could receive as complaint - that puts
     // us on the conservative side of only explicitely allowing correct shares.
     (0..dealers.len())
@@ -981,7 +978,7 @@ fn process_shares_get_all<C: Curve>(
             statuses.set(dealer_idx as Idx, my_idx, Status::Complaint);
         });
 
-    let publics = PublicInfo::new();
+    let mut publics = PublicInfo::<C>::new();
     let valid_shares = bundles
         .iter()
         // check the ones that are not from us
@@ -1007,7 +1004,6 @@ fn process_shares_get_all<C: Curve>(
         // try to decrypt it (ignore invalid decryptions)
         .filter_map(|(bundle, encrypted_share)| {
             decrypt_and_check_share(
-                share_holders.threshold,
                 my_private,
                 my_idx,
                 bundle.dealer_idx,
@@ -1017,7 +1013,7 @@ fn process_shares_get_all<C: Curve>(
             .map(|share| (bundle.dealer_idx, share))
             .ok()
         })
-        .fold(ShareInfo::new(), |mut acc, (didx, share)| {
+        .fold(ShareInfo::<C>::new(), |mut acc, (didx, share)| {
             acc.insert(didx, share);
             acc
         });
@@ -1043,7 +1039,7 @@ fn get_justification<C: Curve>(
     // If there were any complaints against our deal, then we should re-evaluate our
     // secret polynomial at the indexes where the complaints were, and publish these
     // as justifications (i.e. indicating that we are still behaving correctly).
-    if !statuses.all_true(dealer_idx) {
+    if !statuses.dealer_all_true(dealer_idx) {
         let justifications = statuses
             .get_for_dealer(dealer_idx)
             .iter()
@@ -1074,16 +1070,18 @@ fn get_justification<C: Curve>(
 // returns the correct shares destined to the given holder index
 fn internal_process_justifications<C: Curve>(
     holder_idx: Idx,
-    dealers: Group<C>,
-    statuses: RefCell<StatusMatrix>,
+    dealers: &Group<C>,
+    statuses: &mut StatusMatrix,
     publics: &PublicInfo<C>,
     justifs: &[BundledJustification<C>],
 ) -> ShareInfo<C> {
-    let valid_shares = ShareInfo::new();
+    let mut valid_shares = ShareInfo::<C>::new();
     justifs
         .iter()
         .filter(|b| dealers.contains_index(b.dealer_idx))
         // get only the bundles for which we have a public polynomial for
+        // i.e. only justif for polynomials that have been broadcasted in the
+        // first phase
         .filter_map(|b| publics.get(&b.dealer_idx).map(|public| (b, public)))
         .for_each(|(bundle, public)| {
             bundle
@@ -1095,13 +1093,9 @@ fn internal_process_justifications<C: Curve>(
                 })
                 .for_each(|justification| {
                     // justification is valid, we mark it off from our matrix
-                    statuses.borrow_mut().set(
-                        bundle.dealer_idx,
-                        justification.share_idx,
-                        Status::Success,
-                    );
+                    statuses.set(bundle.dealer_idx, justification.share_idx, Status::Success);
                     if holder_idx == justification.share_idx {
-                        valid_shares.set(bundle.dealer_idx, justification.share);
+                        valid_shares.insert(bundle.dealer_idx, justification.share.clone());
                     }
                 })
         });
@@ -1109,82 +1103,74 @@ fn internal_process_justifications<C: Curve>(
 }
 
 fn compute_resharing_output<C: Curve>(
-    info: &ReshareInfo<C>,
-    shares: &ShareInfo<C>,
-    publics: &PublicInfo<C>,
+    info: ReshareInfo<C>,
+    shares: ShareInfo<C>,
+    publics: PublicInfo<C>,
     statuses: RefCell<StatusMatrix>,
 ) -> DKGResult<DKGOutput<C>> {
     // to compute the final share, we interpolate all the valid shares received
-    let mut shares_eval = shares
-        .iter()
+    let mut shares_eval: Vec<Eval<C::Scalar>> = shares
+        .into_iter()
         .map(|(idx, sh)| Eval {
             value: sh,
             index: idx,
         })
-        .collect::<Vec<_>>();
-    shares_eval.sort_by(|a, b| a.index.cmp(b.index));
+        .collect();
 
+    // only take the first t shares sorted
+    shares_eval.sort_by(|a, b| a.index.cmp(&b.index));
+    let shares_indexes = shares_eval.iter().map(|e| e.index).collect::<Vec<Idx>>();
     let shortened_evals = shares_eval
-        .iter()
-        .take(info.old_group.threshold)
-        .collect::<Vec<_>>();
+        .into_iter()
+        .take(info.prev_group.threshold)
+        .collect::<Vec<Eval<C::Scalar>>>();
 
-    let recovered_share = Poly::recover(info.old_group.threshold, shortened_evals)
+    let recovered_share = Poly::recover(info.prev_group.threshold, shortened_evals)
         .map_err(DKGError::InvalidRecovery)?;
     // recover public polynomial by interpolating coefficient-wise all
     // polynomials. the new public polynomial have "newT"
     // coefficients
-    let recovered_public = (0..info.new_group.threshold)
+    let recovered_public: PublicPoly<C> = (0..info.new_group.threshold)
         .map(|cidx| {
             // interpolate the cidx coefficient of the final public polynomial
-            let to_recover = shortened_evals
+            let to_recover = shares_indexes
                 .iter()
-                .map(|eval| {
-                    match publics.get(eval.index) {
+                .map(|sh_idx| {
+                    match publics.get(sh_idx) {
                         Some(poly) => Eval {
                             // value is the cidx coefficient of that dealer's public
                             // poly
-                            value: poly.get(cidx),
+                            value: poly.get(cidx as Idx),
                             // the index is the index from the dealer
-                            index: eval.index,
+                            index: *sh_idx,
                         },
                         None => panic!("BUG: public polynomial evaluating failed"),
                     }
                 })
                 .collect::<Vec<_>>();
             // recover the cidx coefficient of the final public polynomial
-            Poly::recover(info.old_group.threshold, to_recover)
-                .map_err(DKGError::InvalidRecovery)?
+            Poly::recover(info.prev_group.threshold, to_recover).map_err(DKGError::InvalidRecovery)
         })
-        .ok()
-        .collect::<PublicPoly<C::Point>>();
-
-    //if share_correct(info.new_idx.unwrap(),&recovered_share,&recovered_public) {
-    //return DKGError::("BUG: the share is incorrect w.r.t. the public polynomial")
-    //}
-
+        .collect::<Result<Vec<C::Point>, DKGError>>()?
+        .into();
     // To compute the QUAL in the resharing case, we take each new nodes whose
     // column in the status matrix contains true for all valid dealers.
-    // That means:
-    // 1. we only look for valid deals
-    // 2. we only take new nodes, i.e. new participants, that correctly ran the
-    // protocol (i.e. absent nodes will not be counted)
     let qual = info
         .new_group
         .nodes
-        .iter()
+        .into_iter()
         .filter(|node| {
-            shortened_evals
+            shares_indexes
                 .iter()
-                .all(statuses.get_for_share(node.0).all())
+                .all(|&sidx| statuses.borrow().get(sidx, node.id()).is_success())
         })
         .collect::<Vec<_>>();
-
-    Some(DKGOutput {
-        qual: qual,
+    let qual_group = Group::<C>::new(qual, info.new_group.threshold)?;
+    Ok(DKGOutput {
+        qual: qual_group,
         public: recovered_public,
         share: Share {
-            index: info.new_idx.unwrap(),
+            index: info.new_index.unwrap(),
             private: recovered_share,
         },
     })

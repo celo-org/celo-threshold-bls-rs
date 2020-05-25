@@ -188,7 +188,7 @@ impl StatusMatrix {
 
     /// Returns `true` if alls rows are all 1s
     pub fn all_true(&self) -> bool {
-        !self.0.any(|bs| !bs.all())
+        !self.0.iter().any(|bs| !bs.all())
     }
 }
 
