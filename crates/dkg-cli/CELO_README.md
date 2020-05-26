@@ -2,6 +2,9 @@
 
 ## Using Docker
 
+NOTE: Docker is tricky to install on recent Fedora, but Podman works fine. The only changes needed are changing docker to podman, and adding a parameter to override SELinux for the mount: `podman run -ti --security-opt label=disable -v $PWD:/dkg kobigurk/celo-dkg`.
+
+
 1. Create an empty directory and go into it
 2. Run `docker run -ti -v $PWD:/dkg kobigurk/celo-dkg create-account`
 3. Give the address to the DKG coordinator to provide you with cGLD
