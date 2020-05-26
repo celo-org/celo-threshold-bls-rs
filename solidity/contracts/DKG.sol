@@ -16,7 +16,7 @@ contract DKG {
     /// Mapping of Ethereum Address => DKG Phase 3 Justifications
     mapping(address => bytes) public justifications;
 
-    /// List of registered Ethereum keys (used for convenietly fetching data)
+    /// List of registered Ethereum keys (used for conveniently fetching data)
     address[] public participants;
 
     /// The duration of each phase
