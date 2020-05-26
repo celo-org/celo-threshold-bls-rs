@@ -62,6 +62,16 @@ function do_phase1 () {
 
   $CELO dkg:get --node $NODE_URL --address $DKG_ADDRESS --method group 2>&1 | grep -v libusb > dkg_group
 
+  while true; do
+      read -p "DKG group details: $(echo "" && cat dkg_group && echo "DKG group hash: `sha256sum dkg_group | awk '{print $1}'`") `echo $'\nDo you approve the DKG group details? > '`" yn
+      case $yn in
+          [Yy]* ) break;;
+          [Nn]* ) exit 1;;
+          * ) echo "Please answer yes or no.";;
+      esac
+  done
+
+
   $DKG publish-shares --private-key privkey --group ./dkg_group --out-phase phase1_node --output shares
   $CELO dkg:publish --node $NODE_URL --address $DKG_ADDRESS --privateKey $PRIVATE_KEY --from $FROM --data ./shares 2>&1 | grep -v libusb
   echo "Shares published"
