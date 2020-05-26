@@ -58,6 +58,44 @@ describe('DKG', () => {
         })
     })
 
+    it('has gaps', async() => {
+        const pubkey1 = "0x123";
+        await dkg.connect(participants[0]).register(pubkey1)
+
+        const pubkey2 = "0x456";
+        await dkg.connect(participants[1]).register(pubkey2)
+
+        await dkg.start()
+
+        // only the second participant publishes their shares
+        const my_shares = "0x123456";
+        await dkg.connect(participants[1]).publish(my_shares)
+
+        const shares = await dkg.getShares()
+        expect(shares[0]).to.equal("0x")
+        expect(shares[1]).to.equal(my_shares)
+
+        await timeTravel(PHASE_DURATION)
+
+        // only the second participant publishes their responses
+        const my_responses = "0x234567";
+        await dkg.connect(participants[1]).publish(my_responses)
+
+        const responses = await dkg.getResponses()
+        expect(responses[0]).to.equal("0x")
+        expect(responses[1]).to.equal(my_responses)
+
+        await timeTravel(PHASE_DURATION)
+
+        // only the second participant publishes their justifications
+        const my_justifications = "0x345678";
+        await dkg.connect(participants[1]).publish(my_justifications)
+
+        const justifications = await dkg.getJustifications()
+        expect(justifications[0]).to.equal("0x")
+        expect(justifications[1]).to.equal(my_justifications)
+    })
+
     describe('Shares', async () => {
         beforeEach(async () => {
             dkg = dkg.connect(participants[0])
@@ -151,7 +189,7 @@ describe('DKG', () => {
         await timeTravel(PHASE_DURATION + 1)
         expect(await dkg.inPhase()).to.equal(3);
         await timeTravel(PHASE_DURATION + 1)
-        await expect(dkg.inPhase()).revertedWith("DKG ended")
+        await expect(dkg.inPhase()).revertedWith("VM Exception while processing transaction: revert DKG Ended")
     })
 
     it('Ended', async () => {
