@@ -3,32 +3,41 @@
 pragma experimental ABIEncoderV2;
 pragma solidity ^0.6.6;
 
-import "@nomiclabs/buidler/console.sol";
-
-
 contract DKG {
+    /// Mapping of Ethereum Address => BLS public keys
     mapping(address => bytes) public keys;
 
+    /// Mapping of Ethereum Address => DKG Phase 1 Shares
     mapping(address => bytes) public shares;
 
+    /// Mapping of Ethereum Address => DKG Phase 2 Responses
     mapping(address => bytes) public responses;
 
+    /// Mapping of Ethereum Address => DKG Phase 3 Justifications
     mapping(address => bytes) public justifications;
 
+    /// List of registered Ethereum keys (used for conveniently fetching data)
     address[] public participants;
 
+    /// The duration of each phase
     uint256 public immutable PHASE_DURATION;
+
+    /// The threshold of the DKG
     uint256 public immutable THRESHOLD;
 
+    /// If it's 0 then the DKG is still pending start. If >0, it is the DKG's start block
     uint256 public startBlock = 0;
 
+    /// The owner of the DKG is the address which can call the `start` function
     address public owner;
 
+    /// A registered participant is one whose pubkey's length > 0
     modifier onlyRegistered() {
         require(keys[msg.sender].length > 0, "you are not registered!");
         _;
     }
 
+    /// The DKG starts when startBlock > 0
     modifier onlyWhenNotStarted() {
         require(startBlock == 0, "DKG has already started");
         _;
@@ -56,7 +65,9 @@ contract DKG {
         keys[msg.sender] = blsPublicKey;
     }
 
-    /// Participant publishes their data nand depending on the time it gets
+    /// Participant publishes their data and depending on the phase the data gets inserted
+    /// in the shares, responses or justifications mapping. Reverts if the participant
+    /// has already published their data for a phase or if the DKG has ended.
     function publish(bytes calldata value) external onlyRegistered {
         uint256 blocksSinceStart = block.number - startBlock;
 
@@ -83,8 +94,10 @@ contract DKG {
         }
     }
 
-    // Helpers to fetch data in the mappings
+    // Helpers to fetch data in the mappings. If a participant has registered but not
+    // published their data for a phase, the array element at their index is expected to be 0
 
+    /// Gets the participants' shares
     function getShares() external view returns (bytes[] memory) {
         bytes[] memory _shares = new bytes[](participants.length);
         for (uint256 i = 0; i < participants.length; i++) {
@@ -94,6 +107,7 @@ contract DKG {
         return _shares;
     }
 
+    /// Gets the participants' responses
     function getResponses() external view returns (bytes[] memory) {
         bytes[] memory _responses = new bytes[](participants.length);
         for (uint256 i = 0; i < participants.length; i++) {
@@ -103,6 +117,7 @@ contract DKG {
         return _responses;
     }
 
+    /// Gets the participants' justifications
     function getJustifications() external view returns (bytes[] memory) {
         bytes[] memory _justifications = new bytes[](participants.length);
         for (uint256 i = 0; i < participants.length; i++) {
@@ -112,10 +127,12 @@ contract DKG {
         return _justifications;
     }
 
+    /// Gets the participants' ethereum addresses
     function getParticipants() external view returns (address[] memory) {
         return participants;
     }
 
+    /// Gets the participants' BLS keys along with the thershold of the DKG
     function getBlsKeys() external view returns (uint256, bytes[] memory) {
         bytes[] memory _keys = new bytes[](participants.length);
         for (uint256 i = 0; i < participants.length; i++) {
@@ -125,6 +142,7 @@ contract DKG {
         return (THRESHOLD, _keys);
     }
 
+    /// Returns the current phase of the DKG.
     function inPhase() public view returns (uint256) {
         if (startBlock == 0) {
             return 0;
