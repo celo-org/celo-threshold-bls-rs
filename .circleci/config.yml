@@ -1,6 +1,19 @@
 version: 2
 
 jobs:
+  contracts:
+    docker:
+      - image: circleci/node:latest
+    steps:
+      - checkout
+      - run:
+          name: Test Contracts
+          command: |
+              cd solidity
+              yarn
+              yarn build
+              yarn test
+
   build:
     docker:
       - image: circleci/rust:latest
@@ -92,6 +105,7 @@ workflows:
   version: 2
   build_and_test:
     jobs:
+      - contracts
       - build
       - test
       - wasm
