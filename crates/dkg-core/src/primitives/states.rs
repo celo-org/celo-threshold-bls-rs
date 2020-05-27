@@ -401,13 +401,29 @@ impl<C: Curve> Phase1<C> for RDKGWaitingShare<C> {
         }
 
         let my_idx = self.info.new_index.unwrap();
-        let (shares, publics, statuses) = process_shares_get_all(
+        let (mut shares, publics, mut statuses) = process_shares_get_all(
             &self.info.prev_group,
             &self.info.new_group,
             my_idx,
             &self.info.private_key,
             bundles,
         )?;
+
+        bundles
+            .iter()
+            // this bundle was invalid for some reason
+            .filter(|b| publics.contains_key(&b.dealer_idx))
+            // only keep the ones that don't respect the rules to remove them
+            // from the list of valid shares and put their status to complaint
+            .filter(|b| {
+                !check_public_resharing::<C>(b.dealer_idx, &b.public, &self.info.prev_public)
+            })
+            .for_each(|b| {
+                shares.remove(&b.dealer_idx);
+                for n in &self.info.new_group.nodes {
+                    statuses.set(b.dealer_idx, n.id(), Status::Complaint);
+                }
+            });
 
         // we need at least a threshold of dealers to share their share to be
         // able to reconstruct a share of the same distributed private key.
@@ -728,6 +744,7 @@ where
             &self.publics,
             justifs,
         );
+
         for (idx, share) in &valid_shares {
             add_share.add(&share);
             // unwrap since internal_process_justi. gauarantees each share comes
@@ -789,18 +806,40 @@ where
         if !self.info.is_share_holder() {
             return Err(DKGError::NotShareHolder);
         }
-        let valid_shares = internal_process_justifications(
+        let mut valid_shares = internal_process_justifications(
             self.info.new_index.unwrap(),
             &self.info.prev_group,
             &mut self.statuses.borrow_mut(),
             &self.publics,
             justifs,
         );
+
+        let info = self.info;
+        let publics = self.publics;
+        let shares = self.shares;
+        let mut statuses = self.statuses;
+        justifs
+            .iter()
+            // this bundle was already invalid for some reason
+            .filter(|b| publics.contains_key(&b.dealer_idx))
+            // only keep the ones that don't respect the rules to remove them
+            // from the list of valid shares and put their status to complaint
+            .filter(|b| !check_public_resharing::<C>(b.dealer_idx, &b.public, &info.prev_public))
+            .for_each(|b| {
+                // we remove the shares coming from invalid justification
+                valid_shares.remove(&b.dealer_idx);
+                for n in &info.new_group.nodes {
+                    statuses
+                        .borrow_mut()
+                        .set(b.dealer_idx, n.id(), Status::Complaint);
+                }
+            });
+
         compute_resharing_output(
-            self.info,
-            valid_shares.into_iter().chain(self.shares).collect(),
-            self.publics,
-            self.statuses,
+            info,
+            valid_shares.into_iter().chain(shares).collect(),
+            publics,
+            statuses,
         )
     }
 }
@@ -1174,6 +1213,27 @@ fn compute_resharing_output<C: Curve>(
             private: recovered_share,
         },
     })
+}
+
+struct PublicDeal<C: Curve> {
+    dealer_idx: Idx,
+    public: PublicPoly<C>,
+}
+// we verify that the public polynomial is created with the public
+// share of the dealer,i.e. it's actually a resharing
+// if it returns false, we must set the dealer's shares as being complaint, all
+// of them since he is not respecting the protocol
+fn check_public_resharing<C: Curve>(
+    dealer_idx: Idx,
+    deal_poly: &PublicPoly<C>,
+    group_poly: &PublicPoly<C>,
+) -> bool {
+    // evaluation of the public key the dealer gives us which should be
+    // the commitment of its current share
+    let givenPoint = deal_poly.public_key();
+    // computing the current share commitment of the dealer
+    let expPoint = &group_poly.eval(dealer_idx).value;
+    expPoint != givenPoint
 }
 
 #[cfg(test)]
