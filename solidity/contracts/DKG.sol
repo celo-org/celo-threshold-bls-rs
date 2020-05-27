@@ -4,6 +4,15 @@ pragma experimental ABIEncoderV2;
 pragma solidity ^0.6.6;
 
 contract DKG {
+    enum UserState {
+        CannotRegister,
+        CanRegister,
+        Registered
+    }
+
+    /// Mapping of Ethereum Address => UserState for the actions a user can do
+    mapping(address => UserState) public userState;
+
     /// Mapping of Ethereum Address => BLS public keys
     mapping(address => bytes) public keys;
 
@@ -33,7 +42,7 @@ contract DKG {
 
     /// A registered participant is one whose pubkey's length > 0
     modifier onlyRegistered() {
-        require(keys[msg.sender].length > 0, "you are not registered!");
+        require(userState[msg.sender] == UserState.Registered, "you are not registered!");
         _;
     }
 
@@ -51,18 +60,27 @@ contract DKG {
 
     /// Kickoff function which starts the counter
     function start() external onlyWhenNotStarted {
-        require(
-            msg.sender == owner,
-            "only contract deployer may start the DKG"
-        );
+        require(msg.sender == owner, "only owner may start the DKG");
         startBlock = block.number;
+    }
+
+    /// The administrator must whitelist an addrss for participation in the DKG
+    function whitelist(address user) external onlyWhenNotStarted {
+        require(msg.sender == owner, "only owner may whitelist users");
+
+        require(userState[user] == UserState.CannotRegister, "user is already whitelisted");
+        userState[user] = UserState.CanRegister;
     }
 
     /// This function ties a DKG participant's on-chain address with their BLS Public Key
     function register(bytes calldata blsPublicKey) external onlyWhenNotStarted {
-        require(keys[msg.sender].length == 0, "user is already registered");
+        require(userState[msg.sender] == UserState.CanRegister, "user is not whitelisted or has already registered");
+
         participants.push(msg.sender);
         keys[msg.sender] = blsPublicKey;
+
+        // the user is now registered
+        userState[msg.sender] = UserState.Registered;
     }
 
     /// Participant publishes their data and depending on the phase the data gets inserted
