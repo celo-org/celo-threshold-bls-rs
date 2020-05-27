@@ -17,15 +17,14 @@ use threshold_bls::{
 
 use std::cell::RefCell;
 
-pub trait Phase<C: Curve>: Clone + Debug + Serialize + for<'a> Deserialize<'a> {
-    type Next;
-}
+pub trait Phase0<C: Curve>: Clone + Debug + Serialize + for<'a> Deserialize<'a> {
+    type Next: Phase1<C>;
 
-pub trait Phase0<C: Curve>: Phase<C> {
     fn encrypt_shares<R: RngCore>(self, rng: &mut R) -> DKGResult<(Self::Next, BundledShares<C>)>;
 }
 
-pub trait Phase1<C: Curve>: Phase<C> {
+pub trait Phase1<C: Curve>: Clone + Debug + Serialize + for<'a> Deserialize<'a> {
+    type Next: Phase2<C>;
     fn process_shares(
         self,
         bundles: &[BundledShares<C>],
@@ -33,14 +32,15 @@ pub trait Phase1<C: Curve>: Phase<C> {
     ) -> DKGResult<(Self::Next, Option<BundledResponses>)>;
 }
 
-pub trait Phase2<C: Curve>: Phase<C> {
+pub trait Phase2<C: Curve>: Clone + Debug + Serialize + for<'a> Deserialize<'a> {
+    type Next: Phase3<C>;
     fn process_responses(
         self,
         responses: &[BundledResponses],
     ) -> Result<DKGOutput<C>, DKGResult<(Self::Next, Option<BundledJustification<C>>)>>;
 }
 
-pub trait Phase3<C: Curve> {
+pub trait Phase3<C: Curve>: Debug {
     fn process_justifications(
         self,
         justifs: &[BundledJustification<C>],
@@ -230,6 +230,7 @@ impl<C: Curve> RDKG<C> {
 }
 
 impl<C: Curve> Phase0<C> for RDKG<C> {
+    type Next = RDKGWaitingShare<C>;
     fn encrypt_shares<R: RngCore>(
         self,
         rng: &mut R,
@@ -301,15 +302,8 @@ impl<C: Curve> DKG<C> {
     }
 }
 
-impl<C: Curve> Phase<C> for DKG<C> {
-    type Next = DKGWaitingShare<C>;
-}
-
-impl<C: Curve> Phase<C> for RDKG<C> {
-    type Next = RDKGWaitingShare<C>;
-}
-
 impl<C: Curve> Phase0<C> for DKG<C> {
+    type Next = DKGWaitingShare<C>;
     /// Evaluates the secret polynomial at the index of each DKG participant and encrypts
     /// the result with the corresponding public key. Returns the bundled encrypted shares
     /// as well as the next phase of the DKG.
@@ -370,15 +364,8 @@ pub struct RDKGWaitingShare<C: Curve> {
     info: ReshareInfo<C>,
 }
 
-impl<C: Curve> Phase<C> for DKGWaitingShare<C> {
-    type Next = DKGWaitingResponse<C>;
-}
-
-impl<C: Curve> Phase<C> for RDKGWaitingShare<C> {
-    type Next = RDKGWaitingResponse<C>;
-}
-
 impl<C: Curve> Phase1<C> for RDKGWaitingShare<C> {
+    type Next = RDKGWaitingResponse<C>;
     fn process_shares(
         self,
         bundles: &[BundledShares<C>],
@@ -446,6 +433,7 @@ impl<C: Curve> Phase1<C> for RDKGWaitingShare<C> {
 }
 
 impl<C: Curve> Phase1<C> for DKGWaitingShare<C> {
+    type Next = DKGWaitingResponse<C>;
     /// Tries to decrypt the provided shares and calculate the secret key and the
     /// threshold public key. If `publish_all` is set to true then the returned
     /// responses will include both complaints and successful statuses. Consider setting
@@ -573,15 +561,8 @@ impl<C: Curve> DKGWaitingResponse<C> {
     }
 }
 
-impl<C: Curve> Phase<C> for DKGWaitingResponse<C> {
-    type Next = DKGWaitingJustification<C>;
-}
-
-impl<C: Curve> Phase<C> for RDKGWaitingResponse<C> {
-    type Next = RDKGWaitingJustification<C>;
-}
-
 impl<C: Curve> Phase2<C> for RDKGWaitingResponse<C> {
+    type Next = RDKGWaitingJustification<C>;
     #[allow(clippy::type_complexity)]
     /// Checks if the responses when applied to the status matrix result in a
     /// matrix with only `Success` elements. If so, the protocol terminates.
@@ -645,6 +626,7 @@ impl<C: Curve> Phase2<C> for RDKGWaitingResponse<C> {
 }
 
 impl<C: Curve> Phase2<C> for DKGWaitingResponse<C> {
+    type Next = DKGWaitingJustification<C>;
     #[allow(clippy::type_complexity)]
     /// Checks if the responses when applied to the status matrix result in a
     /// matrix with only `Success` elements. If so, the protocol terminates.
@@ -714,6 +696,8 @@ pub struct DKGWaitingJustification<C: Curve> {
     publics: HashMap<Idx, PublicPoly<C>>,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(bound = "C::Scalar: DeserializeOwned")]
 pub struct RDKGWaitingJustification<C: Curve> {
     info: ReshareInfo<C>,
     shares: ShareInfo<C>,
@@ -1299,15 +1283,23 @@ pub mod tests {
     }
 
     #[test]
-    fn full_dkg() {
+    fn test_full_dkg() {
         let n = 5;
         let thr = default_threshold(n);
-
         let (privs, group) = setup_group(n);
-        let dkgs: Vec<_> = privs
+        let dkgs = privs
             .into_iter()
             .map(|p| DKG::new(p, group.clone()).unwrap())
-            .collect();
+            .collect::<Vec<_>>();
+        full_dkg(thr, dkgs);
+    }
+
+    fn full_dkg<C, P>(nthr: usize, dkgs: Vec<P>)
+    where
+        C: Curve,
+        P: Phase0<C>,
+    {
+        let n = dkgs.len();
 
         // Step 1. evaluate polynomial, encrypt shares and broadcast
         let mut all_shares = Vec::with_capacity(n);
@@ -1337,14 +1329,15 @@ pub mod tests {
         // Step 3. get the responses
         let outputs = dkgs
             .into_iter()
-            .inspect(|dkg| println!("dkg {:?}: {}", dkg.info.index, dkg.statuses))
-            .map(|dkg| dkg.process_responses(&response_bundles).unwrap())
+            .map(|dkg| dkg.process_responses(&response_bundles).expect("wholo"))
             .collect::<Vec<_>>();
 
         // Reconstruct the threshold private polynomial from all the outputs
-        let recovered_private = reconstruct(thr, &outputs).unwrap();
+        let recovered_private = reconstruct(nthr, &outputs).unwrap();
         // Get the threshold public key from the private polynomial
-        let recovered_public = recovered_private.commit::<G1>();
+        let recovered_public = recovered_private.commit::<C::Point>();
+        //let mut recovered_public = G1::one();
+        //recovered_public.mul(&recovered_private);
         let recovered_key = recovered_public.public_key();
 
         // it matches with the outputs of each DKG participant, even though they

@@ -319,7 +319,8 @@ impl<X: Scalar<RHS = X>> Poly<X> {
         basis
     }
 
-    /// Commits the scalar polynomial to the group and returns a polynomial over the group
+    /// Commits the scalar polynomial to the group and returns a polynomial over
+    /// the group
     ///
     /// This is done by multiplying each coefficient of the polynomial with the
     /// group's generator.
