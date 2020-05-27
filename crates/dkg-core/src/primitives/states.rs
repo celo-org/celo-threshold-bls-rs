@@ -486,7 +486,6 @@ impl<C: Curve> Phase1<C> for DKGWaitingShare<C> {
         // The public key polynomial is the sum of all shared polynomials
         let mut fpub = self.info.public.clone();
         shares.iter().for_each(|(&dealer_idx, share)| {
-            statuses.set(dealer_idx, my_idx, Status::Success);
             fpub.add(&publics.get(&dealer_idx).unwrap());
             fshare.add(&share);
         });
@@ -616,7 +615,11 @@ impl<C: Curve> Phase2<C> for RDKGWaitingResponse<C> {
 
         // find out if justifications are required
         // if there is a least one participant that issued one complaint
-        let justifications_required = statuses.all_true();
+        let justifications_required = info
+            .prev_group
+            .nodes
+            .iter()
+            .any(|n| !statuses.all_true(n.id()));
 
         if justifications_required {
             let public = info.public.unwrap();
@@ -664,7 +667,7 @@ impl<C: Curve> Phase2<C> for DKGWaitingResponse<C> {
 
         // find out if justifications are required
         // if there is a least one participant that issued one complaint
-        let justifications_required = statuses.all_true();
+        let justifications_required = info.group.nodes.iter().any(|n| !statuses.all_true(n.id()));
 
         if justifications_required {
             let bundled_justifications =
@@ -754,7 +757,7 @@ where
         // QUAL is the set of all entries in the matrix where all bits are set
         let statuses = self.statuses.borrow();
         let qual_indices = (0..self.info.n())
-            .filter(|&dealer| statuses.dealer_all_true(dealer as Idx))
+            .filter(|&dealer| statuses.all_true(dealer as Idx))
             .collect::<Vec<_>>();
 
         let thr = self.info.group.threshold;
@@ -1053,19 +1056,11 @@ fn process_shares_get_all<C: Curve>(
             .ok()
         })
         .fold(ShareInfo::<C>::new(), |mut acc, (didx, share)| {
+            statuses.set(didx, my_idx, Status::Success);
             acc.insert(didx, share);
             acc
         });
 
-    // we check with `thr - 1` because we already have our shares
-    if valid_shares.len() < dealers.threshold {
-        // that means the threat model is not respected since there should be at
-        // least a threshold of honest shares
-        return Err(DKGError::NotEnoughValidShares(
-            valid_shares.len(),
-            dealers.threshold,
-        ));
-    }
     Ok((valid_shares, publics, statuses))
 }
 
@@ -1078,7 +1073,7 @@ fn get_justification<C: Curve>(
     // If there were any complaints against our deal, then we should re-evaluate our
     // secret polynomial at the indexes where the complaints were, and publish these
     // as justifications (i.e. indicating that we are still behaving correctly).
-    if !statuses.dealer_all_true(dealer_idx) {
+    if !statuses.all_true(dealer_idx) {
         let justifications = statuses
             .get_for_dealer(dealer_idx)
             .iter()
@@ -1204,6 +1199,7 @@ fn compute_resharing_output<C: Curve>(
                 .all(|&sidx| statuses.borrow().get(sidx, node.id()).is_success())
         })
         .collect::<Vec<_>>();
+
     let qual_group = Group::<C>::new(qual, info.new_group.threshold)?;
     Ok(DKGOutput {
         qual: qual_group,
@@ -1341,6 +1337,7 @@ pub mod tests {
         // Step 3. get the responses
         let outputs = dkgs
             .into_iter()
+            .inspect(|dkg| println!("dkg {:?}: {}", dkg.info.index, dkg.statuses))
             .map(|dkg| dkg.process_responses(&response_bundles).unwrap())
             .collect::<Vec<_>>();
 
@@ -1400,12 +1397,17 @@ pub mod tests {
         let mut justifications = Vec::with_capacity(n);
         let dkgs: Vec<_> = dkgs
             .into_iter()
-            .map(|dkg| {
-                let (ndkg, justifs) = dkg.process_responses(&response_bundles).unwrap_err();
-                if let Some(j) = justifs {
-                    justifications.push(j);
-                }
-                ndkg
+            .map(|dkg| match dkg.process_responses(&response_bundles) {
+                Ok(output) => panic!("dkg shouldn't have finished"),
+                Err(next) => match next {
+                    Ok((ndkg, justifs)) => {
+                        if let Some(j) = justifs {
+                            justifications.push(j);
+                        }
+                        ndkg
+                    }
+                    Err(e) => panic!(e),
+                },
             })
             .collect();
 
