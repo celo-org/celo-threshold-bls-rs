@@ -86,22 +86,6 @@ impl<C: Curve> ReshareInfo<C> {
     fn is_share_holder(&self) -> bool {
         self.new_index.is_some()
     }
-
-    fn new_n(&self) -> usize {
-        self.new_group.len()
-    }
-
-    fn old_n(&self) -> usize {
-        self.prev_group.len()
-    }
-
-    fn new_thr(&self) -> usize {
-        self.new_group.threshold
-    }
-
-    fn old_thr(&self) -> usize {
-        self.prev_group.threshold
-    }
 }
 
 impl<C: Curve> DKGInfo<C> {
@@ -468,7 +452,7 @@ impl<C: Curve> Phase1<C> for DKGWaitingShare<C> {
     ) -> DKGResult<(DKGWaitingResponse<C>, Option<BundledResponses>)> {
         let thr = self.info.thr();
         let my_idx = self.info.index;
-        let (shares, publics, mut statuses) = process_shares_get_all(
+        let (shares, publics, statuses) = process_shares_get_all(
             &self.info.group,
             &self.info.group,
             my_idx,
@@ -820,7 +804,7 @@ where
         let info = self.info;
         let publics = self.publics;
         let shares = self.shares;
-        let mut statuses = self.statuses;
+        let statuses = self.statuses;
         justifs
             .iter()
             // this bundle was already invalid for some reason
@@ -941,20 +925,6 @@ fn create_share_bundle<C: Curve, R: RngCore>(
     })
 }
 
-// extract_poly maps the bundles into a map: Idx -> public poly for ease of
-// use later on
-fn extract_poly<C: Curve>(degree: usize, bundles: &[BundledShares<C>]) -> PublicInfo<C> {
-    // TODO avoid cloning by using lifetime or better gestin in
-    // process_shares
-    bundles
-        .iter()
-        .filter(|b| b.public.degree() == degree)
-        .fold(HashMap::new(), |mut acc, b| {
-            acc.insert(b.dealer_idx, b.public.clone());
-            acc
-        })
-}
-
 fn compute_bundle_response(
     my_idx: Idx,
     statuses: &StatusMatrix,
@@ -988,8 +958,8 @@ fn compute_bundle_response(
     }
 }
 
-type ShareInfo<C: Curve> = HashMap<Idx, C::Scalar>;
-type PublicInfo<C: Curve> = HashMap<Idx, PublicPoly<C>>;
+type ShareInfo<C> = HashMap<Idx, <C as Curve>::Scalar>;
+type PublicInfo<C> = HashMap<Idx, PublicPoly<C>>;
 
 /// Processes the shares and returns the private share of the user and a public
 /// polynomial, as well as the status matrix of the protocol.
@@ -1167,7 +1137,7 @@ fn compute_resharing_output<C: Curve>(
     let recovered_public: PublicPoly<C> = (0..info.new_group.threshold)
         .map(|cidx| {
             // interpolate the cidx coefficient of the final public polynomial
-            let mut to_recover = shares_indexes
+            let to_recover = shares_indexes
                 .iter()
                 .map(|sh_idx| {
                     match publics.get(sh_idx) {
@@ -1212,10 +1182,6 @@ fn compute_resharing_output<C: Curve>(
     })
 }
 
-struct PublicDeal<C: Curve> {
-    dealer_idx: Idx,
-    public: PublicPoly<C>,
-}
 // we verify that the public polynomial is created with the public
 // share of the dealer,i.e. it's actually a resharing
 // if it returns false, we must set the dealer's shares as being complaint, all
@@ -1227,10 +1193,10 @@ fn check_public_resharing<C: Curve>(
 ) -> bool {
     // evaluation of the public key the dealer gives us which should be
     // the commitment of its current share
-    let givenPoint = deal_poly.public_key();
+    let given = deal_poly.public_key();
     // computing the current share commitment of the dealer
-    let expPoint = &group_poly.eval(dealer_idx).value;
-    expPoint == givenPoint
+    let expected = &group_poly.eval(dealer_idx).value;
+    expected == given
 }
 
 #[cfg(test)]
@@ -1238,7 +1204,7 @@ pub mod tests {
     use super::*;
     use crate::primitives::default_threshold;
     use threshold_bls::{
-        curve::bls12381::{Curve as BCurve, Scalar, G1},
+        curve::bls12381::{Curve as BCurve, G1},
         poly::{Eval, PolyError},
     };
 
@@ -1256,21 +1222,22 @@ pub mod tests {
     assert_impl_all!(DKGOutput<BCurve>: Serialize, DeserializeOwned, Clone, Debug);
     assert_impl_all!(BundledJustification<BCurve>: Serialize, DeserializeOwned, Clone, Debug);
 
-    fn setup_group(n: usize) -> (Vec<Scalar>, Group<BCurve>) {
+    fn setup_group<C: Curve>(n: usize, thr: usize) -> (Vec<C::Scalar>, Group<C>) {
         let privs = (0..n)
-            .map(|_| Scalar::rand(&mut thread_rng()))
+            .map(|_| C::Scalar::rand(&mut thread_rng()))
             .collect::<Vec<_>>();
 
-        let pubs: Vec<G1> = privs
+        let pubs: Vec<C::Point> = privs
             .iter()
             .map(|private| {
-                let mut public = G1::one();
+                let mut public = C::Point::one();
                 public.mul(private);
                 public
             })
             .collect();
-
-        (privs, pubs.into())
+        let mut group = Group::from(pubs);
+        group.threshold = thr;
+        (privs, group)
     }
 
     fn reconstruct<C: Curve>(
@@ -1287,43 +1254,23 @@ pub mod tests {
         Poly::<C::Scalar>::full_recover(thr, evals)
     }
 
-    #[test]
-    fn group_index() {
-        let n = 6;
-        let (privs, group) = setup_group(n);
-        for (i, private) in privs.iter().enumerate() {
-            let mut public = G1::one();
-            public.mul(&private);
-            let idx = group.index(&public).expect("should find public key");
-            assert_eq!(idx, i as Idx);
-        }
-    }
-
-    #[test]
-    fn test_full_dkg() {
-        let n = 5;
-        let thr = default_threshold(n);
-        let (privs, group) = setup_group(n);
-        let dkgs = privs
+    fn setup_dkg<C: Curve>(n: usize) -> Vec<DKG<C>> {
+        let (privs, group) = setup_group::<C>(n, default_threshold(n));
+        privs
             .into_iter()
             .map(|p| DKG::new(p, group.clone()).unwrap())
-            .collect::<Vec<_>>();
-        full_dkg(thr, dkgs);
+            .collect::<Vec<_>>()
     }
-
-    #[test]
-    fn test_full_resharing() {
-        let n = 5;
-        let thr = default_threshold(n);
-        let (privs, group) = setup_group(n);
+    fn setup_reshare<C: Curve>(n: usize, thr: usize) -> (Vec<RDKG<C>>, PublicPoly<C>) {
+        let (privs, group) = setup_group::<C>(n, thr);
         // simulate shares
-        let private_poly = Poly::<Scalar>::new_from(group.threshold - 1, &mut thread_rng());
+        let private_poly = Poly::<C::Scalar>::new_from(group.threshold - 1, &mut thread_rng());
         let shares = group
             .nodes
             .iter()
             .map(|n| private_poly.eval(n.id()))
             .collect::<Vec<_>>();
-        let public_poly = private_poly.commit::<G1>();
+        let public_poly = private_poly.commit::<C::Point>();
         let dkgs = privs
             .into_iter()
             .zip(shares.into_iter())
@@ -1339,9 +1286,53 @@ pub mod tests {
                 RDKG::new_from_share(p, out, group.clone(), &mut thread_rng()).unwrap()
             })
             .collect::<Vec<_>>();
+        return (dkgs, public_poly);
+    }
+
+    #[test]
+    fn group_index() {
+        let n = 6;
+        let (privs, group) = setup_group::<BCurve>(n, default_threshold(n));
+        for (i, private) in privs.iter().enumerate() {
+            let mut public = G1::one();
+            public.mul(&private);
+            let idx = group.index(&public).expect("should find public key");
+            assert_eq!(idx, i as Idx);
+        }
+    }
+
+    #[test]
+    fn test_full_dkg() {
+        let n = 5;
+        let thr = default_threshold(n);
+        full_dkg(thr, setup_dkg::<BCurve>(n));
+    }
+
+    #[test]
+    fn test_invalid_shares_dkg() {
+        let n = 5;
+        let thr = default_threshold(n);
+        invalid_shares(thr, setup_dkg::<BCurve>(n));
+    }
+
+    #[test]
+    fn test_invalid_shares_reshare() {
+        let n = 5;
+        let thr = default_threshold(n);
+        let (dkgs, public) = setup_reshare::<BCurve>(n, thr);
+        let reshared = invalid_shares(thr, dkgs);
+        // test that it gives the same public key
+        assert_eq!(public.public_key(), reshared.public_key());
+    }
+
+    #[test]
+    fn test_full_resharing() {
+        let n = 5;
+        let thr = default_threshold(n);
+        let (dkgs, public) = setup_reshare::<BCurve>(n, thr);
         let reshared = full_dkg(thr, dkgs);
         // test that it gives the same public key
-        assert_eq!(public_poly.public_key(), reshared.public_key());
+        assert_eq!(public.public_key(), reshared.public_key());
     }
 
     fn full_dkg<C, P>(nthr: usize, dkgs: Vec<P>) -> PublicPoly<C>
@@ -1399,18 +1390,13 @@ pub mod tests {
         recovered_public
     }
 
-    #[test]
-    fn invalid_shares() {
-        let n = 5;
-        let thr = default_threshold(n);
-        let (privs, group) = setup_group(n);
-        let dkgs: Vec<_> = privs
-            .into_iter()
-            .map(|p| DKG::new(p, group.clone()).unwrap())
-            .collect();
-
+    fn invalid_shares<C, P>(thr: usize, dkgs: Vec<P>) -> PublicPoly<C>
+    where
+        C: Curve,
+        P: Phase0<C>,
+    {
+        let n = dkgs.len();
         let mut all_shares = Vec::with_capacity(n);
-
         let dkgs: Vec<_> = dkgs
             .into_iter()
             .map(|dkg| {
@@ -1421,8 +1407,8 @@ pub mod tests {
             .collect();
 
         // modify a share
-        all_shares[0].shares[1].secret = ecies::encrypt(&BCurve::point(), &[1], &mut thread_rng());
-        all_shares[3].shares[4].secret = ecies::encrypt(&BCurve::point(), &[1], &mut thread_rng());
+        all_shares[0].shares[1].secret = ecies::encrypt(&C::point(), &[1], &mut thread_rng());
+        all_shares[3].shares[4].secret = ecies::encrypt(&C::point(), &[1], &mut thread_rng());
 
         let mut response_bundles = Vec::with_capacity(2);
         let dkgs: Vec<_> = dkgs
@@ -1443,7 +1429,7 @@ pub mod tests {
         let dkgs: Vec<_> = dkgs
             .into_iter()
             .map(|dkg| match dkg.process_responses(&response_bundles) {
-                Ok(output) => panic!("dkg shouldn't have finished"),
+                Ok(_) => panic!("dkg shouldn't have finished"),
                 Err(next) => match next {
                     Ok((ndkg, justifs)) => {
                         if let Some(j) = justifs {
@@ -1467,11 +1453,12 @@ pub mod tests {
             .collect();
 
         let recovered_private = reconstruct(thr, &outputs).unwrap();
-        let recovered_public = recovered_private.commit::<G1>();
+        let recovered_public = recovered_private.commit::<C::Point>();
         let recovered_key = recovered_public.public_key();
         for out in outputs.iter() {
             let public = &out.public;
             assert_eq!(public.public_key(), recovered_key);
         }
+        recovered_public
     }
 }
