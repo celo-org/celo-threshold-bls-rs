@@ -388,7 +388,7 @@ impl<C: Curve> Phase1<C> for RDKGWaitingShare<C> {
         }
 
         let my_idx = self.info.new_index.unwrap();
-        let (mut shares, publics, mut statuses) = process_shares_get_all(
+        let (mut shares, mut publics, mut statuses) = process_shares_get_all(
             &self.info.prev_group,
             &self.info.new_group,
             my_idx,
@@ -412,18 +412,34 @@ impl<C: Curve> Phase1<C> for RDKGWaitingShare<C> {
                 }
             });
 
+        let mut info = self.info;
+        {
+            let public = info.public.take().unwrap();
+            let secret = info.secret.take().unwrap();
+            if info.is_dealer() {
+                // we register our own share and publics into the mix
+                let didx = info.prev_index.unwrap();
+                shares.insert(didx, secret.eval(didx).value);
+                publics.insert(didx, public.clone());
+                // we treat our own share as valid!
+                statuses.set(didx, my_idx, Status::Success);
+            }
+            info.public = Some(public);
+            info.secret = Some(secret);
+        }
+
         // we need at least a threshold of dealers to share their share to be
         // able to reconstruct a share of the same distributed private key.
-        if shares.len() < self.info.prev_group.threshold {
+        if shares.len() < info.prev_group.threshold {
             return Err(DKGError::NotEnoughValidShares(
                 shares.len(),
-                self.info.prev_group.threshold,
+                info.prev_group.threshold,
             ));
         }
 
         let bundle = compute_bundle_response(my_idx, &statuses, publish_all);
         let new_dkg = RDKGWaitingResponse {
-            info: self.info,
+            info: info,
             shares: shares,
             publics: publics,
             statuses: statuses,
@@ -1151,7 +1167,7 @@ fn compute_resharing_output<C: Curve>(
     let recovered_public: PublicPoly<C> = (0..info.new_group.threshold)
         .map(|cidx| {
             // interpolate the cidx coefficient of the final public polynomial
-            let to_recover = shares_indexes
+            let mut to_recover = shares_indexes
                 .iter()
                 .map(|sh_idx| {
                     match publics.get(sh_idx) {
@@ -1166,6 +1182,7 @@ fn compute_resharing_output<C: Curve>(
                     }
                 })
                 .collect::<Vec<_>>();
+
             // recover the cidx coefficient of the final public polynomial
             Poly::recover(info.prev_group.threshold, to_recover).map_err(DKGError::InvalidRecovery)
         })
@@ -1213,7 +1230,7 @@ fn check_public_resharing<C: Curve>(
     let givenPoint = deal_poly.public_key();
     // computing the current share commitment of the dealer
     let expPoint = &group_poly.eval(dealer_idx).value;
-    expPoint != givenPoint
+    expPoint == givenPoint
 }
 
 #[cfg(test)]
@@ -1294,7 +1311,40 @@ pub mod tests {
         full_dkg(thr, dkgs);
     }
 
-    fn full_dkg<C, P>(nthr: usize, dkgs: Vec<P>)
+    #[test]
+    fn test_full_resharing() {
+        let n = 5;
+        let thr = default_threshold(n);
+        let (privs, group) = setup_group(n);
+        // simulate shares
+        let private_poly = Poly::<Scalar>::new_from(group.threshold - 1, &mut thread_rng());
+        let shares = group
+            .nodes
+            .iter()
+            .map(|n| private_poly.eval(n.id()))
+            .collect::<Vec<_>>();
+        let public_poly = private_poly.commit::<G1>();
+        let dkgs = privs
+            .into_iter()
+            .zip(shares.into_iter())
+            .map(|(p, sh)| {
+                let out = DKGOutput {
+                    share: Share {
+                        index: sh.index,
+                        private: sh.value,
+                    },
+                    public: public_poly.clone(),
+                    qual: group.clone(),
+                };
+                RDKG::new_from_share(p, out, group.clone(), &mut thread_rng()).unwrap()
+            })
+            .collect::<Vec<_>>();
+        let reshared = full_dkg(thr, dkgs);
+        // test that it gives the same public key
+        assert_eq!(public_poly.public_key(), reshared.public_key());
+    }
+
+    fn full_dkg<C, P>(nthr: usize, dkgs: Vec<P>) -> PublicPoly<C>
     where
         C: Curve,
         P: Phase0<C>,
@@ -1336,15 +1386,17 @@ pub mod tests {
         let recovered_private = reconstruct(nthr, &outputs).unwrap();
         // Get the threshold public key from the private polynomial
         let recovered_public = recovered_private.commit::<C::Point>();
-        //let mut recovered_public = G1::one();
-        //recovered_public.mul(&recovered_private);
+        // let mut recovered_public = G1::one();
+        // recovered_public.mul(&recovered_private);
         let recovered_key = recovered_public.public_key();
 
         // it matches with the outputs of each DKG participant, even though they
         // do not have access to the threshold private key
         for out in outputs {
+            //println!("out.publickey(): {:?}", out.public.public_key());
             assert_eq!(out.public.public_key(), recovered_key);
         }
+        recovered_public
     }
 
     #[test]
