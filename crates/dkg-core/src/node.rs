@@ -102,10 +102,11 @@ where
 
     fn run(self, board: &mut B, rng: &mut R) -> NodeResult<Self::Next> {
         let (next, shares) = self.inner.encrypt_shares(rng)?;
-
-        board
-            .publish_shares(shares)
-            .map_err(|_| NodeError::PublisherError)?;
+        if let Some(sh) = shares {
+            board
+                .publish_shares(sh)
+                .map_err(|_| NodeError::PublisherError)?;
+        }
 
         Ok(Phase1 {
             inner: next,

@@ -20,7 +20,10 @@ use std::cell::RefCell;
 pub trait Phase0<C: Curve>: Clone + Debug + Serialize + for<'a> Deserialize<'a> {
     type Next: Phase1<C>;
 
-    fn encrypt_shares<R: RngCore>(self, rng: &mut R) -> DKGResult<(Self::Next, BundledShares<C>)>;
+    fn encrypt_shares<R: RngCore>(
+        self,
+        rng: &mut R,
+    ) -> DKGResult<(Self::Next, Option<BundledShares<C>>)>;
 }
 
 pub trait Phase1<C: Curve>: Clone + Debug + Serialize + for<'a> Deserialize<'a> {
@@ -218,9 +221,9 @@ impl<C: Curve> Phase0<C> for RDKG<C> {
     fn encrypt_shares<R: RngCore>(
         self,
         rng: &mut R,
-    ) -> DKGResult<(RDKGWaitingShare<C>, BundledShares<C>)> {
+    ) -> DKGResult<(RDKGWaitingShare<C>, Option<BundledShares<C>>)> {
         if !self.info.is_dealer() {
-            return Err(DKGError::NotDealer);
+            return Ok((RDKGWaitingShare { info: self.info }, None));
         }
         let info = self.info;
         let public = info.public.unwrap();
@@ -229,7 +232,7 @@ impl<C: Curve> Phase0<C> for RDKG<C> {
             info.prev_index.unwrap(),
             &secret,
             &public,
-            &info.prev_group,
+            &info.new_group,
             rng,
         )?;
         let dw = RDKGWaitingShare {
@@ -239,7 +242,7 @@ impl<C: Curve> Phase0<C> for RDKG<C> {
                 ..info
             },
         };
-        Ok((dw, bundle))
+        Ok((dw, Some(bundle)))
     }
 }
 
@@ -294,7 +297,7 @@ impl<C: Curve> Phase0<C> for DKG<C> {
     fn encrypt_shares<R: RngCore>(
         self,
         rng: &mut R,
-    ) -> DKGResult<(DKGWaitingShare<C>, BundledShares<C>)> {
+    ) -> DKGResult<(DKGWaitingShare<C>, Option<BundledShares<C>>)> {
         let bundle = create_share_bundle(
             self.info.index,
             &self.info.secret,
@@ -303,7 +306,7 @@ impl<C: Curve> Phase0<C> for DKG<C> {
             rng,
         )?;
         let dw = DKGWaitingShare { info: self.info };
-        Ok((dw, bundle))
+        Ok((dw, Some(bundle)))
     }
 }
 
@@ -379,6 +382,13 @@ impl<C: Curve> Phase1<C> for RDKGWaitingShare<C> {
             &self.info.private_key,
             bundles,
         )?;
+        println!(
+            "{} - PROCESS SHARES: {:?} -> {:?} - {}",
+            self.info.new_index.as_ref().unwrap(),
+            bundles.iter().map(|b| b.dealer_idx).collect::<Vec<Idx>>(),
+            shares.iter().map(|(&k, _)| k).collect::<Vec<Idx>>(),
+            statuses,
+        );
 
         bundles
             .iter()
@@ -390,6 +400,7 @@ impl<C: Curve> Phase1<C> for RDKGWaitingShare<C> {
                 !check_public_resharing::<C>(b.dealer_idx, &b.public, &self.info.prev_public)
             })
             .for_each(|b| {
+                println!("REMOVE BUNDLE: {}", b.dealer_idx);
                 shares.remove(&b.dealer_idx);
                 for n in &self.info.new_group.nodes {
                     statuses.set(b.dealer_idx, n.id(), Status::Complaint);
@@ -397,17 +408,15 @@ impl<C: Curve> Phase1<C> for RDKGWaitingShare<C> {
             });
 
         let mut info = self.info;
-        {
+        if info.is_dealer() {
             let public = info.public.take().unwrap();
             let secret = info.secret.take().unwrap();
-            if info.is_dealer() {
-                // we register our own share and publics into the mix
-                let didx = info.prev_index.unwrap();
-                shares.insert(didx, secret.eval(didx).value);
-                publics.insert(didx, public.clone());
-                // we treat our own share as valid!
-                statuses.set(didx, my_idx, Status::Success);
-            }
+            // we register our own share and publics into the mix
+            let didx = info.prev_index.unwrap();
+            shares.insert(didx, secret.eval(didx).value);
+            publics.insert(didx, public.clone());
+            // we treat our own share as valid!
+            statuses.set(didx, my_idx, Status::Success);
             info.public = Some(public);
             info.secret = Some(secret);
         }
@@ -603,16 +612,16 @@ impl<C: Curve> Phase2<C> for RDKGWaitingResponse<C> {
             .any(|n| !statuses.all_true(n.id()));
 
         if justifications_required {
-            let public = info.public.unwrap();
-            let secret = info.secret.unwrap();
-            let bundled_justifications =
-                get_justification(info.prev_index.unwrap(), &secret, &public, &statuses);
+            // we can only create justifications if we are a dealer
+            let bundled_justifications = if info.is_dealer() {
+                let public = info.public.as_ref().unwrap();
+                let secret = info.secret.as_ref().unwrap();
+                get_justification(info.prev_index.unwrap(), secret, public, &statuses)
+            } else {
+                None
+            };
             let dkg = RDKGWaitingJustification {
-                info: ReshareInfo {
-                    public: Some(public),
-                    secret: Some(secret),
-                    ..info
-                },
+                info: info,
                 shares: self.shares,
                 statuses: RefCell::new(statuses),
                 publics: self.publics,
@@ -811,7 +820,14 @@ where
             .filter(|b| publics.contains_key(&b.dealer_idx))
             // only keep the ones that don't respect the rules to remove them
             // from the list of valid shares and put their status to complaint
-            .filter(|b| !check_public_resharing::<C>(b.dealer_idx, &b.public, &info.prev_public))
+            .filter(|b| {
+                !check_public_resharing::<C>(
+                    b.dealer_idx,
+                    // take the public polynomial we received in the first step
+                    &publics.get(&b.dealer_idx).unwrap(),
+                    &info.prev_public,
+                )
+            })
             .for_each(|b| {
                 // we remove the shares coming from invalid justification
                 valid_shares.remove(&b.dealer_idx);
@@ -822,6 +838,7 @@ where
                 }
             });
 
+        println!(" BEFORE JUSTIFICATION OUTPUT: {}", statuses.borrow());
         compute_resharing_output(
             info,
             valid_shares.into_iter().chain(shares).collect(),
@@ -838,12 +855,15 @@ fn decrypt_and_check_share<C: Curve>(
     public: &PublicPoly<C>,
     share: &EncryptedShare<C>,
 ) -> Result<C::Scalar, DKGError> {
-    let buff = ecies::decrypt::<C>(private_key, &share.secret)
-        .map_err(|err| ShareError::InvalidCiphertext(dealer_idx, err))?;
+    let buff = ecies::decrypt::<C>(private_key, &share.secret).map_err(|err| {
+        println!("ERROR {:?}", err);
+        ShareError::InvalidCiphertext(dealer_idx, err)
+    })?;
 
     let clear_share: C::Scalar = bincode::deserialize(&buff)?;
 
     if !share_correct::<C>(own_idx, &clear_share, public) {
+        println!("INCORRECT");
         return Err(ShareError::InvalidShare(dealer_idx).into());
     }
 
@@ -1026,6 +1046,7 @@ fn process_shares_get_all<C: Curve>(
             .ok()
         })
         .fold(ShareInfo::<C>::new(), |mut acc, (didx, share)| {
+            println!(" -- got new share from {}", didx);
             statuses.set(didx, my_idx, Status::Success);
             acc.insert(didx, share);
             acc
@@ -1129,6 +1150,7 @@ fn compute_resharing_output<C: Curve>(
         .take(info.prev_group.threshold)
         .collect::<Vec<Eval<C::Scalar>>>();
 
+    //println!(" --- recovering on shares: {:?}", shortened_evals);
     let recovered_share = Poly::recover(info.prev_group.threshold, shortened_evals)
         .map_err(DKGError::InvalidRecovery)?;
     // recover public polynomial by interpolating coefficient-wise all
@@ -1204,7 +1226,7 @@ pub mod tests {
     use super::*;
     use crate::primitives::default_threshold;
     use threshold_bls::{
-        curve::bls12381::{Curve as BCurve, G1},
+        curve::bls12381::{Curve as BCurve, Scalar, G1},
         poly::{Eval, PolyError},
     };
 
@@ -1261,17 +1283,54 @@ pub mod tests {
             .map(|p| DKG::new(p, group.clone()).unwrap())
             .collect::<Vec<_>>()
     }
-    fn setup_reshare<C: Curve>(n: usize, thr: usize) -> (Vec<RDKG<C>>, PublicPoly<C>) {
-        let (privs, group) = setup_group::<C>(n, thr);
+    fn setup_reshare<C: Curve>(
+        old_n: usize,
+        old_thr: usize,
+        new_n: usize,
+        new_thr: usize,
+    ) -> (Vec<RDKG<C>>, PublicPoly<C>) {
+        let (prev_privs, prev_group) = setup_group::<C>(old_n, old_thr);
         // simulate shares
-        let private_poly = Poly::<C::Scalar>::new_from(group.threshold - 1, &mut thread_rng());
-        let shares = group
+        let private_poly = Poly::<C::Scalar>::new_from(prev_group.threshold - 1, &mut thread_rng());
+        let shares = prev_group
             .nodes
             .iter()
             .map(|n| private_poly.eval(n.id()))
             .collect::<Vec<_>>();
         let public_poly = private_poly.commit::<C::Point>();
-        let dkgs = privs
+
+        // assume strictly greater group
+        let new_priv = if new_n > 0 {
+            let (npriv, _) = setup_group::<C>(new_n - old_n, new_thr);
+            Some(npriv)
+        } else {
+            None
+        };
+
+        // create the new group
+        let mut new_group = if new_n > 0 {
+            Group::from(
+                prev_privs
+                    .iter()
+                    .chain(new_priv.as_ref().unwrap().iter())
+                    .map(|pr| {
+                        let mut public = C::Point::one();
+                        public.mul(pr);
+                        public
+                    })
+                    .collect::<Vec<C::Point>>(),
+            )
+        } else {
+            prev_group.clone()
+        };
+        if new_n > 0 {
+            new_group.threshold = new_thr;
+        } else {
+            // we use the same threshold as "fake" group in this case
+            new_group.threshold = old_thr;
+        }
+
+        let mut dkgs = prev_privs
             .into_iter()
             .zip(shares.into_iter())
             .map(|(p, sh)| {
@@ -1281,11 +1340,25 @@ pub mod tests {
                         private: sh.value,
                     },
                     public: public_poly.clone(),
-                    qual: group.clone(),
+                    qual: prev_group.clone(),
                 };
-                RDKG::new_from_share(p, out, group.clone(), &mut thread_rng()).unwrap()
+                RDKG::new_from_share(p, out, new_group.clone(), &mut thread_rng()).unwrap()
             })
             .collect::<Vec<_>>();
+        if new_n > 0 {
+            dkgs = dkgs
+                .into_iter()
+                .chain(new_priv.unwrap().into_iter().map(|pr| {
+                    RDKG::new_member(
+                        pr,
+                        prev_group.clone(),
+                        public_poly.clone(),
+                        new_group.clone(),
+                    )
+                    .unwrap()
+                }))
+                .collect::<Vec<_>>();
+        }
         return (dkgs, public_poly);
     }
 
@@ -1312,30 +1385,249 @@ pub mod tests {
     fn test_invalid_shares_dkg() {
         let n = 5;
         let thr = default_threshold(n);
-        invalid_shares(thr, setup_dkg::<BCurve>(n));
+        invalid_shares(
+            thr,
+            setup_dkg::<BCurve>(n),
+            invalid2,
+            id_resp,
+            check2,
+            id_out,
+        )
+        .unwrap();
     }
 
     #[test]
     fn test_invalid_shares_reshare() {
         let n = 5;
         let thr = default_threshold(n);
-        let (dkgs, public) = setup_reshare::<BCurve>(n, thr);
-        let reshared = invalid_shares(thr, dkgs);
+        println!(" -------- FIRST SCENARIO ---------- ");
+        // scenario 1.
+        // just change two shares and give it invalid things
+        let (dkgs, public) = setup_reshare::<BCurve>(n, thr, 0, 0);
+        let reshared = invalid_shares(thr, dkgs, invalid2, id_resp, check2, id_out).unwrap();
+        // test that it gives the same public key
+        assert_eq!(public.public_key(), reshared.public_key());
+
+        println!(" -------- SECOND SCENARIO ---------- ");
+        // SCENARIO 2.
+        // change the public polynomial to NOT be the commitment of the previous
+        // share
+        let (dkgs, public) = setup_reshare::<BCurve>(n, thr, 0, 0);
+        let group = dkgs[0].info.prev_group.clone();
+        let target_idx: usize = 0;
+        let inv_public = |mut s: Vec<BundledShares<BCurve>>| {
+            let nsecret = Poly::<Scalar>::new_from(thr - 1, &mut thread_rng());
+            let npublic = nsecret.commit::<G1>();
+            s[target_idx] = create_share_bundle(
+                s[target_idx].dealer_idx,
+                &nsecret,
+                &npublic,
+                &group,
+                &mut thread_rng(),
+            )
+            .unwrap();
+            s
+        };
+        let reshared = invalid_shares(
+            thr,
+            dkgs,
+            inv_public,
+            id_resp,
+            |j| {
+                assert_eq!(j.len(), 1);
+                assert_eq!(j[0].dealer_idx, target_idx as u32);
+                j
+            },
+            |outs| outs.into_iter().filter(|o| o.share.index != 0).collect(),
+        )
+        .unwrap();
+        // test that it gives the same public key
+        assert_eq!(public.public_key(), reshared.public_key());
+
+        // SCENARIO 3
+        // less than a threshold of old nodes is giving good shares
+        let (dkgs, _) = setup_reshare::<BCurve>(n, thr, 0, 0);
+        let group = dkgs[0].info.prev_group.clone();
+        invalid_shares(
+            thr,
+            dkgs,
+            |bundles| {
+                bundles
+                    .into_iter()
+                    .map(|mut b| {
+                        if b.dealer_idx < (n - thr) as u32 {
+                            return b;
+                        }
+                        let msg = vec![1, 9, 6, 9];
+                        b.shares[((b.dealer_idx + 1) as usize % group.len()) as usize].secret =
+                            ecies::encrypt::<BCurve, _>(
+                                &G1::rand(&mut thread_rng()),
+                                &msg,
+                                &mut thread_rng(),
+                            );
+                        return b;
+                    })
+                    .collect()
+            },
+            id_resp,
+            // we skip too many justifications such that the protocol should
+            // fail
+            |bundles| bundles.into_iter().skip(thr - 1).collect(),
+            |outs| outs.into_iter().filter(|o| o.share.index != 0).collect(),
+        )
+        .unwrap_err();
+    }
+
+    #[test]
+    fn test_full_resharing() {
+        // SCENARIO: reshare from a group to same group
+        let n = 5;
+        let thr = default_threshold(n);
+        let (dkgs, public) = setup_reshare::<BCurve>(n, thr, 0, 0);
+        let (_, reshared) = full_dkg(thr, dkgs);
         // test that it gives the same public key
         assert_eq!(public.public_key(), reshared.public_key());
     }
 
     #[test]
-    fn test_full_resharing() {
+    fn test_resharing_added_members() {
+        // SCENARIO: reshare with some new members
         let n = 5;
         let thr = default_threshold(n);
-        let (dkgs, public) = setup_reshare::<BCurve>(n, thr);
-        let reshared = full_dkg(thr, dkgs);
+        let n2 = 8;
+        let thr2 = 5;
+        let (dkgs, public) = setup_reshare::<BCurve>(n, thr, n2, thr2);
+        let (_, reshared) = full_dkg(thr2, dkgs);
         // test that it gives the same public key
         assert_eq!(public.public_key(), reshared.public_key());
     }
 
-    fn full_dkg<C, P>(nthr: usize, dkgs: Vec<P>) -> PublicPoly<C>
+    #[test]
+    fn test_resharing_added_members_invalid() {
+        // SCENARIO: reshare with new members but give invalid shares
+        let n = 5;
+        let thr = default_threshold(n);
+        let n2 = 8;
+        let thr2 = 5;
+        let (dkgs, public) = setup_reshare::<BCurve>(n, thr, n2, thr2);
+        let reshared = invalid_shares(
+            thr2,
+            dkgs,
+            |mut s| {
+                s[0].shares[5].secret = ecies::encrypt(&G1::one(), &[1], &mut thread_rng());
+                s[3].shares[6].secret = ecies::encrypt(&G1::one(), &[1], &mut thread_rng());
+                s
+            },
+            id_resp,
+            check2,
+            id_out,
+        )
+        .unwrap();
+        // test that it gives the same public key
+        assert_eq!(public.public_key(), reshared.public_key());
+    }
+
+    fn invalid2<C: Curve>(mut s: Vec<BundledShares<C>>) -> Vec<BundledShares<C>> {
+        // modify a share
+        s[0].shares[1].secret = ecies::encrypt(&C::point(), &[1], &mut thread_rng());
+        s[3].shares[4].secret = ecies::encrypt(&C::point(), &[1], &mut thread_rng());
+        s
+    }
+
+    fn id_resp(r: Vec<BundledResponses>) -> Vec<BundledResponses> {
+        r
+    }
+
+    fn check2<C: Curve>(j: Vec<BundledJustification<C>>) -> Vec<BundledJustification<C>> {
+        // there should be exactly 2 complaints, one for each bad share where
+        // decryption failed
+        assert_eq!(j.len(), 2);
+        j
+    }
+
+    fn id_out<C: Curve>(o: Vec<DKGOutput<C>>) -> Vec<DKGOutput<C>> {
+        o
+    }
+
+    fn invalid_shares<C, P>(
+        thr: usize,
+        dkgs: Vec<P>,
+        map_share: impl Fn(Vec<BundledShares<C>>) -> Vec<BundledShares<C>>,
+        map_resp: impl Fn(Vec<BundledResponses>) -> Vec<BundledResponses>,
+        map_just: impl Fn(Vec<BundledJustification<C>>) -> Vec<BundledJustification<C>>,
+        map_out: impl Fn(Vec<DKGOutput<C>>) -> Vec<DKGOutput<C>>,
+    ) -> DKGResult<PublicPoly<C>>
+    where
+        C: Curve,
+        P: Phase0<C>,
+    {
+        let n = dkgs.len();
+        let mut all_shares = Vec::with_capacity(n);
+        let dkgs: Vec<_> = dkgs
+            .into_iter()
+            .map(|dkg| {
+                let (ndkg, shares) = dkg.encrypt_shares(&mut thread_rng()).unwrap();
+                if let Some(sh) = shares {
+                    all_shares.push(sh);
+                }
+                ndkg
+            })
+            .collect();
+
+        let all_shares = map_share(all_shares);
+
+        let mut response_bundles = Vec::with_capacity(n);
+        let dkgs: Vec<_> = dkgs
+            .into_iter()
+            .map(|dkg| {
+                let (ndkg, bundle_o) = dkg.process_shares(&all_shares, false).unwrap();
+                if let Some(bundle) = bundle_o {
+                    response_bundles.push(bundle);
+                }
+                ndkg
+            })
+            .collect();
+
+        let response_bundles = map_resp(response_bundles);
+
+        let mut justifications = Vec::with_capacity(n);
+        let dkgs: Vec<_> = dkgs
+            .into_iter()
+            .map(|dkg| match dkg.process_responses(&response_bundles) {
+                Ok(_) => panic!("dkg shouldn't have finished OHE"),
+                Err(next) => match next {
+                    Ok((ndkg, justifs)) => {
+                        if let Some(j) = justifs {
+                            justifications.push(j);
+                        }
+                        ndkg
+                    }
+                    Err(e) => panic!(e),
+                },
+            })
+            .collect();
+
+        let justifications = map_just(justifications);
+
+        // ...and the DKG finishes correctly as expected
+        let outputs = dkgs
+            .into_iter()
+            .map(|dkg| dkg.process_justifications(&justifications))
+            .collect::<Result<Vec<_>, DKGError>>()?;
+
+        let outputs = map_out(outputs);
+
+        let recovered_private = reconstruct(thr, &outputs).unwrap();
+        let recovered_public = recovered_private.commit::<C::Point>();
+        let recovered_key = recovered_public.public_key();
+        for out in outputs.iter() {
+            let public = &out.public;
+            assert_eq!(public.public_key(), recovered_key);
+        }
+        Ok(recovered_public)
+    }
+
+    fn full_dkg<C, P>(nthr: usize, dkgs: Vec<P>) -> (Vec<DKGOutput<C>>, PublicPoly<C>)
     where
         C: Curve,
         P: Phase0<C>,
@@ -1348,7 +1640,9 @@ pub mod tests {
             .into_iter()
             .map(|dkg| {
                 let (ndkg, shares) = dkg.encrypt_shares(&mut thread_rng()).unwrap();
-                all_shares.push(shares);
+                if let Some(sh) = shares {
+                    all_shares.push(sh);
+                }
                 ndkg
             })
             .collect();
@@ -1383,82 +1677,10 @@ pub mod tests {
 
         // it matches with the outputs of each DKG participant, even though they
         // do not have access to the threshold private key
-        for out in outputs {
+        for out in outputs.iter() {
             //println!("out.publickey(): {:?}", out.public.public_key());
             assert_eq!(out.public.public_key(), recovered_key);
         }
-        recovered_public
-    }
-
-    fn invalid_shares<C, P>(thr: usize, dkgs: Vec<P>) -> PublicPoly<C>
-    where
-        C: Curve,
-        P: Phase0<C>,
-    {
-        let n = dkgs.len();
-        let mut all_shares = Vec::with_capacity(n);
-        let dkgs: Vec<_> = dkgs
-            .into_iter()
-            .map(|dkg| {
-                let (ndkg, shares) = dkg.encrypt_shares(&mut thread_rng()).unwrap();
-                all_shares.push(shares);
-                ndkg
-            })
-            .collect();
-
-        // modify a share
-        all_shares[0].shares[1].secret = ecies::encrypt(&C::point(), &[1], &mut thread_rng());
-        all_shares[3].shares[4].secret = ecies::encrypt(&C::point(), &[1], &mut thread_rng());
-
-        let mut response_bundles = Vec::with_capacity(2);
-        let dkgs: Vec<_> = dkgs
-            .into_iter()
-            .map(|dkg| {
-                let (ndkg, bundle_o) = dkg.process_shares(&all_shares, false).unwrap();
-                if let Some(bundle) = bundle_o {
-                    response_bundles.push(bundle);
-                }
-                ndkg
-            })
-            .collect();
-
-        // there should be exactly 2 complaints, one for each bad share where decryption failed
-        assert_eq!(response_bundles.len(), 2);
-
-        let mut justifications = Vec::with_capacity(n);
-        let dkgs: Vec<_> = dkgs
-            .into_iter()
-            .map(|dkg| match dkg.process_responses(&response_bundles) {
-                Ok(_) => panic!("dkg shouldn't have finished"),
-                Err(next) => match next {
-                    Ok((ndkg, justifs)) => {
-                        if let Some(j) = justifs {
-                            justifications.push(j);
-                        }
-                        ndkg
-                    }
-                    Err(e) => panic!(e),
-                },
-            })
-            .collect();
-
-        // both participants whose encryptiosn were tampered with revealed their shares,
-        // so there should be exactly 2 justifications
-        assert_eq!(justifications.len(), 2);
-
-        // ...and the DKG finishes correctly as expected
-        let outputs: Vec<_> = dkgs
-            .into_iter()
-            .map(|dkg| dkg.process_justifications(&justifications).unwrap())
-            .collect();
-
-        let recovered_private = reconstruct(thr, &outputs).unwrap();
-        let recovered_public = recovered_private.commit::<C::Point>();
-        let recovered_key = recovered_public.public_key();
-        for out in outputs.iter() {
-            let public = &out.public;
-            assert_eq!(public.public_key(), recovered_key);
-        }
-        recovered_public
+        (outputs, recovered_public)
     }
 }
