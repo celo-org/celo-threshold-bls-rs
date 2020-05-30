@@ -382,11 +382,13 @@ pub struct RDKGWaitingShare<C: Curve> {
 
 impl<C: Curve> Phase1<C> for RDKGWaitingShare<C> {
     type Next = RDKGWaitingResponse<C>;
+    #[allow(unused_assignments)]
     fn process_shares(
         self,
         bundles: &[BundledShares<C>],
-        publish_all: bool,
+        mut publish_all: bool,
     ) -> DKGResult<(RDKGWaitingResponse<C>, Option<BundledResponses>)> {
+        publish_all = false;
         if !self.info.is_share_holder() {
             return Ok((
                 RDKGWaitingResponse {
@@ -472,6 +474,7 @@ impl<C: Curve> Phase1<C> for RDKGWaitingShare<C> {
 
 impl<C: Curve> Phase1<C> for DKGWaitingShare<C> {
     type Next = DKGWaitingResponse<C>;
+    #[allow(unused_assignments)]
     /// Tries to decrypt the provided shares and calculate the secret key and the
     /// threshold public key. If `publish_all` is set to true then the returned
     /// responses will include both complaints and successful statuses. Consider setting
@@ -486,8 +489,9 @@ impl<C: Curve> Phase1<C> for DKGWaitingShare<C> {
     fn process_shares(
         self,
         bundles: &[BundledShares<C>],
-        publish_all: bool,
+        mut publish_all: bool,
     ) -> DKGResult<(DKGWaitingResponse<C>, Option<BundledResponses>)> {
+        publish_all = false;
         let thr = self.info.thr();
         let my_idx = self.info.index;
         let (shares, publics, statuses) = process_shares_get_all(
