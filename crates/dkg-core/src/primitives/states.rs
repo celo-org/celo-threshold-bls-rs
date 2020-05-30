@@ -50,6 +50,7 @@ pub trait Phase1<C: Curve>: Clone + Debug + Serialize + for<'a> Deserialize<'a> 
 /// node unable to continue participating in the protocol.
 pub trait Phase2<C: Curve>: Clone + Debug + Serialize + for<'a> Deserialize<'a> {
     type Next: Phase3<C>;
+    #[allow(clippy::type_complexity)]
     fn process_responses(
         self,
         responses: &[BundledResponses],
@@ -177,6 +178,7 @@ pub struct BundledShares<C: Curve> {
 }
 
 impl<C: Curve> RDKG<C> {
+    #[allow(dead_code)]
     pub(crate) fn new_from_share(
         private_key: C::Scalar,
         curr_share: DKGOutput<C>,
@@ -186,6 +188,7 @@ impl<C: Curve> RDKG<C> {
         Self::new_from_share_rng(private_key, curr_share, new_group, &mut thread_rng())
     }
 
+    #[allow(dead_code)]
     pub(crate) fn new_from_share_rng<R: RngCore>(
         private_key: C::Scalar,
         curr_share: DKGOutput<C>,
@@ -204,19 +207,20 @@ impl<C: Curve> RDKG<C> {
         pubkey.mul(&private_key);
         let new_idx = new_group.index(&pubkey);
         let info = ReshareInfo {
-            private_key: private_key,
+            private_key,
             public_key: pubkey,
             prev_index: oldi,
-            prev_group: prev_group,
-            prev_public: prev_public,
+            prev_group,
+            prev_public,
             secret: Some(secret),
             public: Some(public),
             new_index: new_idx,
-            new_group: new_group,
+            new_group,
         };
-        Ok(RDKG { info: info })
+        Ok(RDKG { info })
     }
 
+    #[allow(dead_code)]
     pub(crate) fn new_member(
         private_key: C::Scalar,
         curr_group: Group<C>,
@@ -227,7 +231,7 @@ impl<C: Curve> RDKG<C> {
         pubkey.mul(&private_key);
         let new_idx = new_group.index(&pubkey);
         let info = ReshareInfo {
-            private_key: private_key,
+            private_key,
             public_key: pubkey,
             prev_index: None,
             prev_group: curr_group,
@@ -235,9 +239,9 @@ impl<C: Curve> RDKG<C> {
             secret: None,
             public: None,
             new_index: new_idx,
-            new_group: new_group,
+            new_group,
         };
-        Ok(RDKG { info: info })
+        Ok(RDKG { info })
     }
 }
 
@@ -457,10 +461,10 @@ impl<C: Curve> Phase1<C> for RDKGWaitingShare<C> {
 
         let bundle = compute_bundle_response(my_idx, &statuses, publish_all);
         let new_dkg = RDKGWaitingResponse {
-            info: info,
-            shares: shares,
-            publics: publics,
-            statuses: statuses,
+            info,
+            shares,
+            publics,
+            statuses,
         };
         Ok((new_dkg, bundle))
     }
@@ -646,7 +650,7 @@ impl<C: Curve> Phase2<C> for RDKGWaitingResponse<C> {
                 None
             };
             let dkg = RDKGWaitingJustification {
-                info: info,
+                info,
                 shares: self.shares,
                 statuses: RefCell::new(statuses),
                 publics: self.publics,
@@ -655,7 +659,7 @@ impl<C: Curve> Phase2<C> for RDKGWaitingResponse<C> {
         }
         // in case of error here, the protocol must be aborted
         compute_resharing_output(info, self.shares, self.publics, RefCell::new(statuses))
-            .map_err(|e| Err(e))
+            .map_err(Err)
     }
 }
 
@@ -689,7 +693,7 @@ impl<C: Curve> Phase2<C> for DKGWaitingResponse<C> {
             let bundled_justifications =
                 get_justification(info.index, &info.secret, &info.public, &statuses);
             let dkg = DKGWaitingJustification {
-                info: info,
+                info,
                 dist_share: self.dist_share,
                 dist_pub: self.dist_pub,
                 statuses: RefCell::new(statuses),
@@ -708,7 +712,7 @@ impl<C: Curve> Phase2<C> for DKGWaitingResponse<C> {
         Ok(DKGOutput {
             // everybody is qualified in this case since there is no
             // complaint at all
-            qual: info.group.clone(),
+            qual: info.group,
             public: self.dist_pub,
             share,
         })
@@ -964,7 +968,7 @@ fn create_share_bundle<C: Curve, R: RngCore>(
     // Return the encrypted shares along with a commitment
     // to their secret polynomial.
     Ok(BundledShares {
-        dealer_idx: dealer_idx,
+        dealer_idx,
         shares,
         public: public.clone(),
     })
@@ -1108,7 +1112,7 @@ fn get_justification<C: Curve>(
             })
             .collect::<Vec<_>>();
         Some(BundledJustification {
-            dealer_idx: dealer_idx,
+            dealer_idx,
             justifications,
             public: public.clone(),
         })
@@ -1384,7 +1388,7 @@ pub mod tests {
                 }))
                 .collect::<Vec<_>>();
         }
-        return (dkgs, public_poly);
+        (dkgs, public_poly)
     }
 
     #[test]
@@ -1490,7 +1494,7 @@ pub mod tests {
                                 &msg,
                                 &mut thread_rng(),
                             );
-                        return b;
+                        b
                     })
                     .collect()
             },

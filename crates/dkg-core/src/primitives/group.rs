@@ -85,7 +85,7 @@ where
     }
 
     pub fn contains_index(&self, idx: Idx) -> bool {
-        self.nodes.iter().find(|n| n.0 == idx).is_some()
+        self.nodes.iter().any(|n| n.0 == idx)
     }
 }
 
