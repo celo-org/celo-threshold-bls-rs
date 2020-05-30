@@ -49,9 +49,9 @@ pub trait DKGPhase<C: Curve, B: BoardPublisher<C>, T> {
 }
 
 #[derive(Clone, Debug)]
-/// The initial phase of the DKG. In this phase, each participant imports their private
-/// key and the initial group which will participate in the DKG. Running this phase will
-/// encrypt the shares and then publish them to the board
+/// The initial phase of the DKG. In this phase, each participant imports their
+/// private key and the initial group which will participate in the DKG. Running
+/// this phase will encrypt the shares and then publish them to the board
 pub struct Phase0<C: Curve> {
     inner: DKG<C>,
     publish_all: bool,
@@ -65,6 +65,18 @@ impl<C: Curve> Phase0<C> {
             publish_all,
         })
     }
+
+    /*pub fn new_reshare_from(*/
+    //private_key: C::Scalar,
+    //curr_share: DKGOutput<C>,
+    //new_group: Group<C>,
+    //) -> NodeResult<Self> {
+    //let dkg = RDKG::new_from_share(private_key, curr_share, new_group)?;
+    //Ok(Self {
+    //inner: dkg,
+    //publish_all: false,
+    //})
+    /*}*/
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]

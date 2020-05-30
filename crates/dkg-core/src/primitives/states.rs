@@ -17,15 +17,20 @@ use threshold_bls::{
 
 use std::cell::RefCell;
 
+/// Phase0 is the trait abstracting the first step of a distributed key
+/// generation computation. At this stage, the "dealer" nodes create their
+/// shares and encrypt them to the "share holders".
 pub trait Phase0<C: Curve>: Clone + Debug + Serialize + for<'a> Deserialize<'a> {
     type Next: Phase1<C>;
-
     fn encrypt_shares<R: RngCore>(
         self,
         rng: &mut R,
     ) -> DKGResult<(Self::Next, Option<BundledShares<C>>)>;
 }
 
+/// Phase1 is the trait abstracting the second step of a distributed key
+/// generation computation. At this stage, the "share holders" nodes decrypt the
+/// shares and create responses to broadcast to both dealers and share holders.
 pub trait Phase1<C: Curve>: Clone + Debug + Serialize + for<'a> Deserialize<'a> {
     type Next: Phase2<C>;
     fn process_shares(
@@ -35,6 +40,14 @@ pub trait Phase1<C: Curve>: Clone + Debug + Serialize + for<'a> Deserialize<'a> 
     ) -> DKGResult<(Self::Next, Option<BundledResponses>)>;
 }
 
+/// Phase2 is the trait abstracting the third stage of a distributed key
+/// generation computation. At this stage, every participant process the
+/// responses, look if they can finish the protocol. If not, dealers look if
+/// they have to produce some justifications.
+/// The return method of this trait is first the `DKGOutput` if the protocol can
+/// be finished already. If not, the call returns an error which either contains
+/// the next phase and potential justifications or a fatal error that makes this
+/// node unable to continue participating in the protocol.
 pub trait Phase2<C: Curve>: Clone + Debug + Serialize + for<'a> Deserialize<'a> {
     type Next: Phase3<C>;
     fn process_responses(
@@ -43,6 +56,9 @@ pub trait Phase2<C: Curve>: Clone + Debug + Serialize + for<'a> Deserialize<'a> 
     ) -> Result<DKGOutput<C>, DKGResult<(Self::Next, Option<BundledJustification<C>>)>>;
 }
 
+/// Phase3 is the trait abstracting the final stage of a distributed key
+/// generation protocol. At this stage, the share holders process the potential
+/// justifications, and look if they can finish the protocol.
 pub trait Phase3<C: Curve>: Debug {
     fn process_justifications(
         self,
@@ -161,7 +177,16 @@ pub struct BundledShares<C: Curve> {
 }
 
 impl<C: Curve> RDKG<C> {
-    pub(crate) fn new_from_share<R: RngCore>(
+    pub(crate) fn new_from_share(
+        private_key: C::Scalar,
+        curr_share: DKGOutput<C>,
+        new_group: Group<C>,
+    ) -> Result<RDKG<C>, DKGError> {
+        use rand::prelude::*;
+        Self::new_from_share_rng(private_key, curr_share, new_group, &mut thread_rng())
+    }
+
+    pub(crate) fn new_from_share_rng<R: RngCore>(
         private_key: C::Scalar,
         curr_share: DKGOutput<C>,
         new_group: Group<C>,
@@ -1342,7 +1367,7 @@ pub mod tests {
                     public: public_poly.clone(),
                     qual: prev_group.clone(),
                 };
-                RDKG::new_from_share(p, out, new_group.clone(), &mut thread_rng()).unwrap()
+                RDKG::new_from_share(p, out, new_group.clone()).unwrap()
             })
             .collect::<Vec<_>>();
         if new_n > 0 {
