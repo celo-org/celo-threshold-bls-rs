@@ -1,22 +1,27 @@
 #!/bin/bash -e
 
+mkdir /dkg_temp
+cd /dkg_temp
+
+DKG_PHASE_FILE=/dkg_temp/dkg_phase
+
 if [[ $1 == "create-account" ]]; then
   $CELO account:new 2>&1 | grep -v libusb
   exit 0
 fi
 
 if [[ $1 == "clean" ]]; then
-  rm dkg_phase
+  rm ${DKG_PHASE_FILE}
   exit 0
 fi
 
-if [[ ! -f dkg_phase ]]; then
-  echo -1 > dkg_phase
+if [[ ! -f ${DKG_PHASE_FILE} ]]; then
+  echo -1 > ${DKG_PHASE_FILE}
 fi
 
-DKG_CONFIG=dkg_config
+DKG_CONFIG=/dkg/dkg_config
 if [[ $1 != "" ]]; then
-  DKG_CONFIG=$1
+  DKG_CONFIG=/dkg/$1
 fi
 
 touch ${DKG_CONFIG}
@@ -62,7 +67,7 @@ function do_phase0 () {
   $CELO dkg:register --node $NODE_URL --address $DKG_ADDRESS --privateKey $PRIVATE_KEY --from $FROM --blsKey pubkey 2>&1 | grep -v libusb
   exit_if_command_failed
   echo "Registration complete"
-  echo 0 > dkg_phase
+  echo 0 > ${DKG_PHASE_FILE}
 }
 
 function do_phase1 () {
@@ -91,7 +96,7 @@ function do_phase1 () {
   exit_if_command_failed
   echo "Shares published"
 
-  echo 1 > dkg_phase
+  echo 1 > ${DKG_PHASE_FILE}
   #do_phase1
 }
 
@@ -106,7 +111,7 @@ function do_phase2 () {
   exit_if_command_failed
   echo "Responses published"
 
-  echo 2 > dkg_phase
+  echo 2 > ${DKG_PHASE_FILE}
   #do_phase2
 }
 
@@ -120,13 +125,15 @@ function do_phase3 () {
   if  [[ "$PHASE3_OUTPUT" == "Success"* ]]
   then
     echo $PHASE3_OUTPUT
+    echo "Your share, the public key and the public polynomial are available in the file named result."
+    cp phase3_node /dkg/result
     exit 0
   fi
 
   $CELO dkg:publish --node $NODE_URL --address $DKG_ADDRESS --privateKey $PRIVATE_KEY --from $FROM --data ./justifications 2>&1 | grep -v libusb
   exit_if_command_failed
   echo "Justifications Published"
-  echo 3 > dkg_phase
+  echo 3 > ${DKG_PHASE_FILE}
   #do_phase3
 }
 
@@ -136,9 +143,10 @@ function do_phase4 () {
   $CELO dkg:get --node $NODE_URL --address $DKG_ADDRESS --method justifications 2>&1 | grep -v libusb > combined_justifications
   exit_if_command_failed
 
-  $DKG finalize --in-phase phase3_node --input combined_justifications --output result
+  $DKG finalize --in-phase phase3_node --input combined_justifications --output /dkg/result
   exit_if_command_failed
-  echo 4 > dkg_phase
+  echo "Your share, the public key and the public polynomial are available in the file named result."
+  echo 4 > ${DKG_PHASE_FILE}
 }
 
 function do_phase5() {
@@ -150,7 +158,7 @@ echo "Participating in DKG at address $DKG_ADDRESS"
 
 while true; do
   phase="$(get_phase)"
-  done_phase=$(<dkg_phase)
+  done_phase=$(<${DKG_PHASE_FILE})
   if  [[ "$done_phase" == "$phase" ]]; then
     echo "Phase is still $phase. Sleeping for $SLEEP_TIME seconds."
     sleep $SLEEP_TIME
