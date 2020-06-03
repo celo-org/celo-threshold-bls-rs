@@ -31,7 +31,7 @@ impl Status {
         self.is_success()
     }
 
-    pub(super) fn is_success(self) -> bool {
+    pub(crate) fn is_success(self) -> bool {
         match self {
             Status::Success => true,
             Status::Complaint => false,
@@ -166,15 +166,6 @@ impl StatusMatrix {
         col
     }
 
-    /// Returns `true` if the row corresponding to `dealer` is all 1s.
-    ///
-    /// # Panics
-    ///
-    /// If the `dealer` index is greater than the number of dealers
-    pub fn all_true(&self, dealer: Idx) -> bool {
-        self.get_for_dealer(dealer).all()
-    }
-
     /// Returns the row corresponding to the dealer at `dealer`
     ///
     /// # Panics
@@ -184,6 +175,15 @@ impl StatusMatrix {
         self.0
             .get(dealer as usize)
             .expect("dealer index out of bounds")
+    }
+
+    /// Returns `true` if the row corresponding to `dealer` is all 1s.
+    ///
+    /// # Panics
+    ///
+    /// If the `dealer` index is greater than the number of dealers
+    pub fn all_true(&self, dealer: Idx) -> bool {
+        self.get_for_dealer(dealer).all()
     }
 }
 

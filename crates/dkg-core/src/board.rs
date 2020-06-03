@@ -2,7 +2,7 @@
 ///
 /// A board is where DKG participants publish their data for the corresponding DKG
 /// phase.
-use super::primitives::bundles::{BundledJustification, BundledResponses, BundledShares};
+use super::primitives::types::{BundledJustification, BundledResponses, BundledShares};
 use bincode::serialize_into;
 use std::io::Write;
 use threshold_bls::group::Curve;

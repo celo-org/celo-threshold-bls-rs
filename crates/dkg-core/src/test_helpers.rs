@@ -1,5 +1,5 @@
 use super::board::BoardPublisher;
-use super::primitives::bundles::{BundledJustification, BundledResponses, BundledShares};
+use super::primitives::types::{BundledJustification, BundledResponses, BundledShares};
 use threshold_bls::group::Curve;
 
 /// An in-memory board used for testing
