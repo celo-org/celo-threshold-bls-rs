@@ -1,5 +1,5 @@
 use super::opts::{CombineOpts, SetupOpts};
-use crate::CLIResult;
+use anyhow::Result;
 
 use dkg_core::{
     node::NodeError,
@@ -12,7 +12,7 @@ use serde::{de::DeserializeOwned, Serialize};
 use std::fs::File;
 
 /// Reads the initial pubkey/index pairs per participant, and creates the group
-pub fn setup<C, S>(opts: SetupOpts) -> CLIResult<()>
+pub fn setup<C, S>(opts: SetupOpts) -> Result<()>
 where
     C: Curve,
     // We need to bind the Curve's Point and Scalars to the Scheme
@@ -40,7 +40,7 @@ where
 }
 
 /// Combines the contributions of each participant for the next phase
-pub fn combine<T: DeserializeOwned + Serialize>(opts: CombineOpts) -> CLIResult<()> {
+pub fn combine<T: DeserializeOwned + Serialize>(opts: CombineOpts) -> Result<()> {
     let mut data: Vec<T> = Vec::new();
 
     for path in glob(&opts.input).expect("Failed to read glob pattern") {
