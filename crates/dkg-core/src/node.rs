@@ -1,9 +1,10 @@
 use super::{
     board::BoardPublisher,
+    dkg_impls::joint_feldman::{DKGWaitingJustification, DKGWaitingResponse, DKGWaitingShare, DKG},
     primitives::{
-        bundles::{BundledJustification, BundledResponses, BundledShares},
         group::Group,
-        phases::{DKGOutput, DKGWaitingJustification, DKGWaitingResponse, DKGWaitingShare, DKG},
+        phases::{Phase0 as DPhase0, Phase1 as DPhase1, Phase2 as DPhase2, Phase3 as DPhase3},
+        types::{BundledJustification, BundledResponses, BundledShares, DKGOutput},
         DKGError,
     },
 };
@@ -100,9 +101,11 @@ where
     fn run(self, board: &mut B, rng: &mut R) -> NodeResult<Self::Next> {
         let (next, shares) = self.inner.encrypt_shares(rng)?;
 
-        board
-            .publish_shares(shares)
-            .map_err(|_| NodeError::PublisherError)?;
+        if let Some(shares) = shares {
+            board
+                .publish_shares(shares)
+                .map_err(|_| NodeError::PublisherError)?;
+        }
 
         Ok(Phase1 {
             inner: next,
@@ -141,18 +144,23 @@ where
     fn run(self, board: &mut B, responses: &[BundledResponses]) -> NodeResult<Self::Next> {
         match self.inner.process_responses(responses) {
             Ok(output) => Ok(Phase2Result::Output(output)),
-            Err((next, justifications)) => {
-                // publish justifications if you have some
-                // Nodes may just see that justifications are needed but they
-                // don't have to create any, since no  complaint have been filed
-                // against their deal.
-                if let Some(justifications) = justifications {
-                    board
-                        .publish_justifications(justifications)
-                        .map_err(|_| NodeError::PublisherError)?;
-                }
+            Err(next) => {
+                match next {
+                    Ok((next, justifications)) => {
+                        // publish justifications if you have some
+                        // Nodes may just see that justifications are needed but they
+                        // don't have to create any, since no  complaint have been filed
+                        // against their deal.
+                        if let Some(justifications) = justifications {
+                            board
+                                .publish_justifications(justifications)
+                                .map_err(|_| NodeError::PublisherError)?;
+                        }
 
-                Ok(Phase2Result::GoToPhase3(Phase3 { inner: next }))
+                        Ok(Phase2Result::GoToPhase3(Phase3 { inner: next }))
+                    }
+                    Err(e) => Err(NodeError::DKGError(e)),
+                }
             }
         }
     }

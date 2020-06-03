@@ -16,5 +16,8 @@ pub mod node;
 /// Low level primitives which implement the JF-DKG
 pub mod primitives;
 
+/// Implementations of a JF DKG with resharing
+pub mod dkg_impls;
+
 #[cfg(test)]
 mod test_helpers;
