@@ -6,9 +6,8 @@ use std::{fs::File, io::Write};
 use dkg_core::{
     node::{DKGPhase, Phase0, Phase1, Phase2, Phase2Result, Phase3},
     primitives::{
-        bundles::{BundledJustification, BundledResponses, BundledShares},
         group::{Group, Node},
-        phases::DKGOutput,
+        types::{BundledJustification, BundledResponses, BundledShares, DKGOutput},
     },
 };
 

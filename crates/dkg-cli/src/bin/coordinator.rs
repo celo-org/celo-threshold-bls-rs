@@ -3,7 +3,7 @@ use dkg_cli::coordinator::{
     opts::{Command, Opts},
 };
 
-use dkg_core::primitives::bundles::{BundledJustification, BundledResponses, BundledShares};
+use dkg_core::primitives::types::{BundledJustification, BundledResponses, BundledShares};
 
 use gumdrop::Options;
 use std::process;
