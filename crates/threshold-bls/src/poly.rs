@@ -1,7 +1,7 @@
 use crate::group::{Curve, Element, Point, Scalar};
 use rand_core::RngCore;
 use serde::{Deserialize, Serialize};
-use std::{collections::HashMap, fmt};
+use std::{collections::BTreeMap, fmt};
 use thiserror::Error;
 
 pub type PrivatePoly<C> = Poly<<C as Curve>::Scalar>;
@@ -49,6 +49,18 @@ impl<C: Element> Poly<C> {
     pub fn new_from<R: RngCore>(degree: usize, rng: &mut R) -> Self {
         let coeffs: Vec<C> = (0..=degree).map(|_| C::rand(rng)).collect();
         Self::from(coeffs)
+    }
+
+    /// get returns the given coefficient at the requested index. It will panic
+    /// if the index is out of range,i.e. `if i > self.degree()`.
+    pub fn get(&self, i: Idx) -> C {
+        self.0[i as usize].clone()
+    }
+
+    /// set the given element at the specified index. The index 0 is the free
+    /// coefficient of the polynomial. It panics if the index is out of range.
+    pub fn set(&mut self, index: usize, value: C) {
+        self.0[index] = value;
     }
 
     /// Returns a new polynomial of the given degree where each coefficients is
@@ -190,7 +202,7 @@ where
     fn share_map(
         t: usize,
         mut shares: Vec<Eval<C>>,
-    ) -> Result<HashMap<Idx, (C::RHS, C)>, PolyError> {
+    ) -> Result<BTreeMap<Idx, (C::RHS, C)>, PolyError> {
         if shares.len() < t {
             return Err(PolyError::InvalidRecovery(shares.len(), t));
         }
@@ -203,7 +215,7 @@ where
         let xs = shares
             .into_iter()
             .take(t)
-            .fold(HashMap::new(), |mut m, sh| {
+            .fold(BTreeMap::new(), |mut m, sh| {
                 let mut xi = C::RHS::new();
                 xi.set_int((sh.index + 1).into());
                 m.insert(sh.index, (xi, sh.value));
@@ -273,7 +285,7 @@ impl<X: Scalar<RHS = X>> Poly<X> {
     }
 
     /// Computes the lagrange basis polynomial of index i
-    fn lagrange_basis<E: Element<RHS = X>>(i: Idx, xs: &HashMap<Idx, (X, E)>) -> Poly<X> {
+    fn lagrange_basis<E: Element<RHS = X>>(i: Idx, xs: &BTreeMap<Idx, (X, E)>) -> Poly<X> {
         let mut basis = Poly::<X>::from(vec![X::one()]);
 
         // accumulator of the denominator values
@@ -307,7 +319,8 @@ impl<X: Scalar<RHS = X>> Poly<X> {
         basis
     }
 
-    /// Commits the scalar polynomial to the group and returns a polynomial over the group
+    /// Commits the scalar polynomial to the group and returns a polynomial over
+    /// the group
     ///
     /// This is done by multiplying each coefficient of the polynomial with the
     /// group's generator.
