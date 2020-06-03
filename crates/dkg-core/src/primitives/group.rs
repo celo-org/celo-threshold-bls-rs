@@ -83,6 +83,10 @@ where
     pub fn index(&self, public: &C::Point) -> Option<Idx> {
         self.nodes.iter().find(|n| &n.1 == public).map(|n| n.0)
     }
+
+    pub fn contains_index(&self, idx: Idx) -> bool {
+        self.nodes.iter().any(|n| n.0 == idx)
+    }
 }
 
 impl<C> From<Vec<C::Point>> for Group<C>
