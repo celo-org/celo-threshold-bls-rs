@@ -11,6 +11,12 @@ pub use types::*;
 /// 2D binary array utilities for tracking successful (or not) participation in the DKG
 pub(crate) mod status;
 
+pub mod joint_feldman;
+
+pub mod resharing;
+
+mod common;
+
 mod errors;
 pub use errors::{DKGError, DKGResult, ShareError};
 

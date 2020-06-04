@@ -18,10 +18,5 @@ pub use node::{DKGPhase, NodeError, Phase2Result};
 /// Low level primitives and datatypes for implementing DKGs
 pub mod primitives;
 
-/// Implementations of a JF DKG with resharing
-mod dkg_impls;
-pub use dkg_impls::joint_feldman;
-pub use dkg_impls::resharing;
-
 #[cfg(test)]
 mod test_helpers;

@@ -135,8 +135,10 @@ where
 mod tests {
     use super::*;
     use crate::{
-        dkg_impls::joint_feldman,
-        primitives::group::{Group, Node},
+        primitives::{
+            group::{Group, Node},
+            joint_feldman,
+        },
         test_helpers::InMemoryBoard,
     };
 

@@ -2,7 +2,10 @@ use super::opts::{FinalizeOpts, NewOpts, PublishSharesOpts, StateOpts};
 use rand::RngCore;
 use std::{fs::File, io::Write};
 
-use dkg_core::{joint_feldman::*, primitives::*, DKGPhase, Phase2Result};
+use dkg_core::{
+    primitives::{joint_feldman::*, *},
+    DKGPhase, Phase2Result,
+};
 
 use anyhow::Result;
 

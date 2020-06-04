@@ -361,10 +361,10 @@ where
 #[cfg(test)]
 pub mod tests {
     use super::*;
-    use crate::dkg_impls::common::tests::{
-        check2, full_dkg, id_out, id_resp, invalid2, invalid_shares, setup_group,
+    use crate::primitives::{
+        common::tests::{check2, full_dkg, id_out, id_resp, invalid2, invalid_shares, setup_group},
+        default_threshold,
     };
-    use crate::primitives::default_threshold;
     use std::fmt::Debug;
     use threshold_bls::curve::bls12381::{Curve as BCurve, G1};
 

@@ -507,10 +507,10 @@ fn check_public_resharing<C: Curve>(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::dkg_impls::common::tests::{
-        check2, full_dkg, id_out, id_resp, invalid2, invalid_shares, setup_group,
+    use crate::primitives::{
+        common::tests::{check2, full_dkg, id_out, id_resp, invalid2, invalid_shares, setup_group},
+        default_threshold,
     };
-    use crate::primitives::default_threshold;
     use threshold_bls::{
         curve::bls12381::{Curve as BCurve, Scalar, G1},
         ecies,
