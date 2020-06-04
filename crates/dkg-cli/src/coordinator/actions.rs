@@ -2,8 +2,8 @@ use super::opts::{CombineOpts, SetupOpts};
 use anyhow::Result;
 
 use dkg_core::{
-    node::NodeError,
-    primitives::group::{Group, Node},
+    primitives::{Group, Node},
+    NodeError,
 };
 use threshold_bls::{group::Curve, poly::Idx, sig::Scheme};
 

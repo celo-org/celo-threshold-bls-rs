@@ -1,3 +1,10 @@
+//! Implements the resharing scheme from [Desmedt et al.](http://citeseerx.ist.psu.edu/viewdoc/download?doi=10.1.1.55.2968&rep=rep1&type=pdf)).
+//! The protoocol has the same phases as the JF-DKG module but requires additional checks
+//! to verify the resharing is performed correctly. The resharing scheme runs
+//! between two potentially distinct groups: the dealers (nodes that already
+//! have a share, that ran a DKG previously) and the share holders (nodes that
+//! receives a refreshed share of the same secret).
+use super::common::*;
 use crate::primitives::{
     group::Group,
     phases::{Phase0, Phase1, Phase2, Phase3},
@@ -6,18 +13,15 @@ use crate::primitives::{
     DKGError, DKGResult,
 };
 
-use super::common::*;
-
-use rand_core::RngCore;
-use serde::{de::DeserializeOwned, Deserialize, Serialize};
-use std::fmt::Debug;
 use threshold_bls::{
     group::{Curve, Element},
     poly::{Eval, Idx, Poly, PrivatePoly, PublicPoly},
     sig::Share,
 };
 
-use std::cell::RefCell;
+use rand_core::RngCore;
+use serde::{de::DeserializeOwned, Deserialize, Serialize};
+use std::{cell::RefCell, fmt::Debug};
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(bound = "C::Scalar: DeserializeOwned")]

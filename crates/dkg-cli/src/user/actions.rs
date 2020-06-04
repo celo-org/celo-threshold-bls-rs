@@ -2,14 +2,7 @@ use super::opts::{FinalizeOpts, NewOpts, PublishSharesOpts, StateOpts};
 use rand::RngCore;
 use std::{fs::File, io::Write};
 
-use dkg_core::{
-    dkg_impls::joint_feldman::{DKGWaitingJustification, DKGWaitingResponse, DKGWaitingShare, DKG},
-    node::{DKGPhase, Phase2Result},
-    primitives::{
-        group::{Group, Node},
-        types::{BundledJustification, BundledResponses, BundledShares, DKGOutput},
-    },
-};
+use dkg_core::{joint_feldman::*, primitives::*, DKGPhase, Phase2Result};
 
 use anyhow::Result;
 
