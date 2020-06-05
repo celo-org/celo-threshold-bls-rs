@@ -1,3 +1,7 @@
+//! Implements the Distributed Key Generation protocol from
+//! [Pedersen](https://link.springer.com/content/pdf/10.1007%2F3-540-48910-X_21.pdf).
+//! The protocol runs at minimum in two phases and at most in three phases.
+use super::common::*;
 use crate::primitives::{
     group::Group,
     phases::{Phase0, Phase1, Phase2, Phase3},
@@ -6,19 +10,15 @@ use crate::primitives::{
     DKGError, DKGResult,
 };
 
-use super::common::*;
-
-use rand_core::RngCore;
-use serde::{de::DeserializeOwned, Deserialize, Serialize};
-use std::collections::HashMap;
-use std::fmt::Debug;
 use threshold_bls::{
     group::{Curve, Element},
     poly::{Idx, Poly, PrivatePoly, PublicPoly},
     sig::Share,
 };
 
-use std::cell::RefCell;
+use rand_core::RngCore;
+use serde::{de::DeserializeOwned, Deserialize, Serialize};
+use std::{cell::RefCell, collections::HashMap, fmt::Debug};
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(bound = "C::Scalar: DeserializeOwned")]
@@ -361,10 +361,10 @@ where
 #[cfg(test)]
 pub mod tests {
     use super::*;
-    use crate::dkg_impls::common::tests::{
-        check2, full_dkg, id_out, id_resp, invalid2, invalid_shares, setup_group,
+    use crate::primitives::{
+        common::tests::{check2, full_dkg, id_out, id_resp, invalid2, invalid_shares, setup_group},
+        default_threshold,
     };
-    use crate::primitives::default_threshold;
     use std::fmt::Debug;
     use threshold_bls::curve::bls12381::{Curve as BCurve, G1};
 

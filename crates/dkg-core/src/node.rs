@@ -1,16 +1,13 @@
 use super::{
     board::BoardPublisher,
-    dkg_impls::joint_feldman::{DKGWaitingJustification, DKGWaitingResponse, DKGWaitingShare, DKG},
     primitives::{
-        group::Group,
-        phases::{Phase0 as DPhase0, Phase1 as DPhase1, Phase2 as DPhase2, Phase3 as DPhase3},
+        phases::{Phase0, Phase1, Phase2, Phase3},
         types::{BundledJustification, BundledResponses, BundledShares, DKGOutput},
         DKGError,
     },
 };
 
 use rand::RngCore;
-use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use thiserror::Error;
 use threshold_bls::group::Curve;
 
@@ -27,11 +24,11 @@ pub enum NodeError {
 
 /// Phase2 can either be successful or require going to Phase 3.
 #[derive(Clone, Debug)]
-pub enum Phase2Result<C: Curve> {
+pub enum Phase2Result<C: Curve, P: Phase3<C>> {
     /// The final DKG output
     Output(DKGOutput<C>),
     /// Indicates that Phase 2 failed and that the protocol must proceed to Phase 3
-    GoToPhase3(Phase3<C>),
+    GoToPhase3(P),
 }
 
 type NodeResult<T> = std::result::Result<T, NodeError>;
@@ -46,83 +43,37 @@ pub trait DKGPhase<C: Curve, B: BoardPublisher<C>, T> {
     fn run(self, board: &mut B, arg: T) -> NodeResult<Self::Next>;
 }
 
-#[derive(Clone, Debug)]
-/// The initial phase of the DKG. In this phase, each participant imports their private
-/// key and the initial group which will participate in the DKG. Running this phase will
-/// encrypt the shares and then publish them to the board
-pub struct Phase0<C: Curve> {
-    inner: DKG<C>,
-    publish_all: bool,
-}
-
-impl<C: Curve> Phase0<C> {
-    pub fn new(private_key: C::Scalar, group: Group<C>, publish_all: bool) -> NodeResult<Self> {
-        let dkg = DKG::new(private_key, group)?;
-        Ok(Self {
-            inner: dkg,
-            publish_all,
-        })
-    }
-}
-
-#[derive(Clone, Debug, Serialize, Deserialize)]
-/// Phase 1 of the DKG. This phase reads the shares generated from Phase 0 and if there were
-/// complaints, it generates responses which are published to the board.
-#[serde(bound = "C::Scalar: DeserializeOwned")]
-pub struct Phase1<C: Curve> {
-    inner: DKGWaitingShare<C>,
-    publish_all: bool,
-}
-
-#[derive(Clone, Debug, Serialize, Deserialize)]
-/// Phase 2 of the DKG. This phase reads the responses generated from Phase 1, and if processing
-/// is successful outputs the result of the DKG. If processing returns an error, then any
-/// justifications get published to the board and it produces the necessary data for Phase 3.
-#[serde(bound = "C::Scalar: DeserializeOwned")]
-pub struct Phase2<C: Curve> {
-    inner: DKGWaitingResponse<C>,
-}
-
-/// Phase 3 produces the final result or an error
-#[derive(Clone, Debug, Serialize, Deserialize)]
-#[serde(bound = "C::Scalar: DeserializeOwned")]
-pub struct Phase3<C: Curve> {
-    inner: DKGWaitingJustification<C>,
-}
-
-impl<C, B, R> DKGPhase<C, B, &mut R> for Phase0<C>
+impl<C, B, R, P> DKGPhase<C, B, &mut R> for P
 where
     C: Curve,
     B: BoardPublisher<C>,
     R: RngCore,
+    P: Phase0<C>,
 {
-    type Next = Phase1<C>;
+    type Next = P::Next;
 
     fn run(self, board: &mut B, rng: &mut R) -> NodeResult<Self::Next> {
-        let (next, shares) = self.inner.encrypt_shares(rng)?;
-
-        if let Some(shares) = shares {
+        let (next, shares) = self.encrypt_shares(rng)?;
+        if let Some(sh) = shares {
             board
-                .publish_shares(shares)
+                .publish_shares(sh)
                 .map_err(|_| NodeError::PublisherError)?;
         }
 
-        Ok(Phase1 {
-            inner: next,
-            publish_all: self.publish_all,
-        })
+        Ok(next)
     }
 }
 
-impl<C, B> DKGPhase<C, B, &[BundledShares<C>]> for Phase1<C>
+impl<C, B, P> DKGPhase<C, B, &[BundledShares<C>]> for P
 where
     C: Curve,
     B: BoardPublisher<C>,
+    P: Phase1<C>,
 {
-    type Next = Phase2<C>;
+    type Next = P::Next;
 
     fn run(self, board: &mut B, shares: &[BundledShares<C>]) -> NodeResult<Self::Next> {
-        let (next, bundle) = self.inner.process_shares(shares, self.publish_all)?;
+        let (next, bundle) = self.process_shares(shares, false)?;
 
         if let Some(bundle) = bundle {
             board
@@ -130,19 +81,20 @@ where
                 .map_err(|_| NodeError::PublisherError)?;
         }
 
-        Ok(Phase2 { inner: next })
+        Ok(next)
     }
 }
 
-impl<C, B> DKGPhase<C, B, &[BundledResponses]> for Phase2<C>
+impl<C, B, P> DKGPhase<C, B, &[BundledResponses]> for P
 where
     C: Curve,
     B: BoardPublisher<C>,
+    P: Phase2<C>,
 {
-    type Next = Phase2Result<C>;
+    type Next = Phase2Result<C, P::Next>;
 
     fn run(self, board: &mut B, responses: &[BundledResponses]) -> NodeResult<Self::Next> {
-        match self.inner.process_responses(responses) {
+        match self.process_responses(responses) {
             Ok(output) => Ok(Phase2Result::Output(output)),
             Err(next) => {
                 match next {
@@ -157,7 +109,7 @@ where
                                 .map_err(|_| NodeError::PublisherError)?;
                         }
 
-                        Ok(Phase2Result::GoToPhase3(Phase3 { inner: next }))
+                        Ok(Phase2Result::GoToPhase3(next))
                     }
                     Err(e) => Err(NodeError::DKGError(e)),
                 }
@@ -166,22 +118,29 @@ where
     }
 }
 
-impl<C, B> DKGPhase<C, B, &[BundledJustification<C>]> for Phase3<C>
+impl<C, B, P> DKGPhase<C, B, &[BundledJustification<C>]> for P
 where
     C: Curve,
     B: BoardPublisher<C>,
+    P: Phase3<C>,
 {
     type Next = DKGOutput<C>;
 
     fn run(self, _: &mut B, responses: &[BundledJustification<C>]) -> NodeResult<Self::Next> {
-        Ok(self.inner.process_justifications(responses)?)
+        Ok(self.process_justifications(responses)?)
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{primitives::group::Node, test_helpers::InMemoryBoard};
+    use crate::{
+        primitives::{
+            group::{Group, Node},
+            joint_feldman,
+        },
+        test_helpers::InMemoryBoard,
+    };
 
     use threshold_bls::{
         curve::bls12381::{self, PairingCurve as BLS12_381},
@@ -189,15 +148,11 @@ mod tests {
         poly::Idx,
         sig::{BlindThresholdScheme, G1Scheme, G2Scheme, Scheme, SignatureScheme, ThresholdScheme},
     };
-
     // helper to simulate a phase0 where a participant does not publish their
     // shares to the board
-    fn bad_phase0<C: Curve, R: RngCore>(phase0: Phase0<C>, rng: &mut R) -> Phase1<C> {
-        let (next, _) = phase0.inner.encrypt_shares(rng).unwrap();
-        Phase1 {
-            inner: next,
-            publish_all: phase0.publish_all,
-        }
+    fn bad_phase0<C: Curve, R: RngCore, P: Phase0<C>>(phase0: P, rng: &mut R) -> P::Next {
+        let (next, _) = phase0.encrypt_shares(rng).unwrap();
+        next
     }
 
     #[test]
@@ -424,14 +379,12 @@ mod tests {
         n: usize,
         t: usize,
         rng: &mut R,
-    ) -> (InMemoryBoard<C>, Vec<Phase0<C>>)
+    ) -> (InMemoryBoard<C>, Vec<joint_feldman::DKG<C>>)
     where
         C: Curve,
         // We need to bind the Curve's Point and Scalars to the Scheme
         S: Scheme<Public = <C as Curve>::Point, Private = <C as Curve>::Scalar>,
     {
-        let publish_all = false;
-
         // generate a keypair per participant
         let keypairs = (0..n).map(|_| S::keypair(rng)).collect::<Vec<_>>();
 
@@ -448,7 +401,7 @@ mod tests {
         // Create the Phase 0 for each participant
         let phase0s = keypairs
             .iter()
-            .map(|(private, _)| Phase0::new(private.clone(), group.clone(), publish_all).unwrap())
+            .map(|(private, _)| joint_feldman::DKG::new(private.clone(), group.clone()).unwrap())
             .collect::<Vec<_>>();
 
         // Create the board

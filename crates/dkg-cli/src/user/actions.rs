@@ -1,20 +1,18 @@
 use super::opts::{FinalizeOpts, NewOpts, PublishSharesOpts, StateOpts};
-use crate::CLIResult;
 use rand::RngCore;
 use std::{fs::File, io::Write};
 
 use dkg_core::{
-    node::{DKGPhase, Phase0, Phase1, Phase2, Phase2Result, Phase3},
-    primitives::{
-        group::{Group, Node},
-        types::{BundledJustification, BundledResponses, BundledShares, DKGOutput},
-    },
+    primitives::{joint_feldman::*, *},
+    DKGPhase, Phase2Result,
 };
+
+use anyhow::Result;
 
 use threshold_bls::poly::Idx;
 use threshold_bls::{group::Curve, sig::Scheme};
 
-pub fn keygen<S, R>(opts: NewOpts, rng: &mut R) -> CLIResult<()>
+pub fn keygen<S, R>(opts: NewOpts, rng: &mut R) -> Result<()>
 where
     S: Scheme,
     R: RngCore,
@@ -48,7 +46,7 @@ struct OutputJson {
     share: String,
 }
 
-pub fn phase1<S, C, R>(opts: PublishSharesOpts, rng: &mut R) -> CLIResult<()>
+pub fn phase1<S, C, R>(opts: PublishSharesOpts, rng: &mut R) -> Result<()>
 where
     C: Curve,
     // We need to bind the Curve's Point and Scalars to the Scheme
@@ -72,7 +70,7 @@ where
             let pubkey: C::Point = bincode::deserialize(&pubkey)?;
             Ok(Node::<C>::new(i as Idx, pubkey))
         })
-        .collect::<CLIResult<_>>()?;
+        .collect::<Result<_>>()?;
 
     let group = Group {
         threshold: group
@@ -82,7 +80,7 @@ where
         nodes,
     };
 
-    let phase0 = Phase0::new(pk, group, opts.publish_all)?;
+    let phase0 = DKG::new(pk, group)?;
 
     // writes the shares to the board
     let mut board = File::create(opts.output)?;
@@ -94,9 +92,9 @@ where
     Ok(())
 }
 
-pub fn phase2<C: Curve>(opts: StateOpts) -> CLIResult<()> {
+pub fn phase2<C: Curve>(opts: StateOpts) -> Result<()> {
     let phase1_file = File::open(opts.in_phase)?;
-    let phase1: Phase1<C> = bincode::deserialize_from(phase1_file)?;
+    let phase1: DKGWaitingShare<C> = bincode::deserialize_from(phase1_file)?;
     let shares: Vec<BundledShares<C>> = parse_bundle(&opts.input)?;
 
     // writes the responses to the board
@@ -109,9 +107,9 @@ pub fn phase2<C: Curve>(opts: StateOpts) -> CLIResult<()> {
     Ok(())
 }
 
-pub fn try_finalize<C: Curve>(opts: StateOpts) -> CLIResult<()> {
+pub fn try_finalize<C: Curve>(opts: StateOpts) -> Result<()> {
     let phase2_file = File::open(opts.in_phase)?;
-    let phase2: Phase2<C> = bincode::deserialize_from(phase2_file)?;
+    let phase2: DKGWaitingResponse<C> = bincode::deserialize_from(phase2_file)?;
     let responses: Vec<BundledResponses> = parse_bundle(&opts.input)?;
 
     // writes the justifications to the board
@@ -133,9 +131,9 @@ pub fn try_finalize<C: Curve>(opts: StateOpts) -> CLIResult<()> {
     Ok(())
 }
 
-pub fn phase3<C: Curve>(opts: FinalizeOpts) -> CLIResult<()> {
+pub fn phase3<C: Curve>(opts: FinalizeOpts) -> Result<()> {
     let phase3_file = File::open(opts.in_phase)?;
-    let phase3: Phase3<C> = bincode::deserialize_from(phase3_file)?;
+    let phase3: DKGWaitingJustification<C> = bincode::deserialize_from(phase3_file)?;
     let justifications: Vec<BundledJustification<C>> = parse_bundle(&opts.input)?;
 
     // dummy writer instance with `vec!`
@@ -153,7 +151,7 @@ pub fn phase3<C: Curve>(opts: FinalizeOpts) -> CLIResult<()> {
     Ok(())
 }
 
-fn parse_bundle<D: serde::de::DeserializeOwned>(path: &str) -> CLIResult<Vec<D>> {
+fn parse_bundle<D: serde::de::DeserializeOwned>(path: &str) -> Result<Vec<D>> {
     let data: String = std::fs::read_to_string(path)?;
     let data: Vec<String> = serde_json::from_str(&data)?;
     data.into_iter()
@@ -166,7 +164,7 @@ fn parse_bundle<D: serde::de::DeserializeOwned>(path: &str) -> CLIResult<Vec<D>>
         .collect()
 }
 
-fn write_output<C: Curve, W: Write>(writer: W, out: &DKGOutput<C>) -> CLIResult<()> {
+fn write_output<C: Curve, W: Write>(writer: W, out: &DKGOutput<C>) -> Result<()> {
     let output = OutputJson {
         public_key: hex::encode(&bincode::serialize(&out.public.public_key())?),
         public_polynomial: hex::encode(&bincode::serialize(&out.public)?),
