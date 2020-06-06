@@ -1,4 +1,4 @@
-use dkg_cli::user::{
+use dkg_cli::{
     actions::{keygen, phase1, phase2, phase3, try_finalize},
     opts::{Command, DKGOpts},
 };
