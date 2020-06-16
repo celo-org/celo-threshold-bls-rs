@@ -7,6 +7,7 @@ use super::{
     },
 };
 
+use async_trait::async_trait;
 use rand::RngCore;
 use thiserror::Error;
 use threshold_bls::group::Curve;
@@ -34,15 +35,20 @@ pub enum Phase2Result<C: Curve, P: Phase3<C>> {
 type NodeResult<T> = std::result::Result<T, NodeError>;
 
 /// A DKG Phase.
+#[async_trait(?Send)]
 pub trait DKGPhase<C: Curve, B: BoardPublisher<C>, T> {
     /// The next DKG Phase
     type Next;
 
     /// Executes this DKG Phase and publishes the required result to the board.
     /// The `arg` is specific to each phase.
-    fn run(self, board: &mut B, arg: T) -> NodeResult<Self::Next>;
+    async fn run(self, board: &mut B, arg: T) -> NodeResult<Self::Next>
+    where
+        C: 'async_trait,
+        T: 'async_trait;
 }
 
+#[async_trait(?Send)]
 impl<C, B, R, P> DKGPhase<C, B, &mut R> for P
 where
     C: Curve,
@@ -52,11 +58,15 @@ where
 {
     type Next = P::Next;
 
-    fn run(self, board: &mut B, rng: &mut R) -> NodeResult<Self::Next> {
+    async fn run(self, board: &mut B, rng: &'async_trait mut R) -> NodeResult<Self::Next>
+    where
+        C: 'async_trait,
+    {
         let (next, shares) = self.encrypt_shares(rng)?;
         if let Some(sh) = shares {
             board
                 .publish_shares(sh)
+                .await
                 .map_err(|_| NodeError::PublisherError)?;
         }
 
@@ -64,6 +74,7 @@ where
     }
 }
 
+#[async_trait(?Send)]
 impl<C, B, P> DKGPhase<C, B, &[BundledShares<C>]> for P
 where
     C: Curve,
@@ -72,12 +83,20 @@ where
 {
     type Next = P::Next;
 
-    fn run(self, board: &mut B, shares: &[BundledShares<C>]) -> NodeResult<Self::Next> {
+    async fn run(
+        self,
+        board: &mut B,
+        shares: &'async_trait [BundledShares<C>],
+    ) -> NodeResult<Self::Next>
+    where
+        C: 'async_trait,
+    {
         let (next, bundle) = self.process_shares(shares, false)?;
 
         if let Some(bundle) = bundle {
             board
                 .publish_responses(bundle)
+                .await
                 .map_err(|_| NodeError::PublisherError)?;
         }
 
@@ -85,6 +104,7 @@ where
     }
 }
 
+#[async_trait(?Send)]
 impl<C, B, P> DKGPhase<C, B, &[BundledResponses]> for P
 where
     C: Curve,
@@ -93,7 +113,14 @@ where
 {
     type Next = Phase2Result<C, P::Next>;
 
-    fn run(self, board: &mut B, responses: &[BundledResponses]) -> NodeResult<Self::Next> {
+    async fn run(
+        self,
+        board: &mut B,
+        responses: &'async_trait [BundledResponses],
+    ) -> NodeResult<Self::Next>
+    where
+        C: 'async_trait,
+    {
         match self.process_responses(responses) {
             Ok(output) => Ok(Phase2Result::Output(output)),
             Err(next) => {
@@ -106,6 +133,7 @@ where
                         if let Some(justifications) = justifications {
                             board
                                 .publish_justifications(justifications)
+                                .await
                                 .map_err(|_| NodeError::PublisherError)?;
                         }
 
@@ -118,6 +146,7 @@ where
     }
 }
 
+#[async_trait(?Send)]
 impl<C, B, P> DKGPhase<C, B, &[BundledJustification<C>]> for P
 where
     C: Curve,
@@ -126,7 +155,14 @@ where
 {
     type Next = DKGOutput<C>;
 
-    fn run(self, _: &mut B, responses: &[BundledJustification<C>]) -> NodeResult<Self::Next> {
+    async fn run(
+        self,
+        _: &mut B,
+        responses: &'async_trait [BundledJustification<C>],
+    ) -> NodeResult<Self::Next>
+    where
+        C: 'async_trait,
+    {
         Ok(self.process_justifications(responses)?)
     }
 }
@@ -155,17 +191,17 @@ mod tests {
         next
     }
 
-    #[test]
-    fn dkg_sign_e2e() {
+    #[tokio::test]
+    async fn dkg_sign_e2e() {
         let (t, n) = (3, 5);
-        dkg_sign_e2e_curve::<bls12381::Curve, G1Scheme<BLS12_381>>(n, t);
-        dkg_sign_e2e_curve::<bls12381::G2Curve, G2Scheme<BLS12_381>>(n, t);
+        dkg_sign_e2e_curve::<bls12381::Curve, G1Scheme<BLS12_381>>(n, t).await;
+        dkg_sign_e2e_curve::<bls12381::G2Curve, G2Scheme<BLS12_381>>(n, t).await;
 
-        dkg_sign_e2e_curve::<bls12_377::G1Curve, G1Scheme<BLS12_377>>(n, t);
-        dkg_sign_e2e_curve::<bls12_377::G2Curve, G2Scheme<BLS12_377>>(n, t);
+        dkg_sign_e2e_curve::<bls12_377::G1Curve, G1Scheme<BLS12_377>>(n, t).await;
+        dkg_sign_e2e_curve::<bls12_377::G2Curve, G2Scheme<BLS12_377>>(n, t).await;
     }
 
-    fn dkg_sign_e2e_curve<C, S>(n: usize, t: usize)
+    async fn dkg_sign_e2e_curve<C, S>(n: usize, t: usize)
     where
         C: Curve,
         // We need to bind the Curve's Point and Scalars to the Scheme
@@ -177,7 +213,7 @@ mod tests {
         let msg = rand::random::<[u8; 32]>().to_vec();
 
         // executes the DKG state machine and ensures that the keys are generated correctly
-        let outputs = run_dkg::<C, S>(n, t);
+        let outputs = run_dkg::<C, S>(n, t).await;
 
         // blinds the message
         let (token, blinded_msg) = S::blind_msg(&msg[..], &mut rand::thread_rng());
@@ -201,7 +237,7 @@ mod tests {
         S::verify(&pubkey, &msg, &unblinded_sig).unwrap();
     }
 
-    fn run_dkg<C, S>(n: usize, t: usize) -> Vec<DKGOutput<C>>
+    async fn run_dkg<C, S>(n: usize, t: usize) -> Vec<DKGOutput<C>>
     where
         C: Curve,
         // We need to bind the Curve's Point and Scalars to the Scheme
@@ -212,27 +248,27 @@ mod tests {
         let (mut board, phase0s) = setup::<C, S, _>(n, t, rng);
 
         // Phase 1: Publishes shares
-        let phase1s = phase0s
-            .into_iter()
-            .map(|phase0| phase0.run(&mut board, rng).unwrap())
-            .collect::<Vec<_>>();
+        let mut phase1s = Vec::new();
+        for phase0 in phase0s {
+            phase1s.push(phase0.run(&mut board, rng).await.unwrap());
+        }
 
         // Get the shares from the board
         let shares = board.shares.clone();
 
         // Phase2
-        let phase2s = phase1s
-            .into_iter()
-            .map(|phase1| phase1.run(&mut board, &shares).unwrap())
-            .collect::<Vec<_>>();
+        let mut phase2s = Vec::new();
+        for phase1 in phase1s {
+            phase2s.push(phase1.run(&mut board, &shares).await.unwrap());
+        }
 
         // Get the responses from the board
         let responses = board.responses.clone();
 
-        let results = phase2s
-            .into_iter()
-            .map(|phase2| phase2.run(&mut board, &responses).unwrap())
-            .collect::<Vec<_>>();
+        let mut results = Vec::new();
+        for phase2 in phase2s {
+            results.push(phase2.run(&mut board, &responses).await.unwrap());
+        }
 
         // The distributed public key must be the same
         let outputs = results
@@ -247,8 +283,8 @@ mod tests {
         outputs
     }
 
-    #[test]
-    fn not_enough_validator_shares() {
+    #[tokio::test]
+    async fn not_enough_validator_shares() {
         let (t, n) = (6, 10);
         let bad = t + 1;
         let honest = n - bad;
@@ -256,30 +292,28 @@ mod tests {
         let rng = &mut rand::thread_rng();
         let (mut board, phase0s) = setup::<bls12_377::G1Curve, G1Scheme<BLS12_377>, _>(n, t, rng);
 
-        let phase1s = phase0s
-            .into_iter()
-            .enumerate()
-            .map(|(i, phase0)| {
-                if i < bad {
-                    bad_phase0(phase0, rng)
-                } else {
-                    phase0.run(&mut board, rng).unwrap()
-                }
-            })
-            .collect::<Vec<_>>();
+        let mut phase1s = Vec::new();
+        for (i, phase0) in phase0s.into_iter().enumerate() {
+            let phase1 = if i < bad {
+                bad_phase0(phase0, rng)
+            } else {
+                phase0.run(&mut board, rng).await.unwrap()
+            };
+            phase1s.push(phase1);
+        }
 
         // Get the shares from the board
         let shares = board.shares.clone();
 
         // Phase2 fails (only the good ones try to run it)
-        let errs = phase1s
-            .into_iter()
-            .map(|phase1| phase1.run(&mut board, &shares).unwrap_err())
-            .map(|err| match err {
+        let mut errs = Vec::new();
+        for phase1 in phase1s {
+            let err = match phase1.run(&mut board, &shares).await.unwrap_err() {
                 NodeError::DKGError(err) => err,
                 _ => panic!("should get dkg error"),
-            })
-            .collect::<Vec<_>>();
+            };
+            errs.push(err);
+        }
 
         // bad contributors who try to contribute in P2 without contributing in P1
         // will get `honest`
@@ -306,44 +340,40 @@ mod tests {
         }
     }
 
-    #[test]
-    fn dkg_phase3() {
+    #[tokio::test]
+    async fn dkg_phase3() {
         let (t, n) = (5, 8);
         let bad = 2; // >0 people not broadcasting in the start force us to go to phase 3
 
         let rng = &mut rand::thread_rng();
         let (mut board, phase0s) = setup::<bls12_377::G1Curve, G1Scheme<BLS12_377>, _>(n, t, rng);
 
-        let phase1s = phase0s
-            .into_iter()
-            .enumerate()
-            .map(|(i, phase0)| {
-                // some participants decide not to broadcast their share.
-                // this forces us to go to phase 3
-                if i < bad {
-                    bad_phase0(phase0, rng)
-                } else {
-                    phase0.run(&mut board, rng).unwrap()
-                }
-            })
-            .collect::<Vec<_>>();
+        let mut phase1s = Vec::new();
+        for (i, phase0) in phase0s.into_iter().enumerate() {
+            let phase1 = if i < bad {
+                bad_phase0(phase0, rng)
+            } else {
+                phase0.run(&mut board, rng).await.unwrap()
+            };
+            phase1s.push(phase1);
+        }
 
         // Get the shares from the board
         let shares = board.shares.clone();
 
         // Phase2 runs but not enough were published
-        let phase2s = phase1s
-            .into_iter()
-            .map(|phase1| phase1.run(&mut board, &shares).unwrap())
-            .collect::<Vec<_>>();
+        let mut phase2s = Vec::new();
+        for phase1 in phase1s {
+            phase2s.push(phase1.run(&mut board, &shares).await.unwrap());
+        }
 
         // Get the responses from the board
         let responses = board.responses.clone();
 
-        let results = phase2s
-            .into_iter()
-            .map(|phase2| phase2.run(&mut board, &responses).unwrap())
-            .collect::<Vec<_>>();
+        let mut results = Vec::new();
+        for phase2 in phase2s {
+            results.push(phase2.run(&mut board, &responses).await.unwrap());
+        }
 
         let phase3s = results
             .into_iter()
@@ -355,10 +385,10 @@ mod tests {
 
         let justifications = board.justifs.clone();
 
-        let outputs = phase3s
-            .into_iter()
-            .map(|phase3| phase3.run(&mut board, &justifications).unwrap())
-            .collect::<Vec<_>>();
+        let mut outputs = Vec::new();
+        for phase3 in phase3s {
+            outputs.push(phase3.run(&mut board, &justifications).await.unwrap());
+        }
 
         // everyone knows who qualified correctly and who did not
         assert!(is_all_same(outputs.iter().map(|output| &output.qual)));
