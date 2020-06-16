@@ -1,4 +1,5 @@
 use ethers::{contract::Abigen, utils::Solc};
+use std::{fs::File, io::Write};
 
 const PATH: &str = "../../solidity/contracts/DKG.sol";
 // Generates the bindings under `src/`
@@ -8,11 +9,13 @@ fn main() {
 
     // compile the DKG contract (requires solc on the builder's system)
     let contracts = Solc::new(PATH).build_raw().expect("could not compile");
-    let abi = contracts
-        .get("DKG")
-        .expect("contract not found")
-        .abi
-        .clone();
+    let contract = contracts.get("DKG").expect("contract not found");
+
+    let abi = contract.abi.clone();
+
+    let mut f = File::create("dkg.bin").expect("could not create DKG bytecode file");
+    f.write_all(contract.bin.as_bytes())
+        .expect("could not write DKG bytecode to the file");
 
     // generate type-safe bindings to it
     let bindings = Abigen::new("DKG", abi)

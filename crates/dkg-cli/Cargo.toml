@@ -20,6 +20,10 @@ anyhow = "1.0.31"
 
 ethers = { path = "../../../../ethereum/ethers/ethers", features = ["celo"] }
 futures = "0.3.5"
+async-trait = "0.1.35"
+tokio = { version = "0.2.21", features = ["macros"] }
+rustc-hex = "2.1.0"
+clt = "0.0.6"
 
 [build-dependencies]
 ethers = { path = "../../../../ethereum/ethers/ethers", features = ["celo", "abigen"] }
