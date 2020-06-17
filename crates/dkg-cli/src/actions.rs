@@ -1,4 +1,4 @@
-use super::opts::{FinalizeOpts, NewOpts, PublishSharesOpts, StateOpts};
+use crate::opts::{FinalizeOpts, NewOpts, PublishSharesOpts, StateOpts};
 use rand::RngCore;
 use std::{fs::File, io::Write};
 
