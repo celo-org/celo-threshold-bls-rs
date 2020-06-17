@@ -18,7 +18,7 @@ serde_json = "1.0.53"
 hex = "0.4.2"
 anyhow = "1.0.31"
 
-ethers = { path = "../../../../ethereum/ethers/ethers", features = ["celo"] }
+ethers = { git = "https://github.com/gakonst/ethers-rs", features = ["celo"] }
 futures = "0.3.5"
 async-trait = "0.1.35"
 tokio = { version = "0.2.21", features = ["macros"] }
@@ -26,4 +26,4 @@ rustc-hex = "2.1.0"
 clt = "0.0.6"
 
 [build-dependencies]
-ethers = { path = "../../../../ethereum/ethers/ethers", features = ["celo", "abigen"] }
+ethers = { git = "https://github.com/gakonst/ethers-rs", features = ["celo", "abigen"] }
