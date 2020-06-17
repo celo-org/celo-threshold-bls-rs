@@ -64,7 +64,7 @@ pub async fn deploy(opts: DeployOpts) -> Result<()> {
     Ok(())
 }
 
-pub async fn whitelist(opts: WhitelistOpts) -> Result<()> {
+pub async fn allow(opts: AllowlistOpts) -> Result<()> {
     let provider = Provider::<Http>::try_from(opts.node_url.as_str())?;
     let client = opts.private_key.parse::<Wallet>()?.connect(provider);
 
@@ -73,11 +73,11 @@ pub async fn whitelist(opts: WhitelistOpts) -> Result<()> {
     let mut tx_futs = Vec::new();
     for addr in opts.address {
         let tx = contract
-            .whitelist(addr)
+            .allowlist(addr)
             .block(BlockNumber::Pending)
             .send()
             .await?;
-        println!("Sent whitelist tx for {:?} (hash: {:?})", addr, *tx);
+        println!("Sent `allow` tx for {:?} (hash: {:?})", addr, *tx);
         tx_futs.push(tx);
     }
 
@@ -137,9 +137,9 @@ where
     }
 
     if !clt::confirm(
-        "\nDoes the above group look good to you?\n",
+        "\nDoes the above group look good to you?",
         false,
-        "",
+        "\n",
         true,
     ) {
         return Err(anyhow::anyhow!("User rejected group choice."));

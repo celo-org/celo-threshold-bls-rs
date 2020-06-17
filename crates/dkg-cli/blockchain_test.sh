@@ -34,8 +34,8 @@ ADDR=$(cargo run --bin dkg-cli deploy \
 # strip the unused info
 ADDR=${ADDR#"Contract deployed at: 0x"}
 
-# The admin whitelists all addresses
-cargo run --bin dkg-cli -- whitelist \
+# The admin allows all addresses
+cargo run --bin dkg-cli -- allow \
     -n $NODE_URL \
     -p $(private_key $ACC1) \
     -c $ADDR \

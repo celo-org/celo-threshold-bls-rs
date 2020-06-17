@@ -22,7 +22,7 @@ async fn main() -> anyhow::Result<()> {
         Command::Run(opts) => run::<Scheme, Curve, _>(opts, rng).await?,
         Command::Start(opts) => start(opts).await?,
         Command::Deploy(opts) => deploy(opts).await?,
-        Command::Whitelist(opts) => whitelist(opts).await?,
+        Command::Allow(opts) => allow(opts).await?,
     };
 
     Ok(())

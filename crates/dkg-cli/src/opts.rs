@@ -24,8 +24,8 @@ pub enum Command {
     #[options(help = "start the DKG")]
     Start(StartOpts),
 
-    #[options(help = "whitelist 1 or more DKG participants")]
-    Whitelist(WhitelistOpts),
+    #[options(help = "allow 1 or more DKG participants")]
+    Allow(AllowlistOpts),
 }
 
 #[derive(Debug, Options, Clone)]
@@ -93,7 +93,7 @@ pub struct StartOpts {
 }
 
 #[derive(Debug, Options, Clone)]
-pub struct WhitelistOpts {
+pub struct AllowlistOpts {
     help: bool,
 
     #[options(help = "the celo node's endpoint")]
@@ -104,7 +104,7 @@ pub struct WhitelistOpts {
     )]
     pub private_key: String,
 
-    #[options(help = "the addresses to whitelist for the DKG")]
+    #[options(help = "the addresses to allow for the DKG")]
     pub address: Vec<Address>,
 
     #[options(help = "the DKG contract's address")]
