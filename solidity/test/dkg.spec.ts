@@ -32,24 +32,24 @@ describe('DKG', () => {
 
     beforeEach(async () => {
         dkg = await deployContract(deployer, DKG, [THRESHOLD, PHASE_DURATION]);
-        await dkg.whitelist(participants[0].address)
-        await dkg.whitelist(participants[1].address)
+        await dkg.allowlist(participants[0].address)
+        await dkg.allowlist(participants[1].address)
     })
 
     describe('Whitelist', async () => {
-        it('only owner can whitelist', async () => {
-            // non-owner user tries to whitelist a sybil copy of them
+        it('only owner can allowlist', async () => {
+            // non-owner user tries to allowlist a sybil copy of them
             dkg = dkg.connect(participants[0]);
-            await expect(dkg.whitelist(participants[2].address)).revertedWith("only owner may whitelist users")
+            await expect(dkg.allowlist(participants[2].address)).revertedWith("only owner may allowlist users")
         })
 
-        it('owner cannot whitelist twice', async () => {
-            await expect(dkg.whitelist(participants[0].address)).revertedWith("user is already whitelisted")
+        it('owner cannot allowlist twice', async () => {
+            await expect(dkg.allowlist(participants[0].address)).revertedWith("user is already allowlisted")
         })
 
-        it('cannot whitelist once started', async () => {
+        it('cannot allowlist once started', async () => {
             await dkg.start()
-            await expect(dkg.whitelist(participants[2].address)).revertedWith("DKG has already started")
+            await expect(dkg.allowlist(participants[2].address)).revertedWith("DKG has already started")
         });
     })
 
@@ -59,23 +59,23 @@ describe('DKG', () => {
             await dkg.register(data)
         })
 
-        it('participants cannot register if not whitelisted', async () => {
+        it('participants cannot register if not allowlisted', async () => {
             dkg = dkg.connect(participants[2]);
-            await expect(dkg.register(data)).revertedWith("user is not whitelisted or has already registered")
+            await expect(dkg.register(data)).revertedWith("user is not allowlisted or has already registered")
         })
 
         it('participants cannot register twice', async () => {
             dkg = dkg.connect(participants[0]);
             await dkg.register(data)
-            await expect(dkg.register(data)).revertedWith("user is not whitelisted or has already registered")
+            await expect(dkg.register(data)).revertedWith("user is not allowlisted or has already registered")
 
             // user cannot try to inflate the registrations array with 0-length registrations
-            await expect(dkg.register("0x")).revertedWith("user is not whitelisted or has already registered")
+            await expect(dkg.register("0x")).revertedWith("user is not allowlisted or has already registered")
         })
 
         it('cannot register once started', async () => {
-            // user is whitelisted but they dont' register in time
-            await dkg.whitelist(participants[2].address)
+            // user is allowlisted but they dont' register in time
+            await dkg.allowlist(participants[2].address)
             await dkg.start()
 
             dkg = dkg.connect(participants[2]);
