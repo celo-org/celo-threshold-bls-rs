@@ -14,13 +14,6 @@ jobs:
               yarn build
               yarn test
 
-  build:
-    docker:
-      - image: circleci/rust:latest
-    steps:
-      - checkout
-      - run: cargo build --all
-
   cross-ios:
     macos:
       xcode: 11.4.0
@@ -115,7 +108,6 @@ workflows:
   build_and_test:
     jobs:
       - contracts
-      - build
       - test
       - wasm
       - cross-android
