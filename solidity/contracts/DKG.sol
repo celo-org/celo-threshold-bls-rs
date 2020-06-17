@@ -64,17 +64,17 @@ contract DKG {
         startBlock = block.number;
     }
 
-    /// The administrator must whitelist an addrss for participation in the DKG
-    function whitelist(address user) external onlyWhenNotStarted {
-        require(msg.sender == owner, "only owner may whitelist users");
+    /// The administrator must allowlist an addrss for participation in the DKG
+    function allowlist(address user) external onlyWhenNotStarted {
+        require(msg.sender == owner, "only owner may allowlist users");
 
-        require(userState[user] == UserState.CannotRegister, "user is already whitelisted");
+        require(userState[user] == UserState.CannotRegister, "user is already allowlisted");
         userState[user] = UserState.CanRegister;
     }
 
     /// This function ties a DKG participant's on-chain address with their BLS Public Key
     function register(bytes calldata blsPublicKey) external onlyWhenNotStarted {
-        require(userState[msg.sender] == UserState.CanRegister, "user is not whitelisted or has already registered");
+        require(userState[msg.sender] == UserState.CanRegister, "user is not allowlisted or has already registered");
 
         participants.push(msg.sender);
         keys[msg.sender] = blsPublicKey;
