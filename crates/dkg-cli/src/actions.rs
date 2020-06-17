@@ -143,7 +143,7 @@ where
     let nodes = group
         .1
         .into_iter()
-        .filter(|pubkey| pubkey.len() > 0) // skip users that did not register
+        .filter(|pubkey| !pubkey.is_empty()) // skip users that did not register
         .enumerate()
         .map(|(i, pubkey)| {
             let pubkey: C::Point = bincode::deserialize(&pubkey)?;
@@ -244,7 +244,7 @@ async fn wait_for_phase<P: JsonRpcClient, S: Signer>(
 fn parse_bundle<D: serde::de::DeserializeOwned>(bundle: &[Vec<u8>]) -> Result<Vec<D>> {
     bundle
         .iter()
-        .filter(|item| item.len() > 0) // filter out empty items
+        .filter(|item| !item.is_empty()) // filter out empty items
         .map(|item| Ok(bincode::deserialize::<D>(&item)?))
         .collect()
 }
