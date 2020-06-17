@@ -52,7 +52,16 @@ jobs:
           command: |
               cargo install cargo-audit
               rustup component add clippy
-      - run: cargo test --all
+              mkdir -p "$HOME/bin"
+              wget -q https://github.com/ethereum/solidity/releases/download/v0.6.6/solc-static-linux -O $HOME/bin/solc
+              chmod u+x "$HOME/bin/solc"
+              export PATH=$HOME/bin:$PATH
+              solc --version
+      - run:
+          name: Tests
+          command: |
+              export PATH=$HOME/bin:$PATH
+              cargo test --all
       - run:
           name: Check style
           command: |

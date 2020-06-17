@@ -136,7 +136,7 @@ where
         println!("{:?} -> {}", address, key)
     }
 
-    if !clt::confirm("\nDoes the above group look good to you?", false, "", true) {
+    if !clt::confirm("\nDoes the above group look good to you?\n", false, "", true) {
         return Err(anyhow::anyhow!("User rejected group choice."))
     }
 
