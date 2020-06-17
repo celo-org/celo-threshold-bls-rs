@@ -1,3 +1,4 @@
+use ethers::types::Address;
 use gumdrop::Options;
 use std::default::Default;
 
@@ -11,85 +12,101 @@ pub struct DKGOpts {
 // The supported commands
 #[derive(Debug, Options, Clone)]
 pub enum Command {
-    #[options(help = "creates a new challenge for the ceremony")]
-    New(NewOpts),
+    #[options(help = "creates a new Celo keypair which you must fund to participate in the DKG")]
+    Keygen(KeygenOpts),
 
-    #[options(help = "generates your shares and the next phase file")]
-    PublishShares(PublishSharesOpts),
+    #[options(help = "runs the DKG and produces your share")]
+    Run(DKGConfig),
 
-    #[options(help = "generates your responses and the next phase file")]
-    PublishResponses(StateOpts),
+    #[options(help = "deploy the DKG smart contract")]
+    Deploy(DeployOpts),
 
-    #[options(help = "tries to generate the shares/threshold pubkey, or prompts to go to phase 3")]
-    TryFinalize(StateOpts),
+    #[options(help = "start the DKG")]
+    Start(StartOpts),
+
+    #[options(help = "allow 1 or more DKG participants")]
+    Allow(AllowlistOpts),
+}
+
+#[derive(Debug, Options, Clone)]
+pub struct KeygenOpts {
+    help: bool,
+
+    #[options(help = "path to the file where the keys will be written (stdout if none provided)")]
+    pub path: Option<String>,
+}
+
+#[derive(Debug, Options, Clone)]
+pub struct DKGConfig {
+    help: bool,
+
+    #[options(help = "the celo node's endpoint")]
+    pub node_url: String,
 
     #[options(
-        help = "using the justifications, it will generate the shares/threshold pubkey, or return an error"
+        help = "path to your celo private key (hint: use the `keygen` command to generate a new one if you don't have one)"
     )]
-    Finalize(FinalizeOpts),
-}
-
-#[derive(Debug, Options, Clone)]
-pub struct NewOpts {
-    help: bool,
-
-    #[options(help = "path to the file where the private key will be written")]
     pub private_key: String,
 
-    #[options(help = "path to the file where the public key and the index will be written")]
-    pub public_key: String,
-}
-
-#[derive(Debug, Options, Clone)]
-pub struct PublishSharesOpts {
-    help: bool,
-
-    #[options(help = "path to the file where the private key will be written")]
-    pub private_key: String,
-
-    #[options(help = "path to the file where the public key and the index will be written")]
-    pub group: String,
-
-    #[options(help = "the file where the data for the next phase will be written")]
-    pub out_phase: String,
-
-    #[options(help = "the shares will be written to this file")]
-    pub output: String,
+    #[options(help = "the DKG contract's address")]
+    pub contract_address: Address,
 
     #[options(
-        help = "publish all responses or just the complaints? Defaults to publishing complaints only",
-        default = "false"
+        help = "the path where the resulting of the DKG will be stored (stdout if none provided)"
     )]
-    pub publish_all: bool,
+    pub output_path: Option<String>,
 }
 
 #[derive(Debug, Options, Clone)]
-pub struct StateOpts {
+pub struct DeployOpts {
     help: bool,
 
-    #[options(help = "the file where the data for the current phase will be read from")]
-    pub in_phase: String,
+    #[options(help = "the celo node's endpoint")]
+    pub node_url: String,
 
-    #[options(help = "the file where the data for the next phase will be written")]
-    pub out_phase: String,
+    #[options(
+        help = "path to your celo private key (hint: use the `keygen` command to generate a new one if you don't have one)"
+    )]
+    pub private_key: String,
 
-    #[options(help = "the input will be written read from this file")]
-    pub input: String,
+    #[options(help = "the minimum number of DKG participants required")]
+    pub threshold: usize,
 
-    #[options(help = "the output will be written to this file")]
-    pub output: String,
+    #[options(help = "the number of blocks per phase")]
+    pub phase_duration: usize,
 }
 
 #[derive(Debug, Options, Clone)]
-pub struct FinalizeOpts {
+pub struct StartOpts {
     help: bool,
 
-    #[options(help = "the file where the data for the current phase will be read from")]
-    pub in_phase: String,
+    #[options(help = "the celo node's endpoint")]
+    pub node_url: String,
 
-    #[options(help = "the input will be written read from this file")]
-    pub input: String,
+    #[options(
+        help = "path to your celo private key (hint: use the `keygen` command to generate a new one if you don't have one)"
+    )]
+    pub private_key: String,
 
-    #[options(help = "the output will be written to this file")]
-    pub output: String,
+    #[options(help = "the DKG contract's address")]
+    pub contract_address: Address,
+}
+
+#[derive(Debug, Options, Clone)]
+pub struct AllowlistOpts {
+    help: bool,
+
+    #[options(help = "the celo node's endpoint")]
+    pub node_url: String,
+
+    #[options(
+        help = "path to your celo private key (hint: use the `keygen` command to generate a new one if you don't have one)"
+    )]
+    pub private_key: String,
+
+    #[options(help = "the addresses to allow for the DKG")]
+    pub address: Vec<Address>,
+
+    #[options(help = "the DKG contract's address")]
+    pub contract_address: Address,
 }

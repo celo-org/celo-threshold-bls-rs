@@ -10,7 +10,7 @@ use std::marker::PhantomData;
 /// Two implementations are for Scalar which forms a ring so RHS is the same
 /// and Point which can be multiplied by a scalar of its prime field.
 pub trait Element:
-    Clone + Display + Debug + Eq + Serialize + for<'a> Deserialize<'a> + PartialEq
+    Clone + Display + Debug + Eq + Serialize + for<'a> Deserialize<'a> + PartialEq + Send + Sync
 {
     /// The right-hand-side argument for multiplication
     type RHS;
@@ -56,7 +56,7 @@ pub trait Point: Element {
 
 /// A group holds functionalities to create scalar and points related; it is
 /// similar to the Engine definition, just much more simpler.
-pub trait Curve: Clone + Debug {
+pub trait Curve: Clone + Debug + Send + Sync {
     /// The curve's scalar
     type Scalar: Scalar<RHS = Self::Scalar>;
 

@@ -1,5 +1,6 @@
 use super::board::BoardPublisher;
 use super::primitives::types::{BundledJustification, BundledResponses, BundledShares};
+use async_trait::async_trait;
 use threshold_bls::group::Curve;
 
 /// An in-memory board used for testing
@@ -20,23 +21,33 @@ impl<C: Curve> InMemoryBoard<C> {
     }
 }
 
+#[async_trait(?Send)]
 impl<C: Curve> BoardPublisher<C> for InMemoryBoard<C> {
     type Error = ();
 
-    fn publish_shares(&mut self, bundle: BundledShares<C>) -> Result<(), Self::Error> {
+    async fn publish_shares(&mut self, bundle: BundledShares<C>) -> Result<(), Self::Error>
+    where
+        C: 'async_trait,
+    {
         self.shares.push(bundle);
         Ok(())
     }
 
-    fn publish_responses(&mut self, bundle: BundledResponses) -> Result<(), Self::Error> {
+    async fn publish_responses(&mut self, bundle: BundledResponses) -> Result<(), Self::Error>
+    where
+        C: 'async_trait,
+    {
         self.responses.push(bundle);
         Ok(())
     }
 
-    fn publish_justifications(
+    async fn publish_justifications(
         &mut self,
         bundle: BundledJustification<C>,
-    ) -> Result<(), Self::Error> {
+    ) -> Result<(), Self::Error>
+    where
+        C: 'async_trait,
+    {
         self.justifs.push(bundle);
         Ok(())
     }

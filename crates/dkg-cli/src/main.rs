@@ -1,14 +1,12 @@
-use dkg_cli::{
-    actions::{keygen, phase1, phase2, phase3, try_finalize},
-    opts::{Command, DKGOpts},
-};
+use dkg_cli::{actions::*, opts::*};
 
 use gumdrop::Options;
 use std::process;
 
 use threshold_bls::schemes::bls12_377::{G2Curve as Curve, G2Scheme as Scheme};
 
-fn main() {
+#[tokio::main]
+async fn main() -> anyhow::Result<()> {
     let opts = DKGOpts::parse_args_default_or_exit();
 
     let command = opts.command.unwrap_or_else(|| {
@@ -17,12 +15,15 @@ fn main() {
         process::exit(2)
     });
 
+    let rng = &mut rand::thread_rng();
+
     match command {
-        Command::New(opts) => keygen::<Scheme, _>(opts, &mut rand::thread_rng()),
-        Command::PublishShares(opts) => phase1::<Scheme, Curve, _>(opts, &mut rand::thread_rng()),
-        Command::PublishResponses(opts) => phase2::<Curve>(opts),
-        Command::TryFinalize(opts) => try_finalize::<Curve>(opts),
-        Command::Finalize(opts) => phase3::<Curve>(opts),
-    }
-    .expect("command failed");
+        Command::Keygen(opts) => keygen(opts, rng)?,
+        Command::Run(opts) => run::<Scheme, Curve, _>(opts, rng).await?,
+        Command::Start(opts) => start(opts).await?,
+        Command::Deploy(opts) => deploy(opts).await?,
+        Command::Allow(opts) => allow(opts).await?,
+    };
+
+    Ok(())
 }
