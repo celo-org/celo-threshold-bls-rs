@@ -92,7 +92,7 @@ describe('DKG', () => {
 
     })
 
-    it.only('e2e', async() => {
+    it('e2e', async() => {
         const pubkey1 = "0x123";
         await dkg.connect(participants[0]).register(pubkey1)
 
