@@ -109,7 +109,7 @@ where
 {
     let provider = Provider::<Http>::try_from(opts.node_url.as_str())?;
     let client = opts.private_key.parse::<Wallet>()?.connect(provider);
-    let mut dkg = DKGContract::new(opts.contract_address, client);
+    let dkg = DKGContract::new(opts.contract_address, client);
 
     // 1. Generate the keys
     let (private_key, public_key) = S::keypair(rng);
@@ -163,10 +163,27 @@ where
     };
 
     // Instantiate the DKG with the group info
-    println!("Calculating and broadcasting our shares...");
     let phase0 = DKG::new(private_key, group)?;
 
+    run_dkg(dkg, phase0, rng, opts.output_path).await
+}
+
+// Shared helper for running the DKG in both normal and re-sharing mode
+async fn run_dkg<P, C, R>(
+    mut dkg: DKGContract<Http, Wallet>,
+    phase0: P,
+    rng: &mut R,
+    output_path: Option<String>,
+) -> Result<()>
+where
+    C: Curve,
+    // We need to bind the Curve's Point and Scalars to the Scheme
+    // S: Scheme<Public = <C as Curve>::Point, Private = <C as Curve>::Scalar>,
+    P: Phase0<C>,
+    R: RngCore,
+{
     // Run Phase 1 and publish to the chain
+    println!("Calculating and broadcasting our shares...");
     let phase1 = phase0.run(&mut dkg, rng).await?;
 
     // Wait for Phase 2
@@ -204,7 +221,7 @@ where
     match result {
         Ok(output) => {
             println!("Success. Your share and threshold pubkey are ready.");
-            if let Some(path) = opts.output_path {
+            if let Some(path) = output_path {
                 let file = File::create(path)?;
                 write_output(&file, &output)?;
             } else {
