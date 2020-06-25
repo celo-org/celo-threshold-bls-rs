@@ -26,7 +26,7 @@ describe('DKG', () => {
 
     // Each phase lasts 30 blocks
     const PHASE_DURATION = 30;
-    const THRESHOLD = 3;
+    const THRESHOLD = 2;
 
     let dkg: ethers.Contract;
 
@@ -92,7 +92,7 @@ describe('DKG', () => {
 
     })
 
-    it('e2e', async() => {
+    it.only('e2e', async() => {
         const pubkey1 = "0x123";
         await dkg.connect(participants[0]).register(pubkey1)
 
@@ -137,6 +137,19 @@ describe('DKG', () => {
 
         await timeTravel(PHASE_DURATION)
         await expect(dkg.inPhase()).revertedWith("VM Exception while processing transaction: revert DKG Ended")
+
+        // the result of the DKG should be published by participants so that
+        // resharing participants can instantiate their process
+        const thresholdPubkey = "0x1234";
+        await dkg.connect(participants[0]).submitPublicPolynomial(thresholdPubkey)
+        // cannot publish a pubkey twice
+        await expect(dkg.connect(participants[0]).submitPublicPolynomial(thresholdPubkey))
+            .revertedWith("you have already published your publicPolynomial or haven't registered")
+        await dkg.connect(participants[1]).submitPublicPolynomial(thresholdPubkey)
+
+        // now that we've hit the threshold, the pubkey is set
+        const gotPubKey = await dkg.publicPolynomial()
+        expect(gotPubKey).to.equal(thresholdPubkey)
     })
 
     describe('Shares', async () => {

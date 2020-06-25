@@ -7,7 +7,8 @@ contract DKG {
     enum UserState {
         CannotRegister,
         CanRegister,
-        Registered
+        Registered,
+        SubmittedPoly
     }
 
     /// Mapping of Ethereum Address => UserState for the actions a user can do
@@ -39,6 +40,12 @@ contract DKG {
 
     /// The owner of the DKG is the address which can call the `start` function
     address public owner;
+
+    mapping (bytes32 => uint256) submittedPolynomials;
+
+    /// The public polynomial which was produced from the DKG
+    bytes public publicPolynomial;
+
 
     /// A registered participant is one whose pubkey's length > 0
     modifier onlyRegistered() {
@@ -109,6 +116,24 @@ contract DKG {
             justifications[msg.sender] = value;
         } else {
             revert("DKG has ended");
+        }
+    }
+
+    /// Participant submits their public polynomial. After `t` participants have submitted the
+    /// same polynomial, the contract updates its storage with that value
+    function submitPublicPolynomial(bytes calldata _publicPolynomial) external {
+        require(userState[msg.sender] == UserState.Registered, "you have already published your publicPolynomial or haven't registered");
+        require(publicPolynomial.length == 0, "public key has already been set");
+        // disallow the user from submitting their publicPolynomial again
+        userState[msg.sender] = UserState.SubmittedPoly;
+
+        bytes32 key = keccak256(abi.encodePacked(_publicPolynomial));
+        if (submittedPolynomials[key] + 1 == THRESHOLD) {
+            // if `t` public keys have been submitted, store the threshold publicPolynomial
+            publicPolynomial = _publicPolynomial;
+        } else {
+            // otherwise increment the number of votes
+            submittedPolynomials[key] += 1;
         }
     }
 
