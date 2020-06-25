@@ -213,7 +213,9 @@ mod tests {
         let msg = rand::random::<[u8; 32]>().to_vec();
 
         // executes the DKG state machine and ensures that the keys are generated correctly
-        let outputs = run_dkg::<C, S>(n, t).await;
+        let rng = &mut rand::thread_rng();
+        let (board, phase0s) = setup::<C, S, _>(n, t, rng);
+        let outputs = run_dkg(board, phase0s, rng).await;
 
         // blinds the message
         let (token, blinded_msg) = S::blind_msg(&msg[..], &mut rand::thread_rng());
@@ -237,16 +239,16 @@ mod tests {
         S::verify(&pubkey, &msg, &unblinded_sig).unwrap();
     }
 
-    async fn run_dkg<C, S>(n: usize, t: usize) -> Vec<DKGOutput<C>>
+    async fn run_dkg<C, P, R>(
+        mut board: InMemoryBoard<C>,
+        phase0s: Vec<P>,
+        rng: &mut R,
+    ) -> Vec<DKGOutput<C>>
     where
         C: Curve,
-        // We need to bind the Curve's Point and Scalars to the Scheme
-        S: Scheme<Public = <C as Curve>::Point, Private = <C as Curve>::Scalar>,
+        P: Phase0<C>,
+        R: RngCore,
     {
-        let rng = &mut rand::thread_rng();
-
-        let (mut board, phase0s) = setup::<C, S, _>(n, t, rng);
-
         // Phase 1: Publishes shares
         let mut phase1s = Vec::new();
         for phase0 in phase0s {
@@ -344,10 +346,28 @@ mod tests {
     async fn dkg_phase3() {
         let (t, n) = (5, 8);
         let bad = 2; // >0 people not broadcasting in the start force us to go to phase 3
-
         let rng = &mut rand::thread_rng();
-        let (mut board, phase0s) = setup::<bls12_377::G1Curve, G1Scheme<BLS12_377>, _>(n, t, rng);
+        let (board, phase0s) = setup::<bls12_377::G1Curve, G1Scheme<BLS12_377>, _>(n, t, rng);
+        let outputs = run_dkg_phase3(board, phase0s, rng, bad).await;
 
+        // the first people must have a different public key from the others
+        let pubkey = &outputs[bad].public;
+        for output in &outputs[..bad] {
+            assert_ne!(&output.public, pubkey);
+        }
+    }
+
+    async fn run_dkg_phase3<C, P, R>(
+        mut board: InMemoryBoard<C>,
+        phase0s: Vec<P>,
+        rng: &mut R,
+        bad: usize,
+    ) -> Vec<DKGOutput<C>>
+    where
+        C: Curve + PartialEq,
+        P: Phase0<C>,
+        R: RngCore,
+    {
         let mut phase1s = Vec::new();
         for (i, phase0) in phase0s.into_iter().enumerate() {
             let phase1 = if i < bad {
@@ -398,11 +418,7 @@ mod tests {
             outputs[bad..].iter().map(|output| &output.public)
         ));
 
-        // the first people must have a different public key from the others
-        let pubkey = &outputs[bad].public;
-        for output in &outputs[..bad] {
-            assert_ne!(&output.public, pubkey);
-        }
+        outputs
     }
 
     fn setup<C, S, R: rand::RngCore>(
