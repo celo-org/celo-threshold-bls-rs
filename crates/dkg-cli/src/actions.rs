@@ -54,7 +54,7 @@ pub async fn deploy(opts: DeployOpts) -> Result<()> {
     let client = opts.private_key.parse::<Wallet>()?.connect(provider);
     let abi = DKG_ABI.clone();
 
-    let factory = ContractFactory::new(abi, Bytes::from(bytecode), &client);
+    let factory = ContractFactory::new(abi, Bytes::from(bytecode), client);
     let contract = factory
         .deploy((opts.threshold as u64, opts.phase_duration as u64))?
         .send()
@@ -68,7 +68,7 @@ pub async fn allow(opts: AllowlistOpts) -> Result<()> {
     let provider = Provider::<Http>::try_from(opts.node_url.as_str())?;
     let client = opts.private_key.parse::<Wallet>()?.connect(provider);
 
-    let contract = DKGContract::new(opts.contract_address, &client);
+    let contract = DKGContract::new(opts.contract_address, client);
 
     let mut tx_futs = Vec::new();
     for addr in opts.address {
@@ -77,8 +77,8 @@ pub async fn allow(opts: AllowlistOpts) -> Result<()> {
             .block(BlockNumber::Pending)
             .send()
             .await?;
-        println!("Sent `allow` tx for {:?} (hash: {:?})", addr, *tx);
-        tx_futs.push(tx);
+        println!("Sent `allow` tx for {:?} (hash: {:?})", addr, tx);
+        tx_futs.push(contract.client().pending_transaction(tx));
     }
 
     // Await them all
@@ -91,10 +91,11 @@ pub async fn start(opts: StartOpts) -> Result<()> {
     let provider = Provider::<Http>::try_from(opts.node_url.as_str())?;
     let client = opts.private_key.parse::<Wallet>()?.connect(provider);
 
-    let contract = DKGContract::new(opts.contract_address, &client);
+    let contract = DKGContract::new(opts.contract_address, client);
 
     // Submit the tx and wait for the confirmation
-    contract.start().send().await?.await?;
+    let tx_hash = contract.start().send().await?;
+    let _tx_receipt = contract.client().pending_transaction(tx_hash).await?;
 
     Ok(())
 }
@@ -108,7 +109,7 @@ where
 {
     let provider = Provider::<Http>::try_from(opts.node_url.as_str())?;
     let client = opts.private_key.parse::<Wallet>()?.connect(provider);
-    let mut dkg = DKGContract::new(opts.contract_address, &client);
+    let mut dkg = DKGContract::new(opts.contract_address, client);
 
     // 1. Generate the keys
     let (private_key, public_key) = S::keypair(rng);
@@ -117,7 +118,7 @@ where
     println!("Registering...");
     let public_key_serialized = bincode::serialize(&public_key)?;
     let pending_tx = dkg.register(public_key_serialized).send().await?;
-    let _receipt = pending_tx.await?;
+    let _tx_receipt = dkg.pending_transaction(pending_tx).await?;
 
     // Wait for Phase 1
     wait_for_phase(&dkg, 1).await?;
@@ -226,7 +227,7 @@ struct OutputJson {
 }
 
 async fn wait_for_phase<P: JsonRpcClient, S: Signer>(
-    dkg: &DKGContract<'_, P, S>,
+    dkg: &DKGContract<P, S>,
     num: u64,
 ) -> Result<(), ContractError> {
     println!("Waiting for Phase {} to start", num);

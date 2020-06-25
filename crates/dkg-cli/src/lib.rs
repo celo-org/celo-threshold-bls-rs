@@ -28,7 +28,7 @@ pub enum DKGContractError {
 }
 
 #[async_trait(?Send)]
-impl<'a, C: Curve, P: JsonRpcClient, S: Signer> BoardPublisher<C> for DKG<'a, P, S> {
+impl<C: Curve, P: JsonRpcClient, S: Signer> BoardPublisher<C> for DKG<P, S> {
     type Error = DKGContractError;
 
     async fn publish_shares(&mut self, shares: BundledShares<C>) -> Result<(), Self::Error>
@@ -37,7 +37,7 @@ impl<'a, C: Curve, P: JsonRpcClient, S: Signer> BoardPublisher<C> for DKG<'a, P,
     {
         let serialized = bincode::serialize(&shares)?;
         let pending_tx = self.publish(serialized).send().await?;
-        let _tx_receipt = pending_tx.await?;
+        let _tx_receipt = self.pending_transaction(pending_tx).await?;
         Ok(())
     }
 
@@ -47,7 +47,7 @@ impl<'a, C: Curve, P: JsonRpcClient, S: Signer> BoardPublisher<C> for DKG<'a, P,
     {
         let serialized = bincode::serialize(&responses)?;
         let pending_tx = self.publish(serialized).send().await?;
-        let _tx_receipt = pending_tx.await?;
+        let _tx_receipt = self.pending_transaction(pending_tx).await?;
         Ok(())
     }
 
@@ -60,7 +60,7 @@ impl<'a, C: Curve, P: JsonRpcClient, S: Signer> BoardPublisher<C> for DKG<'a, P,
     {
         let serialized = bincode::serialize(&justifications)?;
         let pending_tx = self.publish(serialized).send().await?;
-        let _tx_receipt = pending_tx.await?;
+        let _tx_receipt = self.pending_transaction(pending_tx).await?;
         Ok(())
     }
 }
