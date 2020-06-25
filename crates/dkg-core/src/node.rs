@@ -173,7 +173,7 @@ mod tests {
     use crate::{
         primitives::{
             group::{Group, Node},
-            joint_feldman,
+            joint_feldman, resharing,
         },
         test_helpers::InMemoryBoard,
     };
@@ -199,6 +199,75 @@ mod tests {
 
         dkg_sign_e2e_curve::<bls12_377::G1Curve, G1Scheme<BLS12_377>>(n, t).await;
         dkg_sign_e2e_curve::<bls12_377::G2Curve, G2Scheme<BLS12_377>>(n, t).await;
+    }
+
+    #[tokio::test]
+    async fn dkg_resharing_e2e() {
+        let (t, n) = (2, 3);
+        dkg_resharing_e2e_curve::<bls12_377::G1Curve, G1Scheme<BLS12_377>>(n, t).await;
+    }
+
+    async fn dkg_resharing_e2e_curve<C, S>(n: usize, t: usize)
+    where
+        C: Curve + PartialEq,
+        S: Scheme<Public = <C as Curve>::Point, Private = <C as Curve>::Scalar>,
+    {
+        // 1. run the normal dkg
+        let rng = &mut rand::thread_rng();
+        let (board, phase0s) = setup::<C, S, _>(n, t, rng);
+        let dkg_outputs = run_dkg(board, phase0s, rng).await;
+
+        // save the info for later (these should be recovered from the smart contract)
+        let old_group = dkg_outputs[0].qual.clone();
+        let public_poly = dkg_outputs[0].public.clone();
+
+        // add 2 new ones, replace the last participant
+        let new_n = n + 1;
+        let new_t = new_n / 2 + 1;
+        // the first participant will not participate in the DKG
+        // since they're being removed in this example
+        let dkg_outputs = &dkg_outputs[1..];
+
+        // generate the new ephemeral keys
+        let keypairs = (0..new_n).map(|_| S::keypair(rng)).collect::<Vec<_>>();
+        let nodes = keypairs
+            .iter()
+            .enumerate()
+            .map(|(i, (_, public))| Node::<C>::new(i as Idx, public.clone()))
+            .collect::<Vec<_>>();
+
+        // the new group
+        let new_group = Group::new(nodes, new_t).unwrap();
+
+        let mut phase0s = Vec::new();
+        for i in 0..new_n {
+            // we take `n-1` because we have ommited the first participant
+            let phase0 = if i < n - 1 {
+                resharing::RDKG::new_from_share(
+                    keypairs[i].0.clone(),
+                    dkg_outputs[i].clone(),
+                    new_group.clone(),
+                )
+                .unwrap() // infallible
+            } else {
+                resharing::RDKG::new_member(
+                    keypairs[i].0.clone(),
+                    old_group.clone(),   // people who have registered before
+                    public_poly.clone(), // the previous public key
+                    new_group.clone(),   // the new group
+                )
+                .unwrap()
+            };
+            phase0s.push(phase0);
+        }
+
+        // We explicitly instantiate a new board to show that the new one is not
+        // related to the old board in any way
+        let board = InMemoryBoard::<C>::new();
+
+        // we still need to do phase 3 even though there were no bad people
+        // because there is 1 person missing from the initial set
+        run_dkg_phase3(board, phase0s, rng, 0).await;
     }
 
     async fn dkg_sign_e2e_curve<C, S>(n: usize, t: usize)
