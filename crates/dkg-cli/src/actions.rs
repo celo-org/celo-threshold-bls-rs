@@ -203,6 +203,11 @@ where
 
     match result {
         Ok(output) => {
+            println!("Publishing our public polynomial...");
+            let public_poly = bincode::serialize(&output.public)?;
+            let tx_hash = dkg.submit_public_polynomial(public_poly).send().await?;
+            let _tx_receipt = dkg.pending_transaction(tx_hash).await?;
+
             println!("Success. Your share and threshold pubkey are ready.");
             if let Some(path) = opts.output_path {
                 let file = File::create(path)?;

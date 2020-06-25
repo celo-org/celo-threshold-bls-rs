@@ -123,7 +123,7 @@ contract DKG {
     /// same polynomial, the contract updates its storage with that value
     function submitPublicPolynomial(bytes calldata _publicPolynomial) external {
         require(userState[msg.sender] == UserState.Registered, "you have already published your publicPolynomial or haven't registered");
-        require(publicPolynomial.length == 0, "public key has already been set");
+        require(publicPolynomial.length == 0, "public polynomial has already been set");
         // disallow the user from submitting their publicPolynomial again
         userState[msg.sender] = UserState.SubmittedPoly;
 
