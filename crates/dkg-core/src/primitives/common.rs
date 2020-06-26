@@ -179,14 +179,8 @@ pub fn process_shares_get_all<C: Curve>(
     let mut publics = PublicInfo::<C>::new();
     let valid_shares = bundles
         .iter()
-        // check the ones that are not from us
-        .filter(|b| {
-            if let Some(di) = my_dealer_idx {
-                return b.dealer_idx != di;
-            } else {
-                return true;
-            }
-        })
+        // check the ones that are not from us (do not filter if there was no dealer idx specified)
+        .filter(|b| my_dealer_idx.map(|idx| b.dealer_idx != idx).unwrap_or(true))
         //check the ones with a valid dealer index
         .filter(|b| dealers.contains_index(b.dealer_idx))
         // only consider public polynomial of the right form
