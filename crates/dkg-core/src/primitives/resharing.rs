@@ -200,6 +200,7 @@ impl<C: Curve> Phase1<C> for RDKGWaitingShare<C> {
         let (mut shares, mut publics, mut statuses) = process_shares_get_all(
             &self.info.prev_group,
             &self.info.new_group,
+            self.info.prev_index,
             my_idx,
             &self.info.private_key,
             bundles,

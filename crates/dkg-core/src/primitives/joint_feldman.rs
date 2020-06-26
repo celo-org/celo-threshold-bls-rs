@@ -157,6 +157,7 @@ impl<C: Curve> Phase1<C> for DKGWaitingShare<C> {
         let (shares, publics, statuses) = process_shares_get_all(
             &self.info.group,
             &self.info.group,
+            Some(my_idx),
             my_idx,
             &self.info.private_key,
             bundles,
