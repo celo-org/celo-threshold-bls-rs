@@ -18,6 +18,9 @@ pub enum Command {
     #[options(help = "runs the DKG and produces your share")]
     Run(DKGConfig),
 
+    #[options(help = "runs the DKG and produces your share")]
+    Reshare(ReshareConfig),
+
     #[options(help = "deploy the DKG smart contract")]
     Deploy(DeployOpts),
 
@@ -52,9 +55,43 @@ pub struct DKGConfig {
     pub contract_address: Address,
 
     #[options(
-        help = "the path where the resulting of the DKG will be stored (stdout if none provided)"
+        help = "the path where the result of the DKG will be stored (stdout if none provided)"
     )]
     pub output_path: Option<String>,
+}
+
+#[derive(Debug, Options, Clone)]
+pub struct ReshareConfig {
+    help: bool,
+
+    #[options(help = "the celo node's endpoint")]
+    pub node_url: String,
+
+    #[options(
+        help = "path to your celo private key (hint: use the `keygen` command to generate a new one if you don't have one)"
+    )]
+    pub private_key: String,
+
+    #[options(help = "the DKG resharing contract's address")]
+    pub contract_address: Address,
+
+    #[options(
+        help = "the path where the result of the DKG will be stored (stdout if none provided)"
+    )]
+    pub output_path: Option<String>,
+
+    #[options(
+        help = "your BLS share which was produced from the last DKG round (skip this argument if you do not have one)"
+    )]
+    pub share: Option<String>,
+
+    #[options(
+        help = "the address of the previous DKG contract (used to fetch the previous group's information)"
+    )]
+    pub previous_contract_address: Address,
+
+    #[options(help = "the public polynomial which was produced in the previous DKG")]
+    pub public_polynomial: String,
 }
 
 #[derive(Debug, Options, Clone)]
