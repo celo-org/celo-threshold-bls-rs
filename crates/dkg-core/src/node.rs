@@ -203,46 +203,64 @@ mod tests {
 
     #[tokio::test]
     async fn dkg_resharing_e2e() {
-        let (t, n) = (2, 3);
-        dkg_resharing_e2e_curve::<bls12_377::G1Curve, G1Scheme<BLS12_377>>(n, t).await;
+        dkg_resharing_e2e_curve::<bls12_377::G1Curve, G1Scheme<BLS12_377>>(false).await;
+        dkg_resharing_e2e_curve::<bls12_377::G1Curve, G1Scheme<BLS12_377>>(true).await;
     }
 
-    async fn dkg_resharing_e2e_curve<C, S>(n: usize, t: usize)
+    async fn dkg_resharing_e2e_curve<C, S>(removed_nodes_participate: bool)
     where
         C: Curve + PartialEq,
         S: Scheme<Public = <C as Curve>::Point, Private = <C as Curve>::Scalar>,
     {
+        let (t, n) = (4, 6);
         // 1. run the normal dkg
         let rng = &mut rand::thread_rng();
         let (board, phase0s) = setup::<C, S, _>(n, t, rng);
-        let dkg_outputs = run_dkg(board, phase0s, rng).await;
+        let dkg_outputs = run_dkg(board, phase0s, rng, 0).await;
 
         // save the info for later (these should be recovered from the smart contract)
         let old_group = dkg_outputs[0].qual.clone();
         let public_poly = dkg_outputs[0].public.clone();
 
-        // add 2 new ones, replace the last participant
-        let new_n = n + 1;
-        let new_t = new_n / 2 + 1;
-        // the first participant will not participate in the DKG
-        // since they're being removed in this example
-        let dkg_outputs = &dkg_outputs[1..];
+        // 2 participants are removed in this example
+        let num_participants_before = dkg_outputs.len();
+        let removed_outputs = [dkg_outputs[0].clone(), dkg_outputs[4].clone()].to_vec();
+        let dkg_outputs = [
+            dkg_outputs[1].clone(),
+            dkg_outputs[3].clone(),
+            dkg_outputs[2].clone(),
+            dkg_outputs[5].clone(),
+        ]
+        .to_vec();
+        let removed_nodes = num_participants_before - dkg_outputs.len();
 
-        // generate the new ephemeral keys
+        let new_nodes = 2;
+        let new_n = n + new_nodes - removed_nodes;
+        let new_t = new_n / 2 + 1;
+
+        // generate the new group
         let keypairs = (0..new_n).map(|_| S::keypair(rng)).collect::<Vec<_>>();
         let nodes = keypairs
             .iter()
             .enumerate()
             .map(|(i, (_, public))| Node::<C>::new(i as Idx, public.clone()))
             .collect::<Vec<_>>();
-
-        // the new group
         let new_group = Group::new(nodes, new_t).unwrap();
 
         let mut phase0s = Vec::new();
+
+        if removed_nodes_participate {
+            for output in removed_outputs.into_iter() {
+                let keypair = S::keypair(rng);
+                let phase0 =
+                    resharing::RDKG::new_from_share(keypair.0, output.clone(), new_group.clone())
+                        .unwrap();
+                phase0s.push(phase0);
+            }
+        }
+
         for i in 0..new_n {
-            // we take `n-1` because we have ommited the first participant
-            let phase0 = if i < n - 1 {
+            let phase0 = if i < n - removed_nodes {
                 resharing::RDKG::new_from_share(
                     keypairs[i].0.clone(),
                     dkg_outputs[i].clone(),
@@ -265,9 +283,15 @@ mod tests {
         // related to the old board in any way
         let board = InMemoryBoard::<C>::new();
 
-        // we still need to do phase 3 even though there were no bad people
-        // because there is 1 person missing from the initial set
-        run_dkg_phase3(board, phase0s, rng, 0).await;
+        if removed_nodes_participate {
+            // old nodes that pass the baton to the next group will be prompted to go
+            // to "phase 3", but in fact they are leaving the system so they should cancel
+            run_dkg(board, phase0s, rng, removed_nodes).await;
+        } else {
+            // we still need to do phase 3 even though there were no bad people
+            // because the removed nodes from the initial set are AFK
+            run_dkg_phase3(board, phase0s, rng, 0).await;
+        }
     }
 
     async fn dkg_sign_e2e_curve<C, S>(n: usize, t: usize)
@@ -284,7 +308,7 @@ mod tests {
         // executes the DKG state machine and ensures that the keys are generated correctly
         let rng = &mut rand::thread_rng();
         let (board, phase0s) = setup::<C, S, _>(n, t, rng);
-        let outputs = run_dkg(board, phase0s, rng).await;
+        let outputs = run_dkg(board, phase0s, rng, 0).await;
 
         // blinds the message
         let (token, blinded_msg) = S::blind_msg(&msg[..], &mut rand::thread_rng());
@@ -312,6 +336,7 @@ mod tests {
         mut board: InMemoryBoard<C>,
         phase0s: Vec<P>,
         rng: &mut R,
+        num_removed: usize, // the first `num_removed` results should be point to phase3 while the rest should be OK
     ) -> Vec<DKGOutput<C>>
     where
         C: Curve,
@@ -341,9 +366,18 @@ mod tests {
             results.push(phase2.run(&mut board, &responses).await.unwrap());
         }
 
+        // the first `num_removed` nodes should be prompted to go to phase 3 (but they won't
+        // since they are removed from the group and the rest of the group will
+        // have agreed on a common pubkey)
+        results.iter().take(num_removed).for_each(|res| match res {
+            Phase2Result::GoToPhase3(_) => (),
+            Phase2Result::Output(_) => unreachable!("should not get here"),
+        });
+
         // The distributed public key must be the same
         let outputs = results
             .into_iter()
+            .skip(num_removed)
             .map(|res| match res {
                 Phase2Result::Output(out) => out,
                 Phase2Result::GoToPhase3(_) => unreachable!("should not get here"),
@@ -468,7 +502,10 @@ mod tests {
             .into_iter()
             .map(|res| match res {
                 Phase2Result::GoToPhase3(p3) => p3,
-                _ => unreachable!("should not get here"),
+                Phase2Result::Output(out) => {
+                    dbg!("got output", out);
+                    unreachable!("should not get here");
+                }
             })
             .collect::<Vec<_>>();
 
