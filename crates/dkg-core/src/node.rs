@@ -178,6 +178,7 @@ mod tests {
         test_helpers::InMemoryBoard,
     };
 
+    use rand::Rng;
     use threshold_bls::{
         curve::bls12381::{self, PairingCurve as BLS12_381},
         curve::zexe::{self as bls12_377, PairingCurve as BLS12_377},
@@ -203,40 +204,70 @@ mod tests {
 
     #[tokio::test]
     async fn dkg_resharing_e2e() {
-        dkg_resharing_e2e_curve::<bls12_377::G1Curve, G1Scheme<BLS12_377>>(false).await;
-        dkg_resharing_e2e_curve::<bls12_377::G1Curve, G1Scheme<BLS12_377>>(true).await;
+        let (t, n) = (4, 6);
+        let new_t = 4;
+        // 4-of-6 reshare w/ phase 3
+        dkg_resharing_e2e_curve::<bls12_377::G1Curve, G1Scheme<BLS12_377>>(
+            false, 2, 2, new_t, t, n,
+        )
+        .await;
+        // 4-of-6 reshare w/o phase 3
+        dkg_resharing_e2e_curve::<bls12_377::G1Curve, G1Scheme<BLS12_377>>(true, 2, 2, new_t, t, n)
+            .await;
     }
 
-    async fn dkg_resharing_e2e_curve<C, S>(removed_nodes_participate: bool)
-    where
+    #[tokio::test]
+    async fn dkg_resharing_e2e_downsize() {
+        // 4-of-6 to 3-of-4 (3 leave, 1 joins)
+        dkg_resharing_e2e_curve::<bls12_377::G1Curve, G1Scheme<BLS12_377>>(true, 3, 1, 3, 4, 6)
+            .await;
+    }
+
+    #[tokio::test]
+    async fn dkg_resharing_e2e_all_leave() {
+        let (t, n) = (4, 6);
+
+        // Replace with 4-of-6
+        dkg_resharing_e2e_curve::<bls12_377::G1Curve, G1Scheme<BLS12_377>>(true, n, 6, 4, t, n)
+            .await;
+
+        // Replace with 7-of-8
+        dkg_resharing_e2e_curve::<bls12_377::G1Curve, G1Scheme<BLS12_377>>(true, n, 8, 7, t, n)
+            .await;
+    }
+
+    #[tokio::test]
+    async fn dkg_resharing_e2e_all_leave_downsize() {
+        dkg_resharing_e2e_curve::<bls12_377::G1Curve, G1Scheme<BLS12_377>>(true, 6, 4, 3, 4, 6)
+            .await;
+    }
+
+    async fn dkg_resharing_e2e_curve<C, S>(
+        removed_nodes_participate: bool,
+        num_removed: usize,
+        new_nodes: usize,
+        new_t: usize,
+        t: usize,
+        n: usize,
+    ) where
         C: Curve + PartialEq,
         S: Scheme<Public = <C as Curve>::Point, Private = <C as Curve>::Scalar>,
     {
-        let (t, n) = (4, 6);
         // 1. run the normal dkg
         let rng = &mut rand::thread_rng();
         let (board, phase0s) = setup::<C, S, _>(n, t, rng);
-        let dkg_outputs = run_dkg(board, phase0s, rng, 0).await;
+        let mut dkg_outputs = run_dkg(board, phase0s, rng, 0).await;
 
         // save the info for later (these should be recovered from the smart contract)
         let old_group = dkg_outputs[0].qual.clone();
         let public_poly = dkg_outputs[0].public.clone();
 
-        // 2 participants are removed in this example
-        let num_participants_before = dkg_outputs.len();
-        let removed_outputs = [dkg_outputs[0].clone(), dkg_outputs[4].clone()].to_vec();
-        let dkg_outputs = [
-            dkg_outputs[1].clone(),
-            dkg_outputs[3].clone(),
-            dkg_outputs[2].clone(),
-            dkg_outputs[5].clone(),
-        ]
-        .to_vec();
-        let removed_nodes = num_participants_before - dkg_outputs.len();
+        let mut removed_outputs = Vec::new();
+        for _ in 0..num_removed {
+            removed_outputs.push(dkg_outputs.remove(rng.gen_range(0, dkg_outputs.len())));
+        }
 
-        let new_nodes = 2;
-        let new_n = n + new_nodes - removed_nodes;
-        let new_t = new_n / 2 + 1;
+        let new_n = n + new_nodes - num_removed;
 
         // generate the new group
         let keypairs = (0..new_n).map(|_| S::keypair(rng)).collect::<Vec<_>>();
@@ -260,7 +291,7 @@ mod tests {
         }
 
         for i in 0..new_n {
-            let phase0 = if i < n - removed_nodes {
+            let phase0 = if i < n - num_removed {
                 resharing::RDKG::new_from_share(
                     keypairs[i].0.clone(),
                     dkg_outputs[i].clone(),
@@ -286,7 +317,7 @@ mod tests {
         if removed_nodes_participate {
             // old nodes that pass the baton to the next group will be prompted to go
             // to "phase 3", but in fact they are leaving the system so they should cancel
-            run_dkg(board, phase0s, rng, removed_nodes).await;
+            run_dkg(board, phase0s, rng, num_removed).await;
         } else {
             // we still need to do phase 3 even though there were no bad people
             // because the removed nodes from the initial set are AFK
