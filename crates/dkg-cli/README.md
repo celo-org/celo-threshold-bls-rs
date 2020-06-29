@@ -61,6 +61,34 @@ Optional arguments:
                            the path where the resulting of the DKG will be stored (stdout if none provided)
 ```
 
+### Resharing
+
+After a DKG deal has been done, you may want to add or remove members from the group.
+This is done via the re-sharing command. If you are a member that has already participated
+in a previous round of the DKG, you must pass the `share` parameter. If you are a new member,
+you should specify the threshold polynomial which was generated in the previous round (you can get
+that from any of the previous members)
+
+
+```
+Usage: dkg-cli reshare [OPTIONS]
+
+Optional arguments:
+  -h, --help
+  -n, --node-url NODE-URL  the celo node's endpoint
+  -p, --private-key PRIVATE-KEY
+                           path to your celo private key (hint: use the `keygen` command to generate a new one if you don't have one)
+  -c, --contract-address CONTRACT-ADDRESS
+                           the DKG resharing contract's address
+  -o, --output-path OUTPUT-PATH
+                           the path where the result of the DKG will be stored (stdout if none provided)
+  -s, --share SHARE        your BLS share which was produced from the last DKG round (skip this argument if you do not have one)
+  -P, --previous-contract-address PREVIOUS-CONTRACT-ADDRESS
+                           the address of the previous DKG contract (used to fetch the previous group's information)
+  --public-polynomial PUBLIC-POLYNOMIAL
+                           the public polynomial which was produced in the previous DKG
+```
+
 ### Deploying the contract
 
 ```
