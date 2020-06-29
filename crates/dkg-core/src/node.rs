@@ -221,6 +221,10 @@ mod tests {
         // 4-of-6 to 3-of-4 (3 leave, 1 joins)
         dkg_resharing_e2e_curve::<bls12_377::G1Curve, G1Scheme<BLS12_377>>(true, 3, 1, 3, 4, 6)
             .await;
+
+        // 4-of-6 to 3-of-4 (2 leave, no-one joins, goes to phase 3)
+        dkg_resharing_e2e_curve::<bls12_377::G1Curve, G1Scheme<BLS12_377>>(false, 2, 0, 3, 4, 6)
+            .await;
     }
 
     #[tokio::test]
@@ -238,7 +242,12 @@ mod tests {
 
     #[tokio::test]
     async fn dkg_resharing_e2e_all_leave_downsize() {
+        // 4-of-6 -> 3-of-4
         dkg_resharing_e2e_curve::<bls12_377::G1Curve, G1Scheme<BLS12_377>>(true, 6, 4, 3, 4, 6)
+            .await;
+
+        // 7-of-8 -> 3-of-3
+        dkg_resharing_e2e_curve::<bls12_377::G1Curve, G1Scheme<BLS12_377>>(true, 8, 3, 3, 7, 8)
             .await;
     }
 
