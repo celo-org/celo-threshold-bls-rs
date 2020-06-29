@@ -205,6 +205,16 @@ impl<C: Curve> Phase1<C> for RDKGWaitingShare<C> {
             &self.info.private_key,
             bundles,
         )?;
+
+        // set the status to true for any dealer that is also a share holder
+        // we compare the public keys from the previous group to the new group
+        // to know if that is the case
+        for prev in self.info.prev_group.nodes.iter() {
+            if let Some(nidx) = self.info.new_group.index(prev.key()) {
+                statuses.set(prev.id(), nidx, Status::Success);
+            }
+        }
+
         println!(
             "{} - PROCESS SHARES: {:?} -> {:?} - {}",
             self.info.new_index.as_ref().unwrap(),

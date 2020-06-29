@@ -5,7 +5,7 @@ use super::common::*;
 use crate::primitives::{
     group::Group,
     phases::{Phase0, Phase1, Phase2, Phase3},
-    status::StatusMatrix,
+    status::{Status, StatusMatrix},
     types::*,
     DKGError, DKGResult,
 };
@@ -154,7 +154,7 @@ impl<C: Curve> Phase1<C> for DKGWaitingShare<C> {
         publish_all = false;
         let thr = self.info.thr();
         let my_idx = self.info.index;
-        let (shares, publics, statuses) = process_shares_get_all(
+        let (shares, publics, mut statuses) = process_shares_get_all(
             &self.info.group,
             &self.info.group,
             Some(my_idx),
@@ -162,6 +162,12 @@ impl<C: Curve> Phase1<C> for DKGWaitingShare<C> {
             &self.info.private_key,
             bundles,
         )?;
+
+        // in DKG every dealer is also a share holder, we assume that a dealer
+        // will issue a valid share for itself
+        for n in self.info.group.nodes.iter() {
+            statuses.set(n.id(), n.id(), Status::Success);
+        }
 
         // we check with `thr - 1` because we already have our shares
         if shares.len() < thr - 1 {

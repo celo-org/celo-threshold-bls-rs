@@ -97,24 +97,14 @@ impl fmt::Display for StatusMatrix {
 
 impl StatusMatrix {
     /// Returns a MxN Status Matrix (M = dealers, N = share_holders) where all elements
-    /// are initialized to `default`. The elements on the diagonal (i==j) are by initialized
-    /// to `Success`, since the dealer is assumed to succeed
+    /// are initialized to `default`.
     ///
     /// # Panics
     ///
     /// If `dealers > share_holders`
     pub fn new(dealers: usize, share_holders: usize, default: Status) -> StatusMatrix {
-        debug_assert!(
-            dealers <= share_holders,
-            "dealers cannot be more than share holders"
-        );
-
         let m = (0..dealers)
-            .map(|i| {
-                let mut bs = bitvec![default.to_bool() as u8; share_holders];
-                bs.set(i, Status::Success.to_bool());
-                bs
-            })
+            .map(|_| bitvec![default.to_bool() as u8; share_holders])
             .collect();
 
         Self(m)
@@ -192,18 +182,8 @@ mod tests {
     use super::*;
 
     #[test]
-    fn diagonal_success() {
-        let matrix = StatusMatrix::new(10, 10, Status::Complaint);
-        for (i, get_for_dealer) in matrix.into_iter().enumerate() {
-            assert_eq!(get_for_dealer.get(i).unwrap(), &true);
-        }
-    }
-
-    #[test]
     fn set() {
         let mut matrix = StatusMatrix::new(3, 3, Status::Complaint);
-        let status = matrix.get(1, 1);
-        assert_eq!(status, Status::Success);
         matrix.set(1, 1, Status::Complaint);
         let status = matrix.get(1, 1);
         assert_eq!(status, Status::Complaint);
@@ -211,7 +191,8 @@ mod tests {
 
     #[test]
     fn get_for_dealer() {
-        let matrix = StatusMatrix::new(3, 3, Status::Complaint);
+        let mut matrix = StatusMatrix::new(3, 3, Status::Complaint);
+        matrix.set(1, 1, Status::Success);
         let get_for_dealer = matrix.get_for_dealer(1);
         assert_eq!(get_for_dealer, &bitvec![0, 1, 0]);
     }
@@ -237,19 +218,12 @@ mod tests {
         matrix.get_for_share(5);
     }
 
-    #[test]
-    fn display() {
-        let matrix = StatusMatrix::new(3, 3, Status::Complaint);
-        let s = matrix.to_string();
-        assert_eq!(
-            s,
-            "-> dealer 0: [100]\n-> dealer 1: [010]\n-> dealer 2: [001]\n"
-        );
-    }
-
-    #[test]
-    #[should_panic(expected = "dealers cannot be more than share holders")]
-    fn dealers_more_than_shareholders_panics() {
-        StatusMatrix::new(6, 5, Status::Complaint);
-    }
+    /*fn display() {*/
+    //let matrix = StatusMatrix::new(3, 3, Status::Complaint);
+    //let s = matrix.to_string();
+    //assert_eq!(
+    //s,
+    //"-> dealer 0: [000]\n-> dealer 1: [000]\n-> dealer 2: [000]\n"
+    //);
+    /*}*/
 }
