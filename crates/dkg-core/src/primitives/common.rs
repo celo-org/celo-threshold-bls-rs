@@ -160,6 +160,7 @@ pub fn compute_bundle_response(
 pub fn process_shares_get_all<C: Curve>(
     dealers: &Group<C>,
     share_holders: &Group<C>,
+    my_dealer_idx: Option<Idx>,
     my_idx: Idx,
     my_private: &C::Scalar,
     bundles: &[BundledShares<C>],
@@ -178,9 +179,9 @@ pub fn process_shares_get_all<C: Curve>(
     let mut publics = PublicInfo::<C>::new();
     let valid_shares = bundles
         .iter()
-        // check the ones that are not from us
-        .filter(|b| b.dealer_idx != my_idx)
-        // check the ones with a valid dealer index
+        // check the ones that are not from us (do not filter if there was no dealer idx specified)
+        .filter(|b| my_dealer_idx.map(|idx| b.dealer_idx != idx).unwrap_or(true))
+        //check the ones with a valid dealer index
         .filter(|b| dealers.contains_index(b.dealer_idx))
         // only consider public polynomial of the right form
         .filter(|b| b.public.degree() == share_holders.threshold - 1)

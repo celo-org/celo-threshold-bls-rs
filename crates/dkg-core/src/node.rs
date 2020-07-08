@@ -173,11 +173,12 @@ mod tests {
     use crate::{
         primitives::{
             group::{Group, Node},
-            joint_feldman,
+            joint_feldman, resharing,
         },
         test_helpers::InMemoryBoard,
     };
 
+    use rand::Rng;
     use threshold_bls::{
         curve::bls12381::{self, PairingCurve as BLS12_381},
         curve::zexe::{self as bls12_377, PairingCurve as BLS12_377},
@@ -201,6 +202,138 @@ mod tests {
         dkg_sign_e2e_curve::<bls12_377::G2Curve, G2Scheme<BLS12_377>>(n, t).await;
     }
 
+    #[tokio::test]
+    async fn dkg_resharing_e2e() {
+        let (t, n) = (4, 6);
+        let new_t = 4;
+        // 4-of-6 reshare w/ phase 3
+        dkg_resharing_e2e_curve::<bls12_377::G1Curve, G1Scheme<BLS12_377>>(
+            false, 2, 2, new_t, t, n,
+        )
+        .await;
+        // 4-of-6 reshare w/o phase 3
+        dkg_resharing_e2e_curve::<bls12_377::G1Curve, G1Scheme<BLS12_377>>(true, 2, 2, new_t, t, n)
+            .await;
+    }
+
+    #[tokio::test]
+    async fn dkg_resharing_e2e_downsize() {
+        // 4-of-6 to 3-of-4 (3 leave, 1 joins)
+        dkg_resharing_e2e_curve::<bls12_377::G1Curve, G1Scheme<BLS12_377>>(true, 3, 1, 3, 4, 6)
+            .await;
+
+        // 4-of-6 to 3-of-4 (2 leave, no-one joins, goes to phase 3)
+        dkg_resharing_e2e_curve::<bls12_377::G1Curve, G1Scheme<BLS12_377>>(false, 2, 0, 3, 4, 6)
+            .await;
+    }
+
+    #[tokio::test]
+    async fn dkg_resharing_e2e_all_leave() {
+        let (t, n) = (4, 6);
+
+        // Replace with 4-of-6
+        dkg_resharing_e2e_curve::<bls12_377::G1Curve, G1Scheme<BLS12_377>>(true, n, 6, 4, t, n)
+            .await;
+
+        // Replace with 7-of-8
+        dkg_resharing_e2e_curve::<bls12_377::G1Curve, G1Scheme<BLS12_377>>(true, n, 8, 7, t, n)
+            .await;
+    }
+
+    #[tokio::test]
+    async fn dkg_resharing_e2e_all_leave_downsize() {
+        // 4-of-6 -> 3-of-4
+        dkg_resharing_e2e_curve::<bls12_377::G1Curve, G1Scheme<BLS12_377>>(true, 6, 4, 3, 4, 6)
+            .await;
+
+        // 7-of-8 -> 3-of-3
+        dkg_resharing_e2e_curve::<bls12_377::G1Curve, G1Scheme<BLS12_377>>(true, 8, 3, 3, 7, 8)
+            .await;
+    }
+
+    async fn dkg_resharing_e2e_curve<C, S>(
+        removed_nodes_participate: bool,
+        num_removed: usize,
+        new_nodes: usize,
+        new_t: usize,
+        t: usize,
+        n: usize,
+    ) where
+        C: Curve + PartialEq,
+        S: Scheme<Public = <C as Curve>::Point, Private = <C as Curve>::Scalar>,
+    {
+        // 1. run the normal dkg
+        let rng = &mut rand::thread_rng();
+        let (board, phase0s) = setup::<C, S, _>(n, t, rng);
+        let mut dkg_outputs = run_dkg(board, phase0s, rng, 0).await;
+
+        // save the info for later (these should be recovered from the smart contract)
+        let old_group = dkg_outputs[0].qual.clone();
+        let public_poly = dkg_outputs[0].public.clone();
+
+        let mut removed_outputs = Vec::new();
+        for _ in 0..num_removed {
+            removed_outputs.push(dkg_outputs.remove(rng.gen_range(0, dkg_outputs.len())));
+        }
+
+        let new_n = n + new_nodes - num_removed;
+
+        // generate the new group
+        let keypairs = (0..new_n).map(|_| S::keypair(rng)).collect::<Vec<_>>();
+        let nodes = keypairs
+            .iter()
+            .enumerate()
+            .map(|(i, (_, public))| Node::<C>::new(i as Idx, public.clone()))
+            .collect::<Vec<_>>();
+        let new_group = Group::new(nodes, new_t).unwrap();
+
+        let mut phase0s = Vec::new();
+
+        if removed_nodes_participate {
+            for output in removed_outputs.into_iter() {
+                let keypair = S::keypair(rng);
+                let phase0 =
+                    resharing::RDKG::new_from_share(keypair.0, output.clone(), new_group.clone())
+                        .unwrap();
+                phase0s.push(phase0);
+            }
+        }
+
+        for i in 0..new_n {
+            let phase0 = if i < n - num_removed {
+                resharing::RDKG::new_from_share(
+                    keypairs[i].0.clone(),
+                    dkg_outputs[i].clone(),
+                    new_group.clone(),
+                )
+                .unwrap() // infallible
+            } else {
+                resharing::RDKG::new_member(
+                    keypairs[i].0.clone(),
+                    old_group.clone(),   // people who have registered before
+                    public_poly.clone(), // the previous public key
+                    new_group.clone(),   // the new group
+                )
+                .unwrap()
+            };
+            phase0s.push(phase0);
+        }
+
+        // We explicitly instantiate a new board to show that the new one is not
+        // related to the old board in any way
+        let board = InMemoryBoard::<C>::new();
+
+        if removed_nodes_participate {
+            // old nodes that pass the baton to the next group will be prompted to go
+            // to "phase 3", but in fact they are leaving the system so they should cancel
+            run_dkg(board, phase0s, rng, num_removed).await;
+        } else {
+            // we still need to do phase 3 even though there were no bad people
+            // because the removed nodes from the initial set are AFK
+            run_dkg_phase3(board, phase0s, rng, 0).await;
+        }
+    }
+
     async fn dkg_sign_e2e_curve<C, S>(n: usize, t: usize)
     where
         C: Curve,
@@ -213,7 +346,9 @@ mod tests {
         let msg = rand::random::<[u8; 32]>().to_vec();
 
         // executes the DKG state machine and ensures that the keys are generated correctly
-        let outputs = run_dkg::<C, S>(n, t).await;
+        let rng = &mut rand::thread_rng();
+        let (board, phase0s) = setup::<C, S, _>(n, t, rng);
+        let outputs = run_dkg(board, phase0s, rng, 0).await;
 
         // blinds the message
         let (token, blinded_msg) = S::blind_msg(&msg[..], &mut rand::thread_rng());
@@ -237,16 +372,17 @@ mod tests {
         S::verify(&pubkey, &msg, &unblinded_sig).unwrap();
     }
 
-    async fn run_dkg<C, S>(n: usize, t: usize) -> Vec<DKGOutput<C>>
+    async fn run_dkg<C, P, R>(
+        mut board: InMemoryBoard<C>,
+        phase0s: Vec<P>,
+        rng: &mut R,
+        num_removed: usize, // the first `num_removed` results should be point to phase3 while the rest should be OK
+    ) -> Vec<DKGOutput<C>>
     where
         C: Curve,
-        // We need to bind the Curve's Point and Scalars to the Scheme
-        S: Scheme<Public = <C as Curve>::Point, Private = <C as Curve>::Scalar>,
+        P: Phase0<C>,
+        R: RngCore,
     {
-        let rng = &mut rand::thread_rng();
-
-        let (mut board, phase0s) = setup::<C, S, _>(n, t, rng);
-
         // Phase 1: Publishes shares
         let mut phase1s = Vec::new();
         for phase0 in phase0s {
@@ -270,9 +406,18 @@ mod tests {
             results.push(phase2.run(&mut board, &responses).await.unwrap());
         }
 
+        // the first `num_removed` nodes should be prompted to go to phase 3 (but they won't
+        // since they are removed from the group and the rest of the group will
+        // have agreed on a common pubkey)
+        results.iter().take(num_removed).for_each(|res| match res {
+            Phase2Result::GoToPhase3(_) => (),
+            Phase2Result::Output(_) => unreachable!("should not get here"),
+        });
+
         // The distributed public key must be the same
         let outputs = results
             .into_iter()
+            .skip(num_removed)
             .map(|res| match res {
                 Phase2Result::Output(out) => out,
                 Phase2Result::GoToPhase3(_) => unreachable!("should not get here"),
@@ -344,10 +489,28 @@ mod tests {
     async fn dkg_phase3() {
         let (t, n) = (5, 8);
         let bad = 2; // >0 people not broadcasting in the start force us to go to phase 3
-
         let rng = &mut rand::thread_rng();
-        let (mut board, phase0s) = setup::<bls12_377::G1Curve, G1Scheme<BLS12_377>, _>(n, t, rng);
+        let (board, phase0s) = setup::<bls12_377::G1Curve, G1Scheme<BLS12_377>, _>(n, t, rng);
+        let outputs = run_dkg_phase3(board, phase0s, rng, bad).await;
 
+        // the first people must have a different public key from the others
+        let pubkey = &outputs[bad].public;
+        for output in &outputs[..bad] {
+            assert_ne!(&output.public, pubkey);
+        }
+    }
+
+    async fn run_dkg_phase3<C, P, R>(
+        mut board: InMemoryBoard<C>,
+        phase0s: Vec<P>,
+        rng: &mut R,
+        bad: usize,
+    ) -> Vec<DKGOutput<C>>
+    where
+        C: Curve + PartialEq,
+        P: Phase0<C>,
+        R: RngCore,
+    {
         let mut phase1s = Vec::new();
         for (i, phase0) in phase0s.into_iter().enumerate() {
             let phase1 = if i < bad {
@@ -379,7 +542,10 @@ mod tests {
             .into_iter()
             .map(|res| match res {
                 Phase2Result::GoToPhase3(p3) => p3,
-                _ => unreachable!("should not get here"),
+                Phase2Result::Output(out) => {
+                    dbg!("got output", out);
+                    unreachable!("should not get here");
+                }
             })
             .collect::<Vec<_>>();
 
@@ -398,11 +564,7 @@ mod tests {
             outputs[bad..].iter().map(|output| &output.public)
         ));
 
-        // the first people must have a different public key from the others
-        let pubkey = &outputs[bad].public;
-        for output in &outputs[..bad] {
-            assert_ne!(&output.public, pubkey);
-        }
+        outputs
     }
 
     fn setup<C, S, R: rand::RngCore>(
