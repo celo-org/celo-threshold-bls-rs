@@ -3,22 +3,26 @@ use crate::{
     opts::*,
 };
 use rand::RngCore;
-use std::{fs::File, io::Write};
+use std::{fs::File, io::Write, sync::Arc};
 
 use dkg_core::{
-    primitives::{joint_feldman::*, *},
+    primitives::{joint_feldman::*, resharing::RDKG, *},
     DKGPhase, Phase2Result,
 };
 
 use anyhow::Result;
 use ethers::prelude::*;
 use rustc_hex::{FromHex, ToHex};
+use serde::{Deserialize, Serialize};
 use std::convert::TryFrom;
 
-use threshold_bls::poly::Idx;
 use threshold_bls::{group::Curve, sig::Scheme};
+use threshold_bls::{
+    poly::{Idx, PublicPoly},
+    sig::Share,
+};
 
-#[derive(serde::Serialize, Debug)]
+#[derive(Serialize, Deserialize, Debug)]
 struct CeloKeypairJson {
     address: Address,
     #[serde(rename = "privateKey")]
@@ -100,6 +104,49 @@ pub async fn start(opts: StartOpts) -> Result<()> {
     Ok(())
 }
 
+pub async fn reshare<S, C, R>(opts: ReshareConfig, rng: &mut R) -> Result<()>
+where
+    C: Curve,
+    // We need to bind the Curve's Point and Scalars to the Scheme
+    S: Scheme<Public = <C as Curve>::Point, Private = <C as Curve>::Scalar>,
+    R: RngCore,
+{
+    let provider = Provider::<Http>::try_from(opts.node_url.as_str())?;
+    let client = Arc::new(opts.private_key.parse::<Wallet>()?.connect(provider));
+
+    // we need the previous group and public poly for resharing
+    let previous_group = {
+        let previous_dkg = DKGContract::new(opts.previous_contract_address, client.clone());
+        let previous_group = previous_dkg.get_bls_keys().call().await?;
+        pubkeys_to_group::<C>(previous_group)?
+    };
+
+    let public_poly = opts.public_polynomial.from_hex::<Vec<u8>>()?;
+    let public_poly: PublicPoly<C> = bincode::deserialize(&public_poly)?;
+
+    let dkg = DKGContract::new(opts.contract_address, client.clone());
+
+    let (private_key, public_key) = S::keypair(rng);
+
+    register::<S>(&dkg, &public_key).await?;
+    let new_group = get_group::<C>(&dkg).await?;
+
+    let phase0 = if let Some(share) = opts.share {
+        let share = share.from_hex::<Vec<u8>>()?;
+        let share: Share<C::Scalar> = bincode::deserialize(&share)?;
+        let dkg_output = DKGOutput {
+            share,
+            qual: previous_group,
+            public: public_poly,
+        };
+        RDKG::new_from_share(private_key, dkg_output, new_group)
+    } else {
+        RDKG::new_member(private_key, previous_group, public_poly, new_group)
+    }?;
+
+    run_dkg(dkg, phase0, rng, opts.output_path).await
+}
+
 pub async fn run<S, C, R>(opts: DKGConfig, rng: &mut R) -> Result<()>
 where
     C: Curve,
@@ -109,30 +156,52 @@ where
 {
     let provider = Provider::<Http>::try_from(opts.node_url.as_str())?;
     let client = opts.private_key.parse::<Wallet>()?.connect(provider);
-    let mut dkg = DKGContract::new(opts.contract_address, client);
+    let dkg = DKGContract::new(opts.contract_address, client);
 
     // 1. Generate the keys
     let (private_key, public_key) = S::keypair(rng);
 
     // 2. Register
+    register::<S>(&dkg, &public_key).await?;
+
+    // Get the group info
+    let group = get_group::<C>(&dkg).await?;
+    let phase0 = DKG::new(private_key, group)?;
+
+    run_dkg(dkg, phase0, rng, opts.output_path).await
+}
+
+async fn register<S: Scheme>(
+    dkg: &DKGContract<Http, Wallet>,
+    public_key: &S::Public,
+) -> Result<()> {
     println!("Registering...");
-    let public_key_serialized = bincode::serialize(&public_key)?;
+    let public_key_serialized = bincode::serialize(public_key)?;
     let pending_tx = dkg.register(public_key_serialized).send().await?;
     let _tx_receipt = dkg.pending_transaction(pending_tx).await?;
 
     // Wait for Phase 1
     wait_for_phase(&dkg, 1).await?;
 
-    // Get the group info
+    Ok(())
+}
+
+async fn get_group<C: Curve>(dkg: &DKGContract<Http, Wallet>) -> Result<Group<C>> {
     let group = dkg.get_bls_keys().call().await?;
     let participants = dkg.get_participants().call().await?;
+    confirm_group(&group, participants)?;
 
+    let group = pubkeys_to_group::<C>(group)?;
+    Ok(group)
+}
+
+fn confirm_group(pubkeys: &(U256, Vec<Vec<u8>>), participants: Vec<Address>) -> Result<()> {
     // print some debug info
     println!(
         "Will run DKG with the group listed below and threshold {}",
-        group.0
+        pubkeys.0
     );
-    for (bls_pubkey, address) in group.1.iter().zip(&participants) {
+    for (bls_pubkey, address) in pubkeys.1.iter().zip(&participants) {
         let key = bls_pubkey.to_hex::<String>();
         println!("{:?} -> {}", address, key)
     }
@@ -146,7 +215,12 @@ where
         return Err(anyhow::anyhow!("User rejected group choice."));
     }
 
-    let nodes = group
+    Ok(())
+}
+
+// Pass the result of `get_bls_keys` to convert the raw data to a group
+fn pubkeys_to_group<C: Curve>(pubkeys: (U256, Vec<Vec<u8>>)) -> Result<Group<C>> {
+    let nodes = pubkeys
         .1
         .into_iter()
         .filter(|pubkey| !pubkey.is_empty()) // skip users that did not register
@@ -157,16 +231,28 @@ where
         })
         .collect::<Result<_>>()?;
 
-    let group = Group {
-        threshold: group.0.as_u64() as usize,
+    Ok(Group {
+        threshold: pubkeys.0.as_u64() as usize,
         nodes,
-    };
+    })
+}
 
-    // Instantiate the DKG with the group info
-    println!("Calculating and broadcasting our shares...");
-    let phase0 = DKG::new(private_key, group)?;
-
+// Shared helper for running the DKG in both normal and re-sharing mode
+async fn run_dkg<P, C, R>(
+    mut dkg: DKGContract<Http, Wallet>,
+    phase0: P,
+    rng: &mut R,
+    output_path: Option<String>,
+) -> Result<()>
+where
+    C: Curve,
+    // We need to bind the Curve's Point and Scalars to the Scheme
+    // S: Scheme<Public = <C as Curve>::Point, Private = <C as Curve>::Scalar>,
+    P: Phase0<C>,
+    R: RngCore,
+{
     // Run Phase 1 and publish to the chain
+    println!("Calculating and broadcasting our shares...");
     let phase1 = phase0.run(&mut dkg, rng).await?;
 
     // Wait for Phase 2
@@ -204,7 +290,7 @@ where
     match result {
         Ok(output) => {
             println!("Success. Your share and threshold pubkey are ready.");
-            if let Some(path) = opts.output_path {
+            if let Some(path) = output_path {
                 let file = File::create(path)?;
                 write_output(&file, &output)?;
             } else {
