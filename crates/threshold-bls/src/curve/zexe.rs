@@ -1,11 +1,15 @@
 use crate::group::{self, Element, PairingCurve as PC, Point, Scalar as Sc};
-use algebra::{
-    bls12_377 as zexe,
-    curves::{AffineCurve, PairingEngine, ProjectiveCurve},
-    fields::Field,
-    prelude::{One, UniformRand, Zero},
-    CanonicalDeserialize, CanonicalSerialize, ConstantSerializedSize,
-};
+use ark_bls12_377 as zexe;
+//use algebra::{
+//    bls12_377 as zexe,
+//    curves::{AffineCurve, PairingEngine, ProjectiveCurve},
+//    fields::Field,
+//    prelude::{One, UniformRand, Zero},
+//    CanonicalDeserialize, CanonicalSerialize, ConstantSerializedSize,
+//};
+use ark_ec::{AffineCurve, PairingEngine, ProjectiveCurve};
+use ark_ff::{One, Zero, UniformRand, Field};
+use ark_serialize::{CanonicalSerialize, CanonicalDeserialize, CanonicalSerializeWithFlags};
 use bls_crypto::{
     hash_to_curve::{try_and_increment::TryAndIncrement, HashToCurve},
     hashers::DirectHasher,
@@ -28,7 +32,7 @@ use thiserror::Error;
 #[derive(Debug, Error)]
 pub enum ZexeError {
     #[error("{0}")]
-    SerializationError(#[from] algebra::SerializationError),
+    SerializationError(#[from] ark_serialize::SerializationError),
     #[error("{0}")]
     BLSError(#[from] BLSError),
 }

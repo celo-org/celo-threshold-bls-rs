@@ -20,3 +20,4 @@ react-native
 
 solidity/cache
 solidity/build
+*.swp
