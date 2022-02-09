@@ -258,13 +258,13 @@ impl PC for PairingCurve {
 fn deserialize_field<'de, D, C>(deserializer: D) -> Result<C, D::Error>
 where
     D: Deserializer<'de>,
-    C: CanonicalDeserialize + ConstantSerializedSize,
+    C: CanonicalDeserialize + CanonicalSerializeWithFlags,
 {
     struct FieldVisitor<C>(PhantomData<C>);
 
     impl<'de, C> Visitor<'de> for FieldVisitor<C>
     where
-        C: CanonicalDeserialize + ConstantSerializedSize,
+        C: CanonicalDeserialize + CanonicalSerializeWithFlags,
     {
         type Value = C;
 
@@ -314,14 +314,14 @@ fn deserialize_group<'de, D, C>(deserializer: D) -> Result<C, D::Error>
 where
     D: Deserializer<'de>,
     C: ProjectiveCurve,
-    C::Affine: CanonicalDeserialize + ConstantSerializedSize,
+    C::Affine: CanonicalDeserialize + CanonicalSerializeWithFlags,
 {
     struct GroupVisitor<C>(PhantomData<C>);
 
     impl<'de, C> Visitor<'de> for GroupVisitor<C>
     where
         C: ProjectiveCurve,
-        C::Affine: CanonicalDeserialize + ConstantSerializedSize,
+        C::Affine: CanonicalDeserialize + CanonicalSerializeWithFlags,
     {
         type Value = C;
 
