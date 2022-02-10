@@ -90,7 +90,7 @@ impl Element for Scalar {
         self.0.mul_assign(mul.0)
     }
 
-    fn rand<R: RngCore>(rng: &mut R) -> Self {
+    fn rand<R: rand_core::RngCore>(rng: &mut R) -> Self {
         Self(zexe::Fr::rand(rng))
     }
 }
