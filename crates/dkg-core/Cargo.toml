@@ -20,5 +20,5 @@ serde = {version = "1.0.106", features = ["derive"] }
 thiserror = "1.0.15"
 
 [dev-dependencies]
-threshold-bls = { path = "../threshold-bls", default-features = false, features = ["bls12_381", "bls12_377"] }
+threshold-bls = { path = "../threshold-bls", default-features = false, features = ["bls12_377"] }
 tokio = { version = "0.2.21", features = ["rt-core", "macros"] }

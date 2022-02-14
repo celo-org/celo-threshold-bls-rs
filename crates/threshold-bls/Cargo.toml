@@ -9,19 +9,13 @@ crate-type = ["lib"]
 
 [dependencies]
 rand_core = { version = "0.6.3", default-features = false }
-rand = "0.8.4"
+rand = "0.8.5"
 serde = {version = "1.0.106", features = ["derive"] }
 
 # for ECIES
 chacha20poly1305 = "0.9"
 hkdf = "0.8"
 sha2 = "0.8"
-
-# bls12_381
-paired = { version = "0.22.0", optional = true }
-ff = { version = "0.3.1", package = "fff", optional = true }
-groupy = {version = "0.4.1", optional = true }
-
 
 # bls12_377
 ark-bls12-377 = { version = "0.3", optional = true }
@@ -36,9 +30,8 @@ thiserror = "1.0.15"
 bincode = "1.2.1"
 
 [features]
-default = ["bls12_381", "bls12_377"]
+default = ["bls12_377"]
 bls12_377 = ["ark-bls12-377", "bls-crypto"]
-bls12_381 = ["paired", "groupy", "ff"]
 
 [dev-dependencies]
 static_assertions = "1.1.0"
