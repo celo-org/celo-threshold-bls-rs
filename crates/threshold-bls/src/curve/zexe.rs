@@ -9,7 +9,7 @@ use ark_bls12_377 as zexe;
 //};
 use ark_ec::{AffineCurve, PairingEngine, ProjectiveCurve};
 use ark_ff::{One, Zero, UniformRand, Field};
-use ark_serialize::{CanonicalSerialize, CanonicalDeserialize, CanonicalSerializeWithFlags};
+use ark_serialize::{CanonicalSerialize, CanonicalDeserialize};
 use bls_crypto::{
     hash_to_curve::{try_and_increment::TryAndIncrement, HashToCurve},
     hashers::DirectHasher,
@@ -258,13 +258,13 @@ impl PC for PairingCurve {
 fn deserialize_field<'de, D, C>(deserializer: D) -> Result<C, D::Error>
 where
     D: Deserializer<'de>,
-    C: CanonicalDeserialize + CanonicalSerializeWithFlags,
+    C: Field,
 {
     struct FieldVisitor<C>(PhantomData<C>);
 
     impl<'de, C> Visitor<'de> for FieldVisitor<C>
     where
-        C: CanonicalDeserialize + CanonicalSerializeWithFlags,
+        C: Field,
     {
         type Value = C;
 
@@ -276,7 +276,7 @@ where
         where
             S: SeqAccess<'de>,
         {
-            let len = C::SERIALIZED_SIZE;
+            let len = C::zero().serialized_size();
             let bytes: Vec<u8> = (0..len)
                 .map(|_| {
                     seq.next_element()?
@@ -290,13 +290,13 @@ where
     }
 
     let visitor = FieldVisitor(PhantomData);
-    deserializer.deserialize_tuple(C::SERIALIZED_SIZE, visitor)
+    deserializer.deserialize_tuple(C::zero().serialized_size(), visitor)
 }
 
 fn serialize_field<S, C>(c: &C, s: S) -> Result<S::Ok, S::Error>
 where
     S: Serializer,
-    C: CanonicalSerialize,
+    C: Field,
 {
     let len = c.serialized_size();
     let mut bytes = Vec::with_capacity(len);
@@ -314,14 +314,14 @@ fn deserialize_group<'de, D, C>(deserializer: D) -> Result<C, D::Error>
 where
     D: Deserializer<'de>,
     C: ProjectiveCurve,
-    C::Affine: CanonicalDeserialize + CanonicalSerializeWithFlags,
+    C::Affine: CanonicalDeserialize + CanonicalSerialize,
 {
     struct GroupVisitor<C>(PhantomData<C>);
 
     impl<'de, C> Visitor<'de> for GroupVisitor<C>
     where
         C: ProjectiveCurve,
-        C::Affine: CanonicalDeserialize + CanonicalSerializeWithFlags,
+        //C::Affine: CanonicalDeserialize + CanonicalSerialize,
     {
         type Value = C;
 
@@ -333,7 +333,7 @@ where
         where
             S: SeqAccess<'de>,
         {
-            let len = C::Affine::SERIALIZED_SIZE;
+            let len = C::Affine::zero().serialized_size();//C::Affine::SERIALIZED_SIZE;
             let bytes: Vec<u8> = (0..len)
                 .map(|_| {
                     seq.next_element()?
@@ -348,7 +348,7 @@ where
     }
 
     let visitor = GroupVisitor(PhantomData);
-    deserializer.deserialize_tuple(C::Affine::SERIALIZED_SIZE, visitor)
+    deserializer.deserialize_tuple(C::Affine::zero().serialized_size(), visitor)
 }
 
 fn serialize_group<S, C>(c: &C, s: S) -> Result<S::Ok, S::Error>
