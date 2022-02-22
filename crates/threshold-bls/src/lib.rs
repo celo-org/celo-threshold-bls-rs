@@ -1,4 +1,4 @@
-//! # Threshold BLS Signatures
+/*//! # Threshold BLS Signatures
 //!
 //! This crate provides implementations for BLS signatures on G1 and G2, with additional support
 //! for blind and threshold signing modes.
@@ -170,7 +170,7 @@
 //! [bls12_377]: ./curve/zexe/index.html
 //!
 //! [`curve`]: ./curve/index.html
-//! [`SignatureSchemeExt`]: ./sig/trait.SignatureSchemeExt.html
+//! [`SignatureSchemeExt`]: ./sig/trait.SignatureSchemeExt.html*/
 
 /// Curve implementations for the traits defined in the [`group`](group/index.html) module.
 pub mod curve;

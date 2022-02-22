@@ -1,4 +1,4 @@
-//! # ECIES
+/*//! # ECIES
 //!
 //! Implements an Elliptic Curve Integrated Encryption Scheme using SHA256 as the Key Derivation
 //! Function.
@@ -26,7 +26,7 @@
 //!
 //! assert_eq!(&message[..], &cleartext[..]);
 //! ```
-
+*/
 use crate::group::{Curve, Element};
 use rand_core::RngCore;
 use serde::{Deserialize, Serialize};
@@ -125,7 +125,7 @@ fn derive<C: Curve>(dh: &C::Point) -> [u8; KEY_LEN] {
     ephemeral_key
 }
 
-#[cfg(feature = "bls12_381")]
+/*#[cfg(feature = "bls12_381")]
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -157,4 +157,4 @@ mod tests {
         cipher.aead = vec![0; 32];
         decrypt::<Curve>(&s2, &cipher).unwrap_err();
     }
-}
+}*/
