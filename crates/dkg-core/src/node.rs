@@ -180,7 +180,7 @@ mod tests {
 
     use rand::Rng;
     use threshold_bls::{
-        curve::zexe::{self as bls12_377, PairingCurve as BLS12_377},
+        curve::bls12377::{self as bls12_377, PairingCurve as BLS12_377},
         poly::Idx,
         sig::{BlindThresholdScheme, G1Scheme, G2Scheme, Scheme, SignatureScheme, ThresholdScheme},
     };
