@@ -523,7 +523,7 @@ mod tests {
         default_threshold,
     };
     use threshold_bls::{
-        curve::bls12381::{Curve as BCurve, Scalar, G1},
+        curve::zexe::{G1Curve as BCurve, Scalar, G1},
         ecies,
     };
 

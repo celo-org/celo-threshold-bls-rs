@@ -180,7 +180,6 @@ mod tests {
 
     use rand::Rng;
     use threshold_bls::{
-        curve::bls12381::{self, PairingCurve as BLS12_381},
         curve::zexe::{self as bls12_377, PairingCurve as BLS12_377},
         poly::Idx,
         sig::{BlindThresholdScheme, G1Scheme, G2Scheme, Scheme, SignatureScheme, ThresholdScheme},
@@ -195,9 +194,6 @@ mod tests {
     #[tokio::test]
     async fn dkg_sign_e2e() {
         let (t, n) = (3, 5);
-        dkg_sign_e2e_curve::<bls12381::Curve, G1Scheme<BLS12_381>>(n, t).await;
-        dkg_sign_e2e_curve::<bls12381::G2Curve, G2Scheme<BLS12_381>>(n, t).await;
-
         dkg_sign_e2e_curve::<bls12_377::G1Curve, G1Scheme<BLS12_377>>(n, t).await;
         dkg_sign_e2e_curve::<bls12_377::G2Curve, G2Scheme<BLS12_377>>(n, t).await;
     }
@@ -273,7 +269,7 @@ mod tests {
 
         let mut removed_outputs = Vec::new();
         for _ in 0..num_removed {
-            removed_outputs.push(dkg_outputs.remove(rng.gen_range(0, dkg_outputs.len())));
+            removed_outputs.push(dkg_outputs.remove(rng.gen_range(0..dkg_outputs.len())));
         }
 
         let new_n = n + new_nodes - num_removed;

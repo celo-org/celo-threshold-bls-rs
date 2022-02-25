@@ -373,7 +373,7 @@ pub mod tests {
         default_threshold,
     };
     use std::fmt::Debug;
-    use threshold_bls::curve::bls12381::{Curve as BCurve, G1};
+    use threshold_bls::curve::zexe::{G1Curve as BCurve, G1};
 
     use serde::{de::DeserializeOwned, Serialize};
     use static_assertions::assert_impl_all;

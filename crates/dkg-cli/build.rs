@@ -1,4 +1,4 @@
-use ethers::{contract::Abigen, utils::Solc};
+use ethers::{contract::Abigen, solc::{Solc, CompilerInput}};
 use std::{fs::File, io::Write};
 
 const PATH: &str = "../../solidity/contracts/DKG.sol";

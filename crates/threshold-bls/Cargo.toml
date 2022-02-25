@@ -22,9 +22,6 @@ ark-bls12-377 = { version = "0.3.0" }
 ark-serialize = { version = "0.3.0", features = [ "derive" ] }
 ark-ff = { version = "0.3.0", features = [ "std", "parallel"] }
 ark-ec = { version = "0.3.0", features = [ "std", "parallel"] }
-#ark-std = { version = "0.3", features = ["std"] }
-#ark-ed-on-bw6-761 = { version = "0.3" }
-#ark-crypto-primitives = { version = "0.3", features = ["parallel"] }
 bls-crypto = { git = "https://github.com/celo-org/bls-crypto" }
 thiserror = "1.0.15"
 bincode = "1.2.1"
