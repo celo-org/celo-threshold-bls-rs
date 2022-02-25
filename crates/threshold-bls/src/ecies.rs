@@ -125,11 +125,10 @@ fn derive<C: Curve>(dh: &C::Point) -> [u8; KEY_LEN] {
     ephemeral_key
 }
 
-/*#[cfg(feature = "bls12_381")]
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::curve::bls12381::{Curve, Scalar, G1};
+    use crate::curve::zexe::{G1Curve as Curve, Scalar, G1};
     use rand::thread_rng;
 
     fn kp() -> (Scalar, G1) {
@@ -157,4 +156,4 @@ mod tests {
         cipher.aead = vec![0; 32];
         decrypt::<Curve>(&s2, &cipher).unwrap_err();
     }
-}*/
+}

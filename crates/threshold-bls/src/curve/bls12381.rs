@@ -1,4 +1,4 @@
-/*  use crate::group::{self, Element, PairingCurve as PC, Point, Scalar as Sc};
+use crate::group::{self, Element, PairingCurve as PC, Point, Scalar as Sc};
 use ff::{Field, PrimeField};
 use groupy::CurveProjective;
 use paired::bls12_381::{Bls12, Fq12, Fr, FrRepr, G1 as PG1, G2 as PG2};
@@ -218,4 +218,4 @@ mod tests {
         let mut ii = Scalar::new();
         ii.set_int(4);
     }
-}*/
+}

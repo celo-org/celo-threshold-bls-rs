@@ -352,12 +352,12 @@ impl<C: fmt::Display> fmt::Display for Poly<C> {
     }
 }
 
-#[cfg(feature = "bls12_381")]
+#[cfg(feature = "bls12_377")]
 #[cfg(test)]
 pub mod tests {
     use super::*;
-    use crate::curve::bls12381::Scalar as Sc;
-    use crate::curve::bls12381::G1;
+    use crate::curve::zexe::Scalar as Sc;
+    use crate::curve::zexe::G1;
     use rand::prelude::*;
 
     #[test]

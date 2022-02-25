@@ -102,21 +102,18 @@ where
 }
 
 #[cfg(test)]
-#[cfg(feature = "bls12_381")]
 mod tests {
     use super::*;
-    use crate::curve::bls12381::PairingCurve as PCurve;
+    use crate::curve::zexe::PairingCurve as PCurve;
     use crate::sig::bls::{G1Scheme, G2Scheme};
     use crate::sig::SignatureScheme;
     use rand::thread_rng;
 
-    #[cfg(feature = "bls12_381")]
     #[test]
     fn blind_g1() {
         blind_test::<G1Scheme<PCurve>>();
     }
 
-    #[cfg(feature = "bls12_381")]
     #[test]
     fn blind_g2() {
         blind_test::<G2Scheme<PCurve>>();

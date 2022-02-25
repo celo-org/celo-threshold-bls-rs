@@ -66,9 +66,6 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
-    #[cfg(feature = "bls12_381")]
-    use crate::curve::bls12381::PairingCurve as PCurve;
-    #[cfg(feature = "bls12_377")]
     use crate::curve::zexe::PairingCurve as Zexe;
     use crate::poly::{Idx, Poly};
     use crate::sig::{
