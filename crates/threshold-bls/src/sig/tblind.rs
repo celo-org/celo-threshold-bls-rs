@@ -66,7 +66,7 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::curve::zexe::PairingCurve as Zexe;
+    use crate::curve::bls12377::PairingCurve as PCurve;
     use crate::poly::{Idx, Poly};
     use crate::sig::{
         bls::{G1Scheme, G2Scheme},
@@ -91,13 +91,13 @@ mod tests {
     }
 
     #[test]
-    fn tblind_g1_zexe_unblind() {
-        tblind_test::<G1Scheme<Zexe>>();
+    fn tblind_g1_377_unblind() {
+        tblind_test::<G1Scheme<PCurve>>();
     }
 
     #[test]
-    fn tblind_g2_zexe_unblind() {
-        tblind_test::<G2Scheme<Zexe>>();
+    fn tblind_g2_377_unblind() {
+        tblind_test::<G2Scheme<PCurve>>();
     }
 
     fn tblind_test<B>()

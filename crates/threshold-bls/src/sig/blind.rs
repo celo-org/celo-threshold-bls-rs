@@ -104,7 +104,7 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::curve::zexe::PairingCurve as PCurve;
+    use crate::curve::bls12377::PairingCurve as PCurve;
     use crate::sig::bls::{G1Scheme, G2Scheme};
     use crate::sig::SignatureScheme;
     use rand::thread_rng;

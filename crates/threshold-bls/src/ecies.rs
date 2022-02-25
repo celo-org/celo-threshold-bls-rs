@@ -128,7 +128,7 @@ fn derive<C: Curve>(dh: &C::Point) -> [u8; KEY_LEN] {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::curve::zexe::{G1Curve as Curve, Scalar, G1};
+    use crate::curve::bls12377::{G1Curve as Curve, Scalar, G1};
     use rand::thread_rng;
 
     fn kp() -> (Scalar, G1) {

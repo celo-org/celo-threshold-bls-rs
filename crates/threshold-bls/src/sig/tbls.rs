@@ -96,7 +96,7 @@ impl<I: SignatureScheme> ThresholdScheme for I {
 mod tests {
     use super::*;
     use crate::{
-        curve::zexe::PairingCurve as PCurve,
+        curve::bls12377::PairingCurve as PCurve,
         sig::{
             bls::{G1Scheme, G2Scheme},
             Scheme, SignatureScheme,

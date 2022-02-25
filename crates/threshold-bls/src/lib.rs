@@ -195,8 +195,8 @@ pub mod schemes {
 
     /// BLS12-377 Schemes
     pub mod bls12_377 {
-        use crate::curve::zexe::PairingCurve;
-        pub use crate::curve::zexe::{G1Curve, G2Curve};
+        use crate::curve::bls12377::PairingCurve;
+        pub use crate::curve::bls12377::{G1Curve, G2Curve};
 
         /// Public Keys on G1, Signatures on G2
         pub type G1Scheme = super::G1Scheme<PairingCurve>;
