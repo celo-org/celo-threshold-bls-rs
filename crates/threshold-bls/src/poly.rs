@@ -352,7 +352,6 @@ impl<C: fmt::Display> fmt::Display for Poly<C> {
     }
 }
 
-#[cfg(feature = "bls12_377")]
 #[cfg(test)]
 pub mod tests {
     use super::*;

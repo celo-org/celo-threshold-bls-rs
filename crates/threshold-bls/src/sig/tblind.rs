@@ -90,28 +90,14 @@ mod tests {
         (shares, private.commit())
     }
 
-    #[cfg(feature = "bls12_377")]
     #[test]
     fn tblind_g1_zexe_unblind() {
         tblind_test::<G1Scheme<Zexe>>();
     }
 
-    #[cfg(feature = "bls12_377")]
     #[test]
     fn tblind_g2_zexe_unblind() {
         tblind_test::<G2Scheme<Zexe>>();
-    }
-
-    #[cfg(feature = "bls12_381")]
-    #[test]
-    fn tblind_g1_bellman_unblind() {
-        tblind_test::<G1Scheme<PCurve>>();
-    }
-
-    #[cfg(feature = "bls12_381")]
-    #[test]
-    fn tblind_g2_bellman_unblind() {
-        tblind_test::<G2Scheme<PCurve>>();
     }
 
     fn tblind_test<B>()
