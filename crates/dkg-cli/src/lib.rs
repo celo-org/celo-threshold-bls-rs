@@ -1,4 +1,4 @@
-pub mod actions;
+/*pub mod actions;
 mod dkg_contract;
 pub mod opts;
 
@@ -63,4 +63,4 @@ impl<C: Curve, P: JsonRpcClient, S: Signer> BoardPublisher<C> for DKG<P, S> {
         let _tx_receipt = self.pending_transaction(pending_tx).await?;
         Ok(())
     }
-}
+}*/
