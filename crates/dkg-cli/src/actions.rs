@@ -12,6 +12,8 @@ use dkg_core::{
 
 use anyhow::Result;
 use ethers::prelude::*;
+use ethers::signers::LocalWallet;
+use ethers::providers::Middleware;
 use rustc_hex::{FromHex, ToHex};
 use serde::{Deserialize, Serialize};
 use std::convert::TryFrom;
@@ -55,7 +57,7 @@ pub async fn deploy(opts: DeployOpts) -> Result<()> {
     let bytecode = bytecode.from_hex::<Vec<u8>>()?;
 
     let provider = Provider::<Http>::try_from(opts.node_url.as_str())?;
-    let client = opts.private_key.parse::<Wallet>()?.connect(provider);
+    let client = opts.private_key.parse::<LocalWallet>()?.connect(provider);
     let abi = DKG_ABI.clone();
 
     let factory = ContractFactory::new(abi, Bytes::from(bytecode), client);
@@ -70,7 +72,7 @@ pub async fn deploy(opts: DeployOpts) -> Result<()> {
 
 pub async fn allow(opts: AllowlistOpts) -> Result<()> {
     let provider = Provider::<Http>::try_from(opts.node_url.as_str())?;
-    let client = opts.private_key.parse::<Wallet>()?.connect(provider);
+    let client = opts.private_key.parse::<LocalWallet>()?.connect(provider);
 
     let contract = DKGContract::new(opts.contract_address, client);
 
@@ -93,7 +95,7 @@ pub async fn allow(opts: AllowlistOpts) -> Result<()> {
 
 pub async fn start(opts: StartOpts) -> Result<()> {
     let provider = Provider::<Http>::try_from(opts.node_url.as_str())?;
-    let client = opts.private_key.parse::<Wallet>()?.connect(provider);
+    let client = opts.private_key.parse::<LocalWallet>()?.connect(provider);
 
     let contract = DKGContract::new(opts.contract_address, client);
 
@@ -112,7 +114,7 @@ where
     R: RngCore,
 {
     let provider = Provider::<Http>::try_from(opts.node_url.as_str())?;
-    let client = Arc::new(opts.private_key.parse::<Wallet>()?.connect(provider));
+    let client = Arc::new(opts.private_key.parse::<LocalWallet>()?.connect(provider));
 
     // we need the previous group and public poly for resharing
     let previous_group = {
@@ -155,7 +157,7 @@ where
     R: RngCore,
 {
     let provider = Provider::<Http>::try_from(opts.node_url.as_str())?;
-    let client = opts.private_key.parse::<Wallet>()?.connect(provider);
+    let client = opts.private_key.parse::<LocalWallet>()?.connect(provider);
     let dkg = DKGContract::new(opts.contract_address, client);
 
     // 1. Generate the keys
@@ -171,8 +173,8 @@ where
     run_dkg(dkg, phase0, rng, opts.output_path).await
 }
 
-async fn register<S: Scheme>(
-    dkg: &DKGContract<Http, Wallet>,
+async fn register<S: Scheme, M: Middleware>(
+    dkg: &DKGContract<M>,
     public_key: &S::Public,
 ) -> Result<()> {
     println!("Registering...");
@@ -186,7 +188,7 @@ async fn register<S: Scheme>(
     Ok(())
 }
 
-async fn get_group<C: Curve>(dkg: &DKGContract<Http, Wallet>) -> Result<Group<C>> {
+async fn get_group<C: Curve, M: Middleware>(dkg: &DKGContract<M>) -> Result<Group<C>> {
     let group = dkg.get_bls_keys().call().await?;
     let participants = dkg.get_participants().call().await?;
     confirm_group(&group, participants)?;
@@ -238,8 +240,8 @@ fn pubkeys_to_group<C: Curve>(pubkeys: (U256, Vec<Vec<u8>>)) -> Result<Group<C>>
 }
 
 // Shared helper for running the DKG in both normal and re-sharing mode
-async fn run_dkg<P, C, R>(
-    mut dkg: DKGContract<Http, Wallet>,
+async fn run_dkg<P, C, R, M: Middleware>(
+    mut dkg: DKGContract<M>,
     phase0: P,
     rng: &mut R,
     output_path: Option<String>,
@@ -312,8 +314,8 @@ struct OutputJson {
     share: String,
 }
 
-async fn wait_for_phase<P: JsonRpcClient, S: Signer>(
-    dkg: &DKGContract<P, S>,
+async fn wait_for_phase<M: Middleware>(
+    dkg: &DKGContract<M>,
     num: u64,
 ) -> Result<(), ContractError> {
     println!("Waiting for Phase {} to start", num);
