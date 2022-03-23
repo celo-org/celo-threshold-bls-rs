@@ -210,6 +210,8 @@ impl fmt::Display for G2 {
     }
 }
 
+//TODO: This interface should be refactored, GT is multiplicative subgroup of extension field
+// so using elliptic curve additive notation for it doesn't make sense
 impl Element for GT {
     type RHS = Scalar;
 
@@ -223,16 +225,16 @@ impl Element for GT {
         self.0.add_assign(s2.0);
     }
     fn mul(&mut self, mul: &Scalar) {
-        /*let scalar : &[u64] = mul.0.into();
+        let scalar : &[u64] = mul.0.0.as_ref();
         let mut res = Self(One::one());
         let mut temp = self.clone();
         for b in ark_ff::BitIteratorBE::without_leading_zeros(scalar) {
-            temp.0.square_in_place();
             if b {
                 res.0.mul_assign(temp.0);
             }
-        }*/
-        unimplemented!();
+            temp.0.square_in_place();
+        }
+        *self = res.clone();
     }
     fn rand<R: RngCore>(rng: &mut R) -> Self {
         Self(zexe::Fq12::rand(rng))
