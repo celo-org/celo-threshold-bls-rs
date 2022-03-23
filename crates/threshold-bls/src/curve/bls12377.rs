@@ -211,7 +211,7 @@ impl fmt::Display for G2 {
 }
 
 impl Element for GT {
-    type RHS = GT;
+    type RHS = Scalar;
 
     fn new() -> Self {
         Self(Zero::zero())
@@ -222,8 +222,17 @@ impl Element for GT {
     fn add(&mut self, s2: &Self) {
         self.0.add_assign(s2.0);
     }
-    fn mul(&mut self, mul: &GT) {
-        self.0.mul_assign(mul.0)
+    fn mul(&mut self, mul: &Scalar) {
+        /*let scalar : &[u64] = mul.0.into();
+        let mut res = Self(One::one());
+        let mut temp = self.clone();
+        for b in ark_ff::BitIteratorBE::without_leading_zeros(scalar) {
+            temp.0.square_in_place();
+            if b {
+                res.0.mul_assign(temp.0);
+            }
+        }*/
+        unimplemented!();
     }
     fn rand<R: RngCore>(rng: &mut R) -> Self {
         Self(zexe::Fq12::rand(rng))
