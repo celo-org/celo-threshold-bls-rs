@@ -13,7 +13,7 @@ threshold-bls = { path = "../threshold-bls", default-features = false }
 bls-crypto = { git = "https://github.com/celo-org/bls-crypto" }
 
 rand_core = { version = "0.6.3", default-features = false }
-rand_chacha = { version = "0.2.2", default-features = false }
+rand_chacha = { version = "0.3.1", default-features = false }
 
 wasm-bindgen = { version = "0.2.60", optional = true }
 bincode = { version = "1.2.1", default-features = false }
