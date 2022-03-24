@@ -83,7 +83,7 @@ pub trait PairingCurve: Debug {
 
     type G2: Point<RHS = Self::Scalar>;
 
-    type GT: Element;
+    type GT: Element<RHS = Self::Scalar>;
 
     /// Perfors a pairing operation between the 2 group elements
     fn pair(a: &Self::G1, b: &Self::G2) -> Self::GT;

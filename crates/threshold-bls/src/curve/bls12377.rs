@@ -441,7 +441,6 @@ mod tests {
         let base = GT::rand(rng);
 
         let mut sc = Scalar::one();
-        sc.0.fafsd();
         sc.add(&Scalar::one());
         sc.add(&Scalar::one());
 

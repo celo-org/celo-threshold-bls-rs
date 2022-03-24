@@ -329,7 +329,7 @@ dependencies = [
 [[package]]
 name = "bls-crypto"
 version = "0.3.0"
-source = "git+https://github.com/celo-org/bls-crypto#4c86150166c5c9cc3b1c3b23f4a251a2fbf3e7da"
+source = "git+https://github.com/celo-org/bls-crypto#33c7fc698a7012748816b204891214b18194c09f"
 dependencies = [
  "ark-bls12-377",
  "ark-crypto-primitives",
