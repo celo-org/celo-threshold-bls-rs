@@ -1,4 +1,5 @@
 use crate::group::{self, Element, PairingCurve as PC, Point, Scalar as Sc};
+use ark_ff::PrimeField;
 use ark_bls12_377 as zexe;
 //use algebra::{
 //    bls12_377 as zexe,
@@ -79,6 +80,7 @@ impl Element for Scalar {
     }
 
     fn one() -> Self {
+        //Self(<zexe::Bls12_377 as PairingEngine>::Fr::one())
         Self(One::one())
     }
 
@@ -140,7 +142,7 @@ impl Element for G1 {
     }
 
     fn mul(&mut self, mul: &Scalar) {
-        self.0.mul_assign(mul.0)
+        self.0.mul_assign(mul.0);
     }
 }
 
@@ -222,13 +224,13 @@ impl Element for GT {
         Self(One::one())
     }
     fn add(&mut self, s2: &Self) {
-        self.0.add_assign(s2.0);
+        self.0.mul_assign(s2.0);
     }
     fn mul(&mut self, mul: &Scalar) {
-        let scalar : &[u64] = mul.0.0.as_ref();
-        let mut res = Self(One::one());
+        let scalar = mul.0.into_repr();
+        let mut res = Self::one();
         let mut temp = self.clone();
-        for b in ark_ff::BitIteratorBE::without_leading_zeros(scalar) {
+        for b in ark_ff::BitIteratorLE::without_trailing_zeros(scalar) {
             if b {
                 res.0.mul_assign(temp.0);
             }
@@ -423,5 +425,24 @@ mod tests {
 
         let de: E = bincode::deserialize(&ser).unwrap();
         assert_eq!(de, sig);
+    }
+
+    #[test]
+    fn gt_exp() {
+        let rng = &mut rand::thread_rng();
+        let base = GT::rand(rng);
+
+        let mut sc = Scalar::one();
+        sc.add(&Scalar::one());
+        sc.add(&Scalar::one());
+
+        let mut exp = base.clone();
+        exp.mul(&sc);
+
+        let mut res = base.clone();
+        res.add(&base);
+        res.add(&base);
+
+        assert_eq!(exp, res);
     }
 }
