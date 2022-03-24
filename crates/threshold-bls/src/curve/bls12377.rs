@@ -72,6 +72,16 @@ pub struct GT(
     <zexe::Bls12_377 as PairingEngine>::Fqk,
 );
 
+impl Scalar {
+    pub fn from_random_bytes (bytes: &[u8]) -> Option<Self> {
+        let fr = zexe::Fr::from_random_bytes(&bytes)?;
+        Some(Self(fr))
+    }
+    pub fn serialized_size(&self) -> usize {
+        self.0.serialized_size()
+    }
+}
+
 impl Element for Scalar {
     type RHS = Scalar;
 
@@ -80,7 +90,6 @@ impl Element for Scalar {
     }
 
     fn one() -> Self {
-        //Self(<zexe::Bls12_377 as PairingEngine>::Fr::one())
         Self(One::one())
     }
 
@@ -433,6 +442,7 @@ mod tests {
         let base = GT::rand(rng);
 
         let mut sc = Scalar::one();
+        sc.0.fafsd();
         sc.add(&Scalar::one());
         sc.add(&Scalar::one());
 
