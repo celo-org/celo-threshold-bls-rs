@@ -122,6 +122,15 @@ impl Sc for Scalar {
     fn sub(&mut self, other: &Self) {
         self.0.sub_assign(other.0);
     }
+
+    fn from_random_bytes(bytes: &[u8]) -> Option<Self> {
+        let fr = zexe::Fr::from_random_bytes(&bytes)?;
+        Some(Self(fr))
+    }
+
+    fn serialized_size(&self) -> usize {
+        self.0.serialized_size()
+    }
 }
 
 impl fmt::Display for Scalar {
