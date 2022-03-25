@@ -12,6 +12,7 @@ name = "blind_threshold_bls"
 threshold-bls = { path = "../threshold-bls", default-features = false }
 bls-crypto = { git = "https://github.com/celo-org/bls-crypto" }
 
+getrandom = { version = "0.2", default-features = false, optional = true }
 rand_core = { version = "0.6.3", default-features = false }
 rand_chacha = { version = "0.3.1", default-features = false }
 
@@ -22,4 +23,4 @@ serde = { version = "1.0.106", default-features =  false }
 cfg-if = "0.1"
 
 [features]
-wasm = ["wasm-bindgen"]
+wasm = ["wasm-bindgen", "getrandom/js"]
