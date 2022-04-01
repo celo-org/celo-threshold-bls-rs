@@ -3,6 +3,7 @@ use wasm_bindgen::prelude::*;
 
 use rand_chacha::ChaChaRng;
 use rand_core::{RngCore, SeedableRng};
+use blake2::{Blake2s256, Digest};
 
 use threshold_bls::{
     poly::{Idx as Index, Poly},
@@ -32,7 +33,9 @@ type Result<T> = std::result::Result<T, JsValue>;
 /// - If the same seed is used twice, the blinded result WILL be the same
 pub fn blind(message: Vec<u8>, seed: &[u8]) -> BlindedMessage {
     // convert the seed to randomness
-    let mut rng = get_rng(&[&message, seed]);
+    // TODO(victor): If it is not a back compat concern, change this to the BLAKE2 function and
+    // include the message in the seed generation.
+    let mut rng = get_rng_deprecated(seed);
 
     // blind the message with this randomness
     let (blinding_factor, blinded_message) = SigScheme::blind_msg(&message, &mut rng);
@@ -386,6 +389,19 @@ fn get_rng(seeds: &[&[u8]]) -> impl RngCore {
     }
     let seed = outer.finalize();
     ChaChaRng::from_seed(seed.into())
+}
+
+// TODO(victor) Remove this when it is no longer used.
+fn get_rng_deprecated(digest: &[u8]) -> impl RngCore {
+    let seed = from_slice(digest);
+    ChaChaRng::from_seed(seed)
+}
+
+fn from_slice(bytes: &[u8]) -> [u8; 32] {
+    let mut array = [0; 32];
+    let bytes = &bytes[..array.len()]; // panics if not enough data
+    array.copy_from_slice(bytes);
+    array
 }
 
 #[cfg(test)]
