@@ -10,8 +10,7 @@ name = "blind_threshold_bls"
 
 [dependencies]
 threshold-bls = { path = "../threshold-bls", default-features = false }
-# DO NOT MERGE
-bls-crypto = { git = "https://github.com/nategraf/bls-crypto", branch = "victor/disable-parallel" }
+bls-crypto = { git = "https://github.com/celo-org/bls-crypto" }
 
 rand_core = { version = "0.6.3", default-features = false }
 rand_chacha = { version = "0.3.1", default-features = false }
