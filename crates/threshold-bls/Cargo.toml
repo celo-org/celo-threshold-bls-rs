@@ -20,12 +20,17 @@ sha2 = "0.8"
 # bls12_377
 ark-bls12-377 = { version = "0.3.0" }
 ark-serialize = { version = "0.3.0", features = [ "derive" ] }
-ark-ff = { version = "0.3.0", features = [ "std", "parallel"] }
-ark-ec = { version = "0.3.0", features = [ "std", "parallel"] }
-bls-crypto = { git = "https://github.com/celo-org/bls-crypto" }
+ark-ff = { version = "0.3.0", features = [ "std" ] }
+ark-ec = { version = "0.3.0", features = [ "std" ] }
+# DO NOT MERGE
+bls-crypto = { git = "https://github.com/nategraf/bls-crypto", branch = "victor/disable-parallel" }
 thiserror = "1.0.15"
 bincode = "1.2.1"
 
 [dev-dependencies]
 static_assertions = "1.1.0"
 proptest = "1.0.0"
+
+[features]
+# Enable parallel computation. Cannot be used with WASM.
+parallel = ["ark-ec/parallel", "ark-ff/parallel", "bls-crypto/parallel"]
