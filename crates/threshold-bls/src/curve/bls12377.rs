@@ -220,13 +220,13 @@ impl fmt::Display for G2 {
     }
 }
 
-//TODO: This interface should be refactored, GT is multiplicative subgroup of extension field
+//TODO (michael) : This interface should be refactored, GT is multiplicative subgroup of extension field
 // so using elliptic curve additive notation for it doesn't make sense
 impl Element for GT {
     type RHS = Scalar;
 
     fn new() -> Self {
-        Self(Zero::zero())
+        Self(One::one())
     }
     fn one() -> Self {
         Self(One::one())
