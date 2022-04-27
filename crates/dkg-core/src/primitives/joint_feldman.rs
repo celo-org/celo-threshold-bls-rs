@@ -69,7 +69,7 @@ impl<C: Curve> DKG<C> {
 
     /// Creates a new DKG instance from the provided private key, group and RNG.
     ///
-    /// The private key must be part of the group, otherwise this will return an error.
+    /// The public key must be part of the group, otherwise this will return an error.
     pub fn new_rand<R: RngCore>(
         private_key: C::Scalar,
         group: Group<C>,
