@@ -82,7 +82,7 @@ impl<C: Curve> DKG<C> {
         // check if the public key is part of the group
         let index = group
             .index(&public_key)
-            .ok_or_else(|| DKGError::PublicKeyNotFound)?;
+            .ok_or(DKGError::PublicKeyNotFound)?;
 
         // Generate a secret polynomial and commit to it
         let secret = PrivatePoly::<C>::new_from(group.threshold - 1, rng);
@@ -183,8 +183,8 @@ impl<C: Curve> Phase1<C> for DKGWaitingShare<C> {
         // The public key polynomial is the sum of all shared polynomials
         let mut fpub = self.info.public.clone();
         shares.iter().for_each(|(&dealer_idx, share)| {
-            fpub.add(&publics.get(&dealer_idx).unwrap());
-            fshare.add(&share);
+            fpub.add(publics.get(&dealer_idx).unwrap());
+            fshare.add(share);
         });
         let bundle = compute_bundle_response(my_idx, &statuses, publish_all);
         let new_dkg = DKGWaitingResponse::new(self.info, fshare, fpub, statuses, publics);
@@ -322,10 +322,10 @@ where
         );
 
         for (idx, share) in &valid_shares {
-            add_share.add(&share);
+            add_share.add(share);
             // unwrap since internal_process_justi. gauarantees each share comes
             // from a public polynomial we've seen in the first round.
-            add_public.add(&self.publics.get(idx).unwrap());
+            add_public.add(self.publics.get(idx).unwrap());
         }
         // QUAL is the set of all entries in the matrix where all bits are set
         let statuses = self.statuses.borrow();
@@ -373,7 +373,7 @@ pub mod tests {
         default_threshold,
     };
     use std::fmt::Debug;
-    use threshold_bls::curve::bls12381::{Curve as BCurve, G1};
+    use threshold_bls::curve::bls12377::{G1Curve as BCurve, G1};
 
     use serde::{de::DeserializeOwned, Serialize};
     use static_assertions::assert_impl_all;
@@ -400,7 +400,7 @@ pub mod tests {
         let (privs, group) = setup_group::<BCurve>(n, default_threshold(n));
         for (i, private) in privs.iter().enumerate() {
             let mut public = G1::one();
-            public.mul(&private);
+            public.mul(private);
             let idx = group.index(&public).expect("should find public key");
             assert_eq!(idx, i as Idx);
         }

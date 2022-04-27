@@ -91,7 +91,7 @@ impl<C: Element> Poly<C> {
             self.0.resize(other.0.len(), C::zero())
         }
 
-        self.0.iter_mut().zip(&other.0).for_each(|(a, b)| a.add(&b))
+        self.0.iter_mut().zip(&other.0).for_each(|(a, b)| a.add(b))
     }
 }
 
@@ -352,12 +352,11 @@ impl<C: fmt::Display> fmt::Display for Poly<C> {
     }
 }
 
-#[cfg(feature = "bls12_381")]
 #[cfg(test)]
 pub mod tests {
     use super::*;
-    use crate::curve::bls12381::Scalar as Sc;
-    use crate::curve::bls12381::G1;
+    use crate::curve::bls12377::Scalar as Sc;
+    use crate::curve::bls12377::G1;
     use rand::prelude::*;
 
     #[test]

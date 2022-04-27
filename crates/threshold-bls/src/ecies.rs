@@ -1,4 +1,4 @@
-//! # ECIES
+/*//! # ECIES
 //!
 //! Implements an Elliptic Curve Integrated Encryption Scheme using SHA256 as the Key Derivation
 //! Function.
@@ -26,7 +26,7 @@
 //!
 //! assert_eq!(&message[..], &cleartext[..]);
 //! ```
-
+*/
 use crate::group::{Curve, Element};
 use rand_core::RngCore;
 use serde::{Deserialize, Serialize};
@@ -79,7 +79,7 @@ pub fn encrypt<C: Curve, R: RngCore>(to: &C::Point, msg: &[u8], rng: &mut R) -> 
     let ephemeral_key = derive::<C>(&dh);
 
     // instantiate the AEAD scheme
-    let aead = ChaCha20Poly1305::new(ephemeral_key.into());
+    let aead = ChaCha20Poly1305::new(&ephemeral_key.into());
 
     // generate a random nonce
     let mut nonce: [u8; NONCE_LEN] = [0u8; NONCE_LEN];
@@ -87,7 +87,7 @@ pub fn encrypt<C: Curve, R: RngCore>(to: &C::Point, msg: &[u8], rng: &mut R) -> 
 
     // do the encryption
     let aead = aead
-        .encrypt(&nonce.into(), &msg[..])
+        .encrypt(&nonce.into(), msg)
         .expect("aead should not fail");
 
     EciesCipher {
@@ -101,11 +101,11 @@ pub fn encrypt<C: Curve, R: RngCore>(to: &C::Point, msg: &[u8], rng: &mut R) -> 
 pub fn decrypt<C: Curve>(private: &C::Scalar, cipher: &EciesCipher<C>) -> Result<Vec<u8>, AError> {
     // dh = private * (eph * G) = private * ephPublic
     let mut dh = cipher.ephemeral.clone();
-    dh.mul(&private);
+    dh.mul(private);
 
     let ephemeral_key = derive::<C>(&dh);
 
-    let aead = ChaCha20Poly1305::new((ephemeral_key).into());
+    let aead = ChaCha20Poly1305::new(&ephemeral_key.into());
 
     aead.decrypt(&cipher.nonce.into(), &cipher.aead[..])
 }
@@ -125,11 +125,10 @@ fn derive<C: Curve>(dh: &C::Point) -> [u8; KEY_LEN] {
     ephemeral_key
 }
 
-#[cfg(feature = "bls12_381")]
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::curve::bls12381::{Curve, Scalar, G1};
+    use crate::curve::bls12377::{G1Curve as Curve, Scalar, G1};
     use rand::thread_rng;
 
     fn kp() -> (Scalar, G1) {

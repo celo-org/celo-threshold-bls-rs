@@ -77,7 +77,7 @@ impl<I: SignatureScheme> ThresholdScheme for I {
         let valid_partials: Vec<Eval<Self::Signature>> = partials
             .iter()
             .map(|partial| {
-                let eval: Eval<Vec<u8>> = bincode::deserialize(&partial)?;
+                let eval: Eval<Vec<u8>> = bincode::deserialize(partial)?;
                 let sig = bincode::deserialize(&eval.value)?;
                 Ok(Eval {
                     index: eval.index,
@@ -92,12 +92,11 @@ impl<I: SignatureScheme> ThresholdScheme for I {
     }
 }
 
-#[cfg(feature = "bls12_381")]
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::{
-        curve::bls12381::PairingCurve as PCurve,
+        curve::bls12377::PairingCurve as PCurve,
         sig::{
             bls::{G1Scheme, G2Scheme},
             Scheme, SignatureScheme,
@@ -138,7 +137,7 @@ mod tests {
             false,
             partials
                 .iter()
-                .any(|p| T::partial_verify(&public, &msg, &p).is_err())
+                .any(|p| T::partial_verify(&public, &msg, p).is_err())
         );
         let final_sig = T::aggregate(threshold, &partials).unwrap();
 

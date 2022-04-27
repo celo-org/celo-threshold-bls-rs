@@ -120,8 +120,8 @@ where
     fn final_exp(p: &Self::Public, sig: &Self::Signature, hm: &Self::Signature) -> bool {
         // e(g1,sig) == e(pub, H(m))
         // e(g1,H(m))^x == e(g1,H(m))^x
-        let left = C::pair(&C::G1::one(), &sig);
-        let right = C::pair(p, &hm);
+        let left = C::pair(&C::G1::one(), sig);
+        let right = C::pair(p, hm);
         left == right
     }
 }
@@ -149,17 +149,16 @@ where
     fn final_exp(p: &Self::Public, sig: &Self::Signature, hm: &Self::Signature) -> bool {
         // e(sig,g2) == e(H(m),pub)
         // e(H(m),g2)^x == e(H(m),g2)^x
-        let left = C::pair(&sig, &Self::Public::one());
-        let right = C::pair(&hm, p);
+        let left = C::pair(sig, &Self::Public::one());
+        let right = C::pair(hm, p);
         left == right
     }
 }
 
-#[cfg(feature = "bls12_381")]
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::curve::bls12381::{Curve as G1Curve, G2Curve, PairingCurve as PCurve};
+    use crate::curve::bls12377::{G1Curve, G2Curve, PairingCurve as PCurve};
     use crate::group::Curve;
     use rand::prelude::*;
 
