@@ -254,7 +254,7 @@ impl Element for GT {
 
 // TODO (michael): Write unit test for this
 impl PrimeOrder for GT {
-    fn in_correct_subgroup(&mut self) -> bool {
+    fn in_correct_subgroup(&self) -> bool {
         self.0
             .pow(<zexe::Bls12_377 as PairingEngine>::Fr::characteristic())
             .is_zero()
