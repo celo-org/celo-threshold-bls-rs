@@ -464,7 +464,7 @@ unsafe fn deserialize<T: DeserializeOwned>(
     len: usize,
     out: *mut *mut T,
 ) -> bool {
-    let buf = unsafe { std::slice::from_raw_parts(in_buf, len) };
+    let buf = std::slice::from_raw_parts(in_buf, len);
 
     let obj = if let Ok(res) = bincode::deserialize(&buf) {
         res
@@ -478,7 +478,7 @@ unsafe fn deserialize<T: DeserializeOwned>(
 }
 
 unsafe fn serialize<T: Serialize>(in_obj: *const T, out_bytes: *mut *mut u8) -> bool {
-    let obj = unsafe { &*in_obj };
+    let obj = &*in_obj;
     let mut marshalled = if let Ok(res) = bincode::serialize(obj) {
         res
     } else {
