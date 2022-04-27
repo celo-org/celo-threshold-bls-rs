@@ -36,13 +36,21 @@ pub trait Element:
     }
 }
 
+/// Checks inclusion in prime order subgroup. Only needed when underlying trait
+/// does not enforce this already
+pub trait PrimeOrder: Element {
+    /// Checks the provided element is in the correct prime-order subgroup
+    fn in_correct_subgroup(&mut self) -> bool;
+}
+
 /// Scalar can be multiplied by only a Scalar, no other elements.
 pub trait Scalar: Element {
     fn set_int(&mut self, i: u64);
     fn inverse(&self) -> Option<Self>;
     fn negate(&mut self);
     fn sub(&mut self, other: &Self);
-    // TODO
+    fn from_random_bytes(bytes: &[u8]) -> Option<Self>;
+    fn serialized_size(&self) -> usize;
 }
 
 /// Basic point functionality that can be multiplied by a scalar
@@ -82,7 +90,7 @@ pub trait PairingCurve: Debug {
 
     type G2: Point<RHS = Self::Scalar>;
 
-    type GT: Element;
+    type GT: Element<RHS = Self::Scalar>;
 
     /// Perfors a pairing operation between the 2 group elements
     fn pair(a: &Self::G1, b: &Self::G2) -> Self::GT;
