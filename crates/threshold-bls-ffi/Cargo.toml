@@ -17,6 +17,8 @@ rand_chacha = { version = "0.3.1", default-features = false }
 
 bincode = { version = "1.2.1", default-features = false }
 serde = { version = "1.0.106", default-features =  false }
+blake2b_simd = { version = "1.0.0", default-features = false }
+
 
 # Required for WASM interface
 blake2 = { version = "0.10", default-features = false, optional = true }

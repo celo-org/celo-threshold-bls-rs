@@ -2,6 +2,7 @@
 use rand_chacha::ChaChaRng;
 use rand_core::{RngCore, SeedableRng};
 
+use blake2b_simd::Params;
 use serde::{de::DeserializeOwned, Serialize};
 use threshold_bls::{
     poly::{Idx as Index, Poly},
@@ -581,7 +582,12 @@ pub unsafe extern "C" fn destroy_sig(signature: *mut Signature) {
 ///
 /// The seed MUST be at least 32 bytes long
 #[no_mangle]
-pub unsafe extern "C" fn threshold_keygen(n: usize, t: usize, seed: *const Buffer, keys: *mut *mut Keys) {
+pub unsafe extern "C" fn threshold_keygen(
+    n: usize,
+    t: usize,
+    seed: *const Buffer,
+    keys: *mut *mut Keys,
+) {
     let seed = <&[u8]>::from(unsafe { &*seed });
     let mut rng = get_rng(seed);
     let private = Poly::<PrivateKey>::new_from(t - 1, &mut rng);
@@ -713,13 +719,13 @@ fn from_slice(bytes: &[u8]) -> [u8; 32] {
     let mut array = [0; 32];
     let hash_result = Params::new()
         .hash_length(32)
-        .personal(b"THRESHOLD BLS_rng") // personalization
+        .personal(b"BLS_rng") // personalization
         .to_state()
         .update(bytes) // digest
         .finalize()
         .as_ref()
         .to_vec();
-    array.copy_from_slice(hash_result);
+    array.copy_from_slice(&hash_result);
     array
 }
 
