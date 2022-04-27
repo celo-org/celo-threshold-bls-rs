@@ -710,8 +710,15 @@ fn get_rng(digest: &[u8]) -> impl RngCore {
 
 fn from_slice(bytes: &[u8]) -> [u8; 32] {
     let mut array = [0; 32];
-    let bytes = &bytes[..array.len()]; // panics if not enough data
-    array.copy_from_slice(bytes);
+    let hash_result = Params::new()
+        .hash_length(32)
+        .personal(b"THRESHOLD BLS_rng") // personalization
+        .to_state()
+        .update(bytes) // digest
+        .finalize()
+        .as_ref()
+        .to_vec();
+    array.copy_from_slice(hash_result);
     array
 }
 
