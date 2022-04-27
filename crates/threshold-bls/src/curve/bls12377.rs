@@ -1,6 +1,7 @@
+use crate::group::PrimeOrder;
 use crate::group::{self, Element, PairingCurve as PC, Point, Scalar as Sc};
-use ark_ff::PrimeField;
 use ark_bls12_377 as zexe;
+use ark_ff::PrimeField;
 //use algebra::{
 //    bls12_377 as zexe,
 //    curves::{AffineCurve, PairingEngine, ProjectiveCurve},
@@ -9,8 +10,8 @@ use ark_bls12_377 as zexe;
 //    CanonicalDeserialize, CanonicalSerialize, ConstantSerializedSize,
 //};
 use ark_ec::{AffineCurve, PairingEngine, ProjectiveCurve};
-use ark_ff::{One, Zero, UniformRand, Field};
-use ark_serialize::{CanonicalSerialize, CanonicalDeserialize};
+use ark_ff::{Field, One, UniformRand, Zero};
+use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
 use bls_crypto::{
     hash_to_curve::{try_and_increment::TryAndIncrement, HashToCurve},
     hashers::DirectHasher,
@@ -251,6 +252,15 @@ impl Element for GT {
     }
 }
 
+// TODO (michael): Write unit test for this
+impl PrimeOrder for GT {
+    fn in_correct_subgroup(&mut self) -> bool {
+        self.0
+            .pow(<zexe::Bls12_377 as PairingEngine>::Fr::characteristic())
+            .is_zero()
+    }
+}
+
 impl fmt::Display for GT {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{{{:?}}}", self.0)
@@ -354,7 +364,7 @@ where
         where
             S: SeqAccess<'de>,
         {
-            let len = C::Affine::zero().serialized_size();//C::Affine::SERIALIZED_SIZE;
+            let len = C::Affine::zero().serialized_size(); //C::Affine::SERIALIZED_SIZE;
             let bytes: Vec<u8> = (0..len)
                 .map(|_| {
                     seq.next_element()?
