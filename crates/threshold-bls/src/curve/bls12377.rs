@@ -257,7 +257,7 @@ impl PrimeOrder for GT {
     fn in_correct_subgroup(&self) -> bool {
         self.0
             .pow(<zexe::Bls12_377 as PairingEngine>::Fr::characteristic())
-            .is_zero()
+            .is_one()
     }
 }
 
