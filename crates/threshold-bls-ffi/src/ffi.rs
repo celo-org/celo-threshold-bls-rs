@@ -59,7 +59,7 @@ pub unsafe extern "C" fn blind(
 
     // blind the message with this randomness
     let message = <&[u8]>::from(unsafe { &*message });
-    let (blinding_factor, blinded_message_bytes) = SigScheme::blind_msg(&message, &mut rng);
+    let (blinding_factor, blinded_message_bytes) = SigScheme::blind_msg(message, &mut rng);
 
     unsafe { *blinded_message_out = Buffer::from(&blinded_message_bytes[..]) };
     std::mem::forget(blinded_message_bytes);
@@ -133,7 +133,7 @@ pub unsafe extern "C" fn verify(
 
     // checks the signature on the message hash
     let signature = <&[u8]>::from(unsafe { &*signature });
-    SigScheme::verify(public_key, &message, signature).is_ok()
+    SigScheme::verify(public_key, message, signature).is_ok()
 }
 
 ///////////////////////////////////////////////////////////////////////////
@@ -161,7 +161,7 @@ pub unsafe extern "C" fn sign(
     let private_key = unsafe { &*private_key };
     let message = <&[u8]>::from(unsafe { &*message });
 
-    let sig = match SigScheme::sign(&private_key, &message) {
+    let sig = match SigScheme::sign(private_key, message) {
         Ok(s) => s,
         Err(_) => return false,
     };
@@ -193,7 +193,7 @@ pub unsafe extern "C" fn sign_blinded_message(
     let private_key = unsafe { &*private_key };
     let message = <&[u8]>::from(unsafe { &*message });
 
-    let sig = match SigScheme::blind_sign(&private_key, &message) {
+    let sig = match SigScheme::blind_sign(private_key, message) {
         Ok(s) => s,
         Err(_) => return false,
     };
@@ -297,7 +297,7 @@ pub unsafe extern "C" fn partial_verify(
     let blinded_message = <&[u8]>::from(unsafe { &*blinded_message });
     let signature = <&[u8]>::from(unsafe { &*signature });
 
-    SigScheme::partial_verify(&polynomial, blinded_message, signature).is_ok()
+    SigScheme::partial_verify(polynomial, blinded_message, signature).is_ok()
 }
 
 /// Verifies a partial *blinded* signature against the public key corresponding to the secret shared
@@ -325,7 +325,7 @@ pub unsafe extern "C" fn partial_verify_blind_signature(
     let blinded_message = <&[u8]>::from(unsafe { &*blinded_message });
     let signature = <&[u8]>::from(unsafe { &*signature });
 
-    SigScheme::verify_blind_partial(&polynomial, blinded_message, signature).is_ok()
+    SigScheme::verify_blind_partial(polynomial, blinded_message, signature).is_ok()
 }
 
 /// Combines a flattened vector of partial signatures to a single threshold signature
@@ -466,7 +466,7 @@ unsafe fn deserialize<T: DeserializeOwned>(
 ) -> bool {
     let buf = unsafe { std::slice::from_raw_parts(in_buf, len) };
 
-    let obj = if let Ok(res) = bincode::deserialize(&buf) {
+    let obj = if let Ok(res) = bincode::deserialize(buf) {
         res
     } else {
         return false;
@@ -618,7 +618,7 @@ pub unsafe extern "C" fn threshold_keygen(n: usize, t: usize, seed: *const Buffe
 #[no_mangle]
 pub unsafe extern "C" fn keygen(seed: *const Buffer, keypair: *mut *mut Keypair) {
     let seed = <&[u8]>::from(unsafe { &*seed });
-    let mut rng = get_rng(&seed);
+    let mut rng = get_rng(seed);
     let (private, public) = SigScheme::keypair(&mut rng);
     let keypair_local = Keypair { private, public };
     unsafe { *keypair = Box::into_raw(Box::new(keypair_local)) };
@@ -908,7 +908,7 @@ mod tests {
         let message = unsafe { std::slice::from_raw_parts(privkey_buf, PRIVKEY_LEN) };
         assert_eq!(marshalled, message);
 
-        let unmarshalled: PrivateKey = bincode::deserialize(&message).unwrap();
+        let unmarshalled: PrivateKey = bincode::deserialize(message).unwrap();
         assert_eq!(&unmarshalled, private_key);
 
         let mut de = MaybeUninit::<*mut PrivateKey>::uninit();
@@ -942,7 +942,7 @@ mod tests {
         let message = unsafe { std::slice::from_raw_parts(pubkey_buf, PUBKEY_LEN) };
         assert_eq!(marshalled, message);
 
-        let unmarshalled: PublicKey = bincode::deserialize(&message).unwrap();
+        let unmarshalled: PublicKey = bincode::deserialize(message).unwrap();
         assert_eq!(&unmarshalled, public_key);
 
         let mut de = MaybeUninit::<*mut PublicKey>::uninit();

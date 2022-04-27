@@ -87,7 +87,7 @@ pub fn encrypt<C: Curve, R: RngCore>(to: &C::Point, msg: &[u8], rng: &mut R) -> 
 
     // do the encryption
     let aead = aead
-        .encrypt(&nonce.into(), &msg[..])
+        .encrypt(&nonce.into(), msg)
         .expect("aead should not fail");
 
     EciesCipher {
@@ -101,7 +101,7 @@ pub fn encrypt<C: Curve, R: RngCore>(to: &C::Point, msg: &[u8], rng: &mut R) -> 
 pub fn decrypt<C: Curve>(private: &C::Scalar, cipher: &EciesCipher<C>) -> Result<Vec<u8>, AError> {
     // dh = private * (eph * G) = private * ephPublic
     let mut dh = cipher.ephemeral.clone();
-    dh.mul(&private);
+    dh.mul(private);
 
     let ephemeral_key = derive::<C>(&dh);
 

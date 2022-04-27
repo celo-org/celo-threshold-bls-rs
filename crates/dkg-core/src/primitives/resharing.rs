@@ -397,7 +397,7 @@ where
                 !check_public_resharing::<C>(
                     b.dealer_idx,
                     // take the public polynomial we received in the first step
-                    &publics.get(&b.dealer_idx).unwrap(),
+                    publics.get(&b.dealer_idx).unwrap(),
                     &info.prev_public,
                 )
             })

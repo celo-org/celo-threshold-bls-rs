@@ -365,7 +365,7 @@ mod tests {
         let pubkey = outputs[0].public.public_key();
 
         // verify the threshold signature
-        S::verify(&pubkey, &msg, &unblinded_sig).unwrap();
+        S::verify(pubkey, &msg, &unblinded_sig).unwrap();
     }
 
     async fn run_dkg<C, P, R>(

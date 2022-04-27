@@ -115,7 +115,7 @@ impl Sc for Scalar {
     }
 
     fn from_random_bytes(bytes: &[u8]) -> Option<Self> {
-        let fr = zexe::Fr::from_random_bytes(&bytes)?;
+        let fr = zexe::Fr::from_random_bytes(bytes)?;
         Some(Self(fr))
     }
 
