@@ -7,6 +7,11 @@ pub type DKGResult<A> = Result<A, DKGError>;
 #[derive(Debug, Error)]
 /// Errors which may occur during the DKG
 pub enum DKGError {
+    /// PrivateKeyInvalid is raised when the private key is either identity
+    /// element or neutral element in the  finite field.
+    #[error("private key cannot be identity element or neutral element")]
+    PrivateKeyInvalid,
+
     /// PublicKeyNotFound is raised when the private key given to the DKG init
     /// function does not yield a public key that is included in the group.
     #[error("public key not found in list of participants")]
