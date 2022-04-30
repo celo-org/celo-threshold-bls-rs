@@ -10,7 +10,7 @@ jobs:
   test:
     name: Test
     env:
-      PROJECT_NAME_UNDERSCORE: celo-threshold-bls-rs
+      PROJECT_NAME_UNDERSCORE: celo_threshold_bls_rs
       CARGO_INCREMENTAL: 0
       CARGO_OPTIONS: --features=wasm
       RUSTFLAGS: -Zprofile -Ccodegen-units=1 -Copt-level=0 -Clink-dead-code -Coverflow-checks=off -Zpanic_abort_tests -Cpanic=abort
