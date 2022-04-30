@@ -10,7 +10,7 @@ jobs:
   test:
     name: Test
     env:
-      PROJECT_NAME_UNDERSCORE: celo_threshold_bls
+      PROJECT_NAME_UNDERSCORE: celo_threshold_bls_rs
       CARGO_INCREMENTAL: 0
       CARGO_OPTIONS: --features=wasm
       RUSTFLAGS: -Zprofile -Ccodegen-units=1 -Copt-level=0 -Clink-dead-code -Coverflow-checks=off -Zpanic_abort_tests -Cpanic=abort
@@ -18,7 +18,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v2
-      - uses: actions-rs/toolchain@v1
+      - name: Install latest nightly
+        uses: actions-rs/toolchain@v1
         with:
           profile: minimal
           toolchain: nightly
