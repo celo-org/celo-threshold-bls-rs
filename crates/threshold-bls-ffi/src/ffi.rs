@@ -581,7 +581,12 @@ pub unsafe extern "C" fn destroy_sig(signature: *mut Signature) {
 ///
 /// The seed MUST be at least 32 bytes long
 #[no_mangle]
-pub unsafe extern "C" fn threshold_keygen(n: usize, t: usize, seed: *const Buffer, keys: *mut *mut Keys) {
+pub unsafe extern "C" fn threshold_keygen(
+    n: usize,
+    t: usize,
+    seed: *const Buffer,
+    keys: *mut *mut Keys,
+) {
     let seed = <&[u8]>::from(unsafe { &*seed });
     let mut rng = get_rng(seed);
     let private = Poly::<PrivateKey>::new_from(t - 1, &mut rng);
