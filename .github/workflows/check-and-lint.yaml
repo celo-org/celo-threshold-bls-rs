@@ -1,11 +1,10 @@
+name: Check and Lint
 on:
   pull_request:
   push:
     branches:
       - main
 
-
-name: Check and Lint
 
 jobs:
   check:
