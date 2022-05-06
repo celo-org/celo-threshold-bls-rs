@@ -1,9 +1,9 @@
 //! # BLS12-377 WASM Bindings for Blind Threshold Signatures.
 use wasm_bindgen::prelude::*;
 
+use blake2::{Blake2s256, Digest};
 use rand_chacha::ChaChaRng;
 use rand_core::{RngCore, SeedableRng};
-use blake2::{Blake2s256, Digest};
 
 use threshold_bls::{
     poly::{Idx as Index, Poly},
