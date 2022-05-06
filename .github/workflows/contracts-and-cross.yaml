@@ -85,4 +85,4 @@ jobs:
       - name: Install wasm-pack
         run: curl https://rustwasm.github.io/wasm-pack/installer/init.sh -sSf | sh
       - name: Build wasm
-        run: cd crates/threshold-bls-ffi && wasm-pack build
+        run: cd crates/threshold-bls-ffi && wasm-pack build --target nodejs -- --features=wasm
