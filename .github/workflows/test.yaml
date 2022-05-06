@@ -1,4 +1,4 @@
-name: Test with Code Coverage
+name: CI Test
 on:
   pull_request:
   push:
@@ -8,24 +8,17 @@ on:
 jobs:
   test:
     name: Test on ${{ matrix.os }}
-    env:
-      PROJECT_NAME_UNDERSCORE: celo_threshold_bls_rs
-      CARGO_INCREMENTAL: 0
-      CARGO_OPTIONS: --features=wasm
-      RUSTFLAGS: -Zprofile -Ccodegen-units=1 -Copt-level=0 -Clink-dead-code -Coverflow-checks=off -Zpanic_abort_tests -Cpanic=abort
-      RUSTDOCFLAGS: -Cpanic=abort
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
         os: [ubuntu-latest, windows-latest, macOS-latest]
 
     steps:
-      - uses: actions/checkout@v2
-      - name: Install latest nightly
+      - uses: actions/checkout@v3
+      - name: Install stable rust
         uses: actions-rs/toolchain@v1
         with:
-          profile: minimal
-          toolchain: nightly
+          toolchain: stable
           override: true
       - name: Cache dependencies
         uses: actions/cache@v2
@@ -40,26 +33,12 @@ jobs:
             ~/.cargo/registry/cache
             target
           key: ${{ runner.os }}-build-${{ env.cache-name }}-${{ hashFiles('Cargo.lock') }}
-      # - name: Generate test result and coverage report
-      #   run: |
-      #     cargo install cargo2junit grcov;
-      #     cargo test $CARGO_OPTIONS -- -Z unstable-options --format json | cargo2junit > results.xml;
-      #     zip -0 ccov.zip `find . \( -name "$PROJECT_NAME_UNDERSCORE*.gc*" \) -print`;
-      #     grcov ccov.zip -s . -t lcov --llvm --ignore-not-existing --ignore "/*" --ignore "tests/*" -o lcov.info;
-      # - name: Upload test results
-      #   uses: EnricoMi/publish-unit-test-result-action@v1
-      #   with:
-      #     check_name: Test Results
-      #     github_token: ${{ secrets.GITHUB_TOKEN }}
-      #     files: results.xml
-      # - name: Upload to CodeCov
-      #   uses: codecov/codecov-action@v1
-      #   with:
-      #     # required for private repositories:
-      #     # token: ${{ secrets.CODECOV_TOKEN }}
-      #     files: ./lcov.info
-      #     fail_ci_if_error: true
-
+      - name: Run tests
+        uses: actions-rs/cargo@v1
+        with:
+          command: test
+          args: --verbose --release --all --all-features
+          
   codecov:
     name: Code coverage
     runs-on: ubuntu-latest
