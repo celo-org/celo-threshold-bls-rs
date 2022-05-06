@@ -79,6 +79,11 @@ impl<C: Curve> DKG<C> {
         let mut public_key = C::Point::one();
         public_key.mul(&private_key);
 
+        // make sure the private key is not identity element nor neutral element
+        if private_key == C::Scalar::zero() || private_key == C::Scalar::one() {
+            return Err(DKGError::PrivateKeyInvalid);
+        }
+
         // check if the public key is part of the group
         let index = group
             .index(&public_key)
