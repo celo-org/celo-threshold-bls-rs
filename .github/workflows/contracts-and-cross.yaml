@@ -16,9 +16,10 @@ jobs:
       - uses: actions/setup-node@v1
         with:
           node-version: '16'
-      - run: cd solidity
+      # - run: cd solidity
       - name: Install dependencies
-        run: yarn
-      - run: yarn build
+        run: cd solidity && yarn
+      - name: Build packages
+        run: cd solidity && yarn build
       - name: Run contract tests
-        run: yarn test       
+        run: cd solidity && yarn test       
