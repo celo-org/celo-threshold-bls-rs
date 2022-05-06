@@ -61,7 +61,7 @@ pub struct DKG<C: Curve> {
 impl<C: Curve> DKG<C> {
     /// Creates a new DKG instance from the provided private key and group.
     ///
-    /// The private key must be part of the group, otherwise this will return an error.
+    /// The public key must be part of the group, otherwise this will return an error.
     pub fn new(private_key: C::Scalar, group: Group<C>) -> Result<DKG<C>, DKGError> {
         use rand::prelude::*;
         Self::new_rand(private_key, group, &mut thread_rng())
