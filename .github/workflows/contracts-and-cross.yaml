@@ -13,9 +13,10 @@ jobs:
 
   #   steps:
   #     - uses: actions/checkout@v1
-  #     - uses: actions/setup-node@v1
+  #     - uses: actions/setup-node@v2
   #       with:
-  #         node-version: '16'
+  #         node-version: '12'
+  #         check-latest: true
   #     - name: Install dependencies
   #       run: cd solidity && yarn
   #     - name: Build packages
@@ -24,22 +25,48 @@ jobs:
   #       run: cd solidity && yarn test
 
 
-  cross-ios:
-    runs-on: macos-latest
-    env: 
-      DEVELOPER_DIR: /Applications/Xcode_11.4.app/Contents/Developer
-    # macos:
-    #   xcode: 11.4.0
-    # working_directory: ~/work
+  # cross-ios:
+  #   name: macOS
+  #   runs-on: macos-latest
+  #   env: 
+  #     DEVELOPER_DIR: /Applications/Xcode_11.4.0.app/Contents/Developer
+  
+  #   steps:
+  #     - uses: actions/checkout@v2
+  #     - name: Install rustup
+  #       run: curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
+  #     - name: Install Rust 1.41
+  #       run: rustup install 1.41.0 && rustup default 1.41.0
+  #     - name: Install iOS targets
+  #       run: rustup target add armv7-apple-ios armv7s-apple-ios aarch64-apple-ios x86_64-apple-ios
+  #     - name: Build iOS
+  #       run: cd crates/threshold-bls-ffi/cross && make ios
+   
+
+  cross-android:
+    name: Android
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v2
+      - uses: actions/setup-node@v2
+        with:
+          node-version: '12'
+          check-latest: true
+      - uses: actions/cache@v2
+        with:
+          path: |
+            node_modules
+            */*/node_modules
+          key: ${{ runner.os }}-modules-${{ hashFiles('**/yarn.lock') }}
       - name: Install rustup
         run: curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
       - name: Install Rust 1.41
         run: rustup install 1.41.0 && rustup default 1.41.0
-      - name: Install iOS targets
-        run: rustup target add armv7-apple-ios armv7s-apple-ios aarch64-apple-ios x86_64-apple-ios
-      - name: Build iOS
-        run: cd crates/threshold-bls-ffi/cross && make ios
-    # - store_artifacts:
-    #     path: ~/work/cross/react-native/ios      
+      - name: Install Android targets
+        run: rustup target add aarch64-linux-android armv7-linux-androideabi arm-linux-androideabi i686-linux-android x86_64-linux-android
+      - name: Download NDK
+        run: cd crates/threshold-bls-ffi && wget https://dl.google.com/android/repository/android-ndk-r21-linux-x86_64.zip && unzip android-ndk-r21-linux-x86_64.zip
+      - name: Create standalone toolchain
+        run: cd crates/threshold-bls-ffi/cross && NDK_HOME=$PWD/../android-ndk-r21 ./create-ndk-standalone.sh
+      - name: Build Android
+        run: cd crates/threshold-bls-ffi/cross && make android
