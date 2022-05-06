@@ -1,0 +1,24 @@
+name: Contract and Cross Platform
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+
+jobs:
+  contracts:
+    name: Test Contracts
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v1
+      - uses: actions/setup-node@v1
+        with:
+          node-version: latest
+      - run: cd solidity
+      - name: Install dependencies
+        run: yarn
+      - run: yarn build
+      - name: Run contract tests
+        run: yarn test       

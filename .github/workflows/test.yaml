@@ -5,6 +5,7 @@ on:
     branches:
       - main
 
+
 jobs:
   test:
     name: Test on ${{ matrix.os }}
@@ -38,7 +39,7 @@ jobs:
         with:
           command: test
           args: --verbose --release --all --all-features
-          
+
   codecov:
     name: Code coverage
     runs-on: ubuntu-latest
