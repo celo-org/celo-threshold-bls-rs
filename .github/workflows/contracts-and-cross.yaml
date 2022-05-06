@@ -7,10 +7,24 @@ on:
 
 
 jobs:
+  wasm:
+    name: Build wasm
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - name: Install stable rust
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+          override: true
+      - name: Install wasm-pack
+        run: curl https://rustwasm.github.io/wasm-pack/installer/init.sh -sSf | sh
+      - name: Build wasm
+        run: cd crates/threshold-bls-ffi && wasm-pack build --target nodejs -- --features=wasm
+
 #   contracts:
 #     name: Test Contracts
 #     runs-on: ubuntu-latest
-
 #     steps:
 #       - uses: actions/checkout@v1
 #       - uses: actions/setup-node@v2
@@ -23,7 +37,6 @@ jobs:
 #         run: cd solidity && yarn build
 #       - name: Run contract tests
 #         run: cd solidity && yarn test
-
 
 #   cross-ios:
 #     name: macOS
@@ -42,7 +55,6 @@ jobs:
 #       - name: Build iOS
 #         run: cd crates/threshold-bls-ffi/cross && make ios
    
-
 #   cross-android:
 #     name: Android
 #     runs-on: ubuntu-latest
@@ -70,19 +82,3 @@ jobs:
 #         run: cd crates/threshold-bls-ffi/cross && NDK_HOME=$PWD/../android-ndk-r21 ./create-ndk-standalone.sh
 #       - name: Build Android
 #         run: cd crates/threshold-bls-ffi/cross && make android
-
-  wasm:
-    name: Build wasm
-    runs-on: ubuntu-latest
-
-    steps:
-      - uses: actions/checkout@v3
-      - name: Install stable rust
-        uses: actions-rs/toolchain@v1
-        with:
-          toolchain: stable
-          override: true
-      - name: Install wasm-pack
-        run: curl https://rustwasm.github.io/wasm-pack/installer/init.sh -sSf | sh
-      - name: Build wasm
-        run: cd crates/threshold-bls-ffi && wasm-pack build --target nodejs -- --features=wasm

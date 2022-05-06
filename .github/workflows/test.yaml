@@ -13,7 +13,6 @@ jobs:
     strategy:
       matrix:
         os: [ubuntu-latest, windows-latest, macOS-latest]
-
     steps:
       - uses: actions/checkout@v3
       - name: Install stable rust
@@ -43,10 +42,8 @@ jobs:
   codecov:
     name: Code coverage
     runs-on: ubuntu-latest
-
     steps:
       - uses: actions/checkout@v3
-      # Use stable for this to ensure that cargo-tarpaulin can be built.
       - uses: actions-rs/toolchain@v1
         with:
           toolchain: stable
