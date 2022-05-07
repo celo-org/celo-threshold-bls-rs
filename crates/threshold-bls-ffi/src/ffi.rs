@@ -459,11 +459,7 @@ pub unsafe extern "C" fn serialize_sig(sig: *const Signature, sig_buf: *mut *mut
     serialize(sig, sig_buf)
 }
 
-unsafe fn deserialize<T: DeserializeOwned>(
-    in_buf: *const u8,
-    len: usize,
-    out: *mut *mut T,
-) -> bool {
+fn deserialize<T: DeserializeOwned>(in_buf: *const u8, len: usize, out: *mut *mut T) -> bool {
     let buf = unsafe { std::slice::from_raw_parts(in_buf, len) };
 
     let obj = if let Ok(res) = bincode::deserialize(buf) {
@@ -477,7 +473,7 @@ unsafe fn deserialize<T: DeserializeOwned>(
     true
 }
 
-unsafe fn serialize<T: Serialize>(in_obj: *const T, out_bytes: *mut *mut u8) -> bool {
+fn serialize<T: Serialize>(in_obj: *const T, out_bytes: *mut *mut u8) -> bool {
     let obj = unsafe { &*in_obj };
     let mut marshalled = if let Ok(res) = bincode::serialize(obj) {
         res
@@ -581,7 +577,12 @@ pub unsafe extern "C" fn destroy_sig(signature: *mut Signature) {
 ///
 /// The seed MUST be at least 32 bytes long
 #[no_mangle]
-pub unsafe extern "C" fn threshold_keygen(n: usize, t: usize, seed: *const Buffer, keys: *mut *mut Keys) {
+pub unsafe extern "C" fn threshold_keygen(
+    n: usize,
+    t: usize,
+    seed: *const Buffer,
+    keys: *mut *mut Keys,
+) {
     let seed = <&[u8]>::from(unsafe { &*seed });
     let mut rng = get_rng(seed);
     let private = Poly::<PrivateKey>::new_from(t - 1, &mut rng);
