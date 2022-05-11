@@ -23,3 +23,15 @@ pub(crate) const VEC_LENGTH: usize = 8;
 pub(crate) const SIGNATURE_LEN: usize = 48;
 pub(crate) const PARTIAL_SIG_LENGTH: usize =
     VEC_LENGTH + SIGNATURE_LEN + std::mem::size_of::<Idx>();
+
+use blake2::Blake2s256;
+
+fn from_slice(bytes: &[u8]) -> [u8; 32] {
+    let mut array = [0; 32];
+    if bytes.len() > PRIVKEY_LEN {
+        let bytes = Blake2s256::new().hash_length(32).update(bytes).finalize();
+    }
+    let bytes = &bytes[..array.len()]; // panics if not enough data
+    array.copy_from_slice(&bytes);
+    array
+}
