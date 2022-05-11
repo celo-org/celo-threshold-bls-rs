@@ -40,7 +40,7 @@ pub trait Element:
 /// does not enforce this already
 pub trait PrimeOrder: Element {
     /// Checks the provided element is in the correct prime-order subgroup
-    fn in_correct_subgroup(&mut self) -> bool;
+    fn in_correct_subgroup(&self) -> bool;
 }
 
 /// Scalar can be multiplied by only a Scalar, no other elements.
