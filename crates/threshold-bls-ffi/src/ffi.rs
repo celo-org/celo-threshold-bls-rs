@@ -1,8 +1,5 @@
 //! # BLS12-377 FFI Bindings for Blind Threshold Signatures.
-use rand_chacha::ChaChaRng;
-use rand_core::{RngCore, SeedableRng};
 
-use blake2b_simd::Params;
 use serde::{de::DeserializeOwned, Serialize};
 use threshold_bls::{
     poly::{Idx as Index, Poly},
@@ -56,7 +53,7 @@ pub unsafe extern "C" fn blind(
 
     // convert the seed to randomness
     let seed = <&[u8]>::from(unsafe { &*seed });
-    let mut rng = get_rng(seed);
+    let mut rng = get_rng(seed).unwrap();
 
     // blind the message with this randomness
     let message = <&[u8]>::from(unsafe { &*message });
@@ -585,7 +582,7 @@ pub unsafe extern "C" fn threshold_keygen(
     keys: *mut *mut Keys,
 ) {
     let seed = <&[u8]>::from(unsafe { &*seed });
-    let mut rng = get_rng(seed);
+    let mut rng = get_rng(seed).unwrap();
     let private = Poly::<PrivateKey>::new_from(t - 1, &mut rng);
     let shares = (0..n)
         .map(|i| private.eval(i as Index))
@@ -620,7 +617,7 @@ pub unsafe extern "C" fn threshold_keygen(
 #[no_mangle]
 pub unsafe extern "C" fn keygen(seed: *const Buffer, keypair: *mut *mut Keypair) {
     let seed = <&[u8]>::from(unsafe { &*seed });
-    let mut rng = get_rng(seed);
+    let mut rng = get_rng(seed).unwrap();
     let (private, public) = SigScheme::keypair(&mut rng);
     let keypair_local = Keypair { private, public };
     unsafe { *keypair = Box::into_raw(Box::new(keypair_local)) };
@@ -704,25 +701,6 @@ pub struct Keypair {
     private: PrivateKey,
     /// The public key
     public: PublicKey,
-}
-
-fn get_rng(digest: &[u8]) -> impl RngCore {
-    let seed = from_slice(digest);
-    ChaChaRng::from_seed(seed)
-}
-
-fn from_slice(bytes: &[u8]) -> [u8; 32] {
-    let mut array = [0; 32];
-    let hash_result = Params::new()
-        .hash_length(32)
-        .personal(b"BLS_rng") // personalization
-        .to_state()
-        .update(bytes) // digest
-        .finalize()
-        .as_ref()
-        .to_vec();
-    array.copy_from_slice(&hash_result);
-    array
 }
 
 // The general pattern in these FFI tests is:

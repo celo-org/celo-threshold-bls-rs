@@ -304,17 +304,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "blake2b_simd"
-version = "1.0.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "72936ee4afc7f8f736d1c38383b56480b5497b4617b4a77bdbf1d2ababc76127"
-dependencies = [
- "arrayref",
- "arrayvec",
- "constant_time_eq",
-]
-
-[[package]]
 name = "blake2s_simd"
 version = "1.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1324,7 +1313,6 @@ version = "0.2.0"
 dependencies = [
  "bincode",
  "blake2 0.10.4",
- "blake2b_simd",
  "bls-crypto",
  "cfg-if 0.1.10",
  "console_error_panic_hook",
@@ -1332,6 +1320,7 @@ dependencies = [
  "rand_chacha",
  "rand_core",
  "serde",
+ "thiserror",
  "threshold-bls",
  "wasm-bindgen",
 ]

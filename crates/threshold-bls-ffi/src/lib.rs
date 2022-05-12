@@ -24,14 +24,42 @@ pub(crate) const SIGNATURE_LEN: usize = 48;
 pub(crate) const PARTIAL_SIG_LENGTH: usize =
     VEC_LENGTH + SIGNATURE_LEN + std::mem::size_of::<Idx>();
 
-use blake2::Blake2s256;
+use bls_crypto::{hashers::DirectHasher, Hasher};
+use rand_chacha::ChaChaRng;
+use rand_core::{RngCore, SeedableRng};
+use thiserror::Error;
 
-fn from_slice(bytes: &[u8]) -> [u8; 32] {
-    let mut array = [0; 32];
-    if bytes.len() > PRIVKEY_LEN {
-        let bytes = Blake2s256::new().hash_length(32).update(bytes).finalize();
+#[derive(Debug, Error)]
+pub enum RNGError {
+    #[error("could not hash digest correctly")]
+    HashError(#[from] bls_crypto::BLSError),
+
+    #[error("The length of seed bytes is not long enough")]
+    LengthError,
+}
+
+fn get_rng(digest: &[u8]) -> Result<impl RngCore, RNGError> {
+    let mut seed = digest;
+    if seed.len() > 32 {
+        let hash = &DirectHasher
+            .hash(b"BLS_RNG", seed, 32)
+            .map_err(|_| RNGError::HashError)?;
+        seed = &hash.to_vec();
     }
-    let bytes = &bytes[..array.len()]; // panics if not enough data
-    array.copy_from_slice(&bytes);
-    array
+
+    let res = match from_slice(seed) {
+        Ok(bytes) => Ok(ChaChaRng::from_seed(bytes)),
+        Err(e) => Err(e),
+    };
+    res
+}
+
+fn from_slice(bytes: &[u8]) -> Result<[u8; 32], RNGError> {
+    let mut array = [0; 32];
+    if bytes.len() < 32 {
+        return Err(RNGError::LengthError);
+    }
+    let bytes = &bytes[..array.len()]; // Make sure there is enough data
+    array.copy_from_slice(bytes);
+    Ok(array)
 }
