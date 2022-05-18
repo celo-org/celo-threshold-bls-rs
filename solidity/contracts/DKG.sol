@@ -1,7 +1,7 @@
 // Using the ABIEncoderV2 poses little risk here because we only use it for fetching the byte arrays
 // of shares/responses/justifications
 pragma experimental ABIEncoderV2;
-pragma solidity >=0.8.12 <0.9.0;
+pragma solidity >=0.6.6 <0.9.0;
 
 contract DKG {
     enum UserState {
