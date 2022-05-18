@@ -22,21 +22,21 @@ jobs:
       - name: Build wasm
         run: cd crates/threshold-bls-ffi && wasm-pack build --target nodejs -- --features=wasm
 
-   contracts:
-     name: Test Contracts
-     runs-on: ubuntu-latest
-     steps:
-       - uses: actions/checkout@v1
-       - uses: actions/setup-node@v2
-         with:
-           node-version: '12'
-           check-latest: true
-       - name: Install dependencies
-         run: cd solidity && yarn
-       - name: Build packages
-         run: cd solidity && yarn build
-       - name: Run contract tests
-         run: cd solidity && yarn test
+  contracts:
+    name: Test Contracts
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v1
+      - uses: actions/setup-node@v2
+        with:
+          node-version: '12'
+          check-latest: true
+      - name: Install dependencies
+        run: cd solidity && yarn
+      - name: Build packages
+        run: cd solidity && yarn build
+      - name: Run contract tests
+        run: cd solidity && yarn test
 
 #   cross-ios:
 #     name: macOS
