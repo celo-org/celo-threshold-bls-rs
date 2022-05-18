@@ -40,12 +40,14 @@ jobs:
 
   cross-ios:
     name: macOS
-    runs-on: macOS-latest
+    runs-on: macos-latest
     env:
       DEVELOPER_DIR: /Applications/Xcode_11.4.app/Contents/Developer
 
     steps:
       - uses: actions/checkout@v2
+      - name: install xcode
+        run: xcode-select --install
       - name: Install rustup
         run: curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
       - name: Install Rust 1.41
