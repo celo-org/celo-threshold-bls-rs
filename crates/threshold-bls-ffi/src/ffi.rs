@@ -53,7 +53,10 @@ pub unsafe extern "C" fn blind(
 
     // convert the seed to randomness
     let seed = <&[u8]>::from(unsafe { &*seed });
-    let mut rng = get_rng(seed).unwrap();
+    let mut rng = match get_rng(seed) {
+        Ok(r) => r,
+        Err(_) => return (),
+    };
 
     // blind the message with this randomness
     let message = <&[u8]>::from(unsafe { &*message });
@@ -582,7 +585,11 @@ pub unsafe extern "C" fn threshold_keygen(
     keys: *mut *mut Keys,
 ) {
     let seed = <&[u8]>::from(unsafe { &*seed });
-    let mut rng = get_rng(seed).unwrap();
+
+    let mut rng = match get_rng(seed) {
+        Ok(r) => r,
+        Err(_) => return false,
+    };
     let private = Poly::<PrivateKey>::new_from(t - 1, &mut rng);
     let shares = (0..n)
         .map(|i| private.eval(i as Index))
@@ -617,7 +624,10 @@ pub unsafe extern "C" fn threshold_keygen(
 #[no_mangle]
 pub unsafe extern "C" fn keygen(seed: *const Buffer, keypair: *mut *mut Keypair) {
     let seed = <&[u8]>::from(unsafe { &*seed });
-    let mut rng = get_rng(seed).unwrap();
+    let mut rng = match get_rng(seed) {
+        Ok(r) => r,
+        Err(_) => return (),
+    };
     let (private, public) = SigScheme::keypair(&mut rng);
     let keypair_local = Keypair { private, public };
     unsafe { *keypair = Box::into_raw(Box::new(keypair_local)) };

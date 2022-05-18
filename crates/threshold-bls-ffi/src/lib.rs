@@ -39,14 +39,14 @@ pub enum RNGError {
 }
 
 fn get_rng(digest: &[u8]) -> Result<impl RngCore, RNGError> {
-    let mut seed = digest;
+    let mut seed = digest.to_vec();
     if digest.len() > 32 {
         let hash = &DirectHasher
             .hash(b"BLS_RNG", digest, 32)?;
-        seed = &hash.to_vec();
+        seed = hash.to_vec();
     }
 
-    let res = match from_slice(seed) {
+    let res = match from_slice(&seed) {
         Ok(bytes) => Ok(ChaChaRng::from_seed(bytes)),
         Err(e) => Err(e),
     };
