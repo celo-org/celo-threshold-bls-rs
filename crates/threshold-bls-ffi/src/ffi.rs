@@ -55,7 +55,7 @@ pub unsafe extern "C" fn blind(
     let seed = <&[u8]>::from(unsafe { &*seed });
     let mut rng = match get_rng(seed) {
         Ok(r) => r,
-        Err(_) => return (),
+        Err(_) => return false,
     };
 
     // blind the message with this randomness
@@ -583,12 +583,12 @@ pub unsafe extern "C" fn threshold_keygen(
     t: usize,
     seed: *const Buffer,
     keys: *mut *mut Keys,
-) {
+) -> Result<(), RNGError> {
     let seed = <&[u8]>::from(unsafe { &*seed });
 
     let mut rng = match get_rng(seed) {
         Ok(r) => r,
-        Err(_) => return false,
+        Err(e) => return Err(e),
     };
     let private = Poly::<PrivateKey>::new_from(t - 1, &mut rng);
     let shares = (0..n)
@@ -612,6 +612,8 @@ pub unsafe extern "C" fn threshold_keygen(
     unsafe {
         *keys = Box::into_raw(Box::new(keys_local));
     };
+
+    Ok(())
 }
 
 /// Generates a single private key from the provided seed.
@@ -622,15 +624,20 @@ pub unsafe extern "C" fn threshold_keygen(
 ///
 /// The seed MUST be at least 32 bytes long
 #[no_mangle]
-pub unsafe extern "C" fn keygen(seed: *const Buffer, keypair: *mut *mut Keypair) {
+pub unsafe extern "C" fn keygen(
+    seed: *const Buffer,
+    keypair: *mut *mut Keypair,
+) -> Result<(), RNGError> {
     let seed = <&[u8]>::from(unsafe { &*seed });
     let mut rng = match get_rng(seed) {
         Ok(r) => r,
-        Err(_) => return (),
+        Err(e) => return Err(e),
     };
     let (private, public) = SigScheme::keypair(&mut rng);
     let keypair_local = Keypair { private, public };
     unsafe { *keypair = Box::into_raw(Box::new(keypair_local)) };
+
+    Ok(())
 }
 
 /// Gets the `index`'th share corresponding to the provided `Keys` pointer
@@ -704,7 +711,6 @@ pub struct Keys {
 }
 
 #[derive(Clone)]
-#[repr(C)]
 /// A BLS12-377 Keypair
 pub struct Keypair {
     /// The private key
