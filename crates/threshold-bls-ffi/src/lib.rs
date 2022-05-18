@@ -41,7 +41,7 @@ pub enum RNGError {
 fn get_rng(digest: &[u8]) -> Result<impl RngCore, RNGError> {
     let mut seed = digest;
     if digest.len() > 32 {
-        let hash = DirectHasher
+        let hash = &DirectHasher
             .hash(b"BLS_RNG", digest, 32)?;
         seed = &hash.to_vec();
     }
