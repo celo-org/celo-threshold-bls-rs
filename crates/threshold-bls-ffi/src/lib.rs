@@ -46,11 +46,11 @@ fn get_rng(digest: &[u8]) -> Result<impl RngCore, RNGError> {
         seed = hash.to_vec();
     }
 
-    let res = match from_slice(&seed) {
+    let rng = match from_slice(&seed) {
         Ok(bytes) => Ok(ChaChaRng::from_seed(bytes)),
         Err(e) => Err(e),
     };
-    res
+    rng
 }
 
 fn from_slice(bytes: &[u8]) -> Result<[u8; 32], RNGError> {
