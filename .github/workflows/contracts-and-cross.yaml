@@ -38,22 +38,22 @@ jobs:
       - name: Run contract tests
         run: cd solidity && yarn test
 
-   cross-ios:
-     name: macOS
-     runs-on: macos-latest
-     env:
-       DEVELOPER_DIR: /Applications/Xcode_11.4.0.app/Contents/Developer
-  
-     steps:
-       - uses: actions/checkout@v2
-       - name: Install rustup
-         run: curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
-       - name: Install Rust 1.41
-         run: rustup install 1.41.0 && rustup default 1.41.0
-       - name: Install iOS targets
-         run: rustup target add armv7-apple-ios armv7s-apple-ios aarch64-apple-ios x86_64-apple-ios
-       - name: Build iOS
-         run: cd crates/threshold-bls-ffi/cross && make ios
+  cross-ios:
+    name: macOS
+    runs-on: macos-latest
+    env:
+      DEVELOPER_DIR: /Applications/Xcode_11.4.0.app/Contents/Developer
+
+    steps:
+      - uses: actions/checkout@v2
+      - name: Install rustup
+        run: curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
+      - name: Install Rust 1.41
+        run: rustup install 1.41.0 && rustup default 1.41.0
+      - name: Install iOS targets
+        run: rustup target add armv7-apple-ios armv7s-apple-ios aarch64-apple-ios x86_64-apple-ios
+      - name: Build iOS
+        run: cd crates/threshold-bls-ffi/cross && make ios
    
 #   cross-android:
 #     name: Android
