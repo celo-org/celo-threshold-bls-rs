@@ -19,7 +19,6 @@ rand_chacha = { version = "0.3.1", default-features = false }
 bincode = { version = "1.2.1", default-features = false }
 serde = { version = "1.0.106", default-features =  false }
 
-
 # Required for WASM interface
 blake2 = { version = "0.10", default-features = false, optional = true }
 getrandom = { version = "0.2", default-features = false, optional = true }
