@@ -490,6 +490,76 @@ fn serialize<T: Serialize>(in_obj: *const T, out_bytes: *mut *mut u8) -> bool {
     true
 }
 
+/// Generates a t-of-n polynomial and private key shares
+///
+/// The return value should be destroyed with `destroy_keys`.
+///
+/// # Safety
+///
+/// WARNING: This is a helper function for local testing of the library. Do not use
+/// in production, unless you trust the person that generated the keys.
+///
+/// The seed MUST be at least 32 bytes long
+#[no_mangle]
+pub unsafe extern "C" fn threshold_keygen(
+    n: usize,
+    t: usize,
+    seed: *const Buffer,
+    keys: *mut *mut Keys,
+) -> bool {
+    let seed = <&[u8]>::from(unsafe { &*seed });
+
+    let mut rng = match get_rng(seed) {
+        Ok(r) => r,
+        Err(_) => return false,
+    };
+    let private = Poly::<PrivateKey>::new_from(t - 1, &mut rng);
+    let shares = (0..n)
+        .map(|i| private.eval(i as Index))
+        .map(|e| Share {
+            index: e.index,
+            private: e.value,
+        })
+        .collect();
+    let polynomial: Poly<PublicKey> = private.commit();
+    let threshold_public_key = polynomial.public_key().clone();
+
+    let keys_local = Keys {
+        shares,
+        polynomial,
+        threshold_public_key,
+        t,
+        n,
+    };
+
+    unsafe {
+        *keys = Box::into_raw(Box::new(keys_local));
+    };
+
+    true
+}
+
+/// Generates a single private key from the provided seed.
+///
+/// The return value should be destroyed with `destroy_keypair`.
+///
+/// # Safety
+///
+/// The seed MUST be at least 32 bytes long
+#[no_mangle]
+pub unsafe extern "C" fn keygen(seed: *const Buffer, keypair: *mut *mut Keypair) -> bool {
+    let seed = <&[u8]>::from(unsafe { &*seed });
+    let mut rng = match get_rng(seed) {
+        Ok(r) => r,
+        Err(_) => return false,
+    };
+    let (private, public) = SigScheme::keypair(&mut rng);
+    let keypair_local = Keypair { private, public };
+    unsafe { *keypair = Box::into_raw(Box::new(keypair_local)) };
+
+    true
+}
+
 #[no_mangle]
 /// Frees the memory allocated for the blinding factor
 ///
@@ -566,79 +636,6 @@ pub unsafe extern "C" fn destroy_sig(signature: *mut Signature) {
 // These should be exposed behind a helper module and should not be made part
 // of the public API
 ///////////////////////////////////////////////////////////////////////////
-
-/// Generates a t-of-n polynomial and private key shares
-///
-/// The return value should be destroyed with `destroy_keys`.
-///
-/// # Safety
-///
-/// WARNING: This is a helper function for local testing of the library. Do not use
-/// in production, unless you trust the person that generated the keys.
-///
-/// The seed MUST be at least 32 bytes long
-#[no_mangle]
-pub unsafe extern "C" fn threshold_keygen(
-    n: usize,
-    t: usize,
-    seed: *const Buffer,
-    keys: *mut *mut Keys,
-) -> Result<(), RNGError> {
-    let seed = <&[u8]>::from(unsafe { &*seed });
-
-    let mut rng = match get_rng(seed) {
-        Ok(r) => r,
-        Err(e) => return Err(e),
-    };
-    let private = Poly::<PrivateKey>::new_from(t - 1, &mut rng);
-    let shares = (0..n)
-        .map(|i| private.eval(i as Index))
-        .map(|e| Share {
-            index: e.index,
-            private: e.value,
-        })
-        .collect();
-    let polynomial: Poly<PublicKey> = private.commit();
-    let threshold_public_key = polynomial.public_key().clone();
-
-    let keys_local = Keys {
-        shares,
-        polynomial,
-        threshold_public_key,
-        t,
-        n,
-    };
-
-    unsafe {
-        *keys = Box::into_raw(Box::new(keys_local));
-    };
-
-    Ok(())
-}
-
-/// Generates a single private key from the provided seed.
-///
-/// The return value should be destroyed with `destroy_keypair`.
-///
-/// # Safety
-///
-/// The seed MUST be at least 32 bytes long
-#[no_mangle]
-pub unsafe extern "C" fn keygen(
-    seed: *const Buffer,
-    keypair: *mut *mut Keypair,
-) -> Result<(), RNGError> {
-    let seed = <&[u8]>::from(unsafe { &*seed });
-    let mut rng = match get_rng(seed) {
-        Ok(r) => r,
-        Err(e) => return Err(e),
-    };
-    let (private, public) = SigScheme::keypair(&mut rng);
-    let keypair_local = Keypair { private, public };
-    unsafe { *keypair = Box::into_raw(Box::new(keypair_local)) };
-
-    Ok(())
-}
 
 /// Gets the `index`'th share corresponding to the provided `Keys` pointer
 ///
