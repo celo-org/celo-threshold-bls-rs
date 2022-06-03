@@ -55,7 +55,7 @@ where
     fn blind_msg<R: RngCore>(msg: &[u8], rng: &mut R) -> (Self::Token, Vec<u8>) {
         let r = I::Private::rand(rng);
         if r == I::Private::zero() || r == I::Private::one() {
-           panic!("weak blinding because of broken RNG");
+            panic!("weak blinding because of broken RNG");
         }
 
         let mut h = I::Signature::new();

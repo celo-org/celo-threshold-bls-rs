@@ -1,8 +1,8 @@
 use crate::group::PrimeOrder;
 use crate::group::{self, Element, PairingCurve as PC, Point, Scalar as Sc};
 use ark_bls12_377 as bls377;
-use ark_ff::PrimeField;
 use ark_ec::{AffineCurve, PairingEngine, ProjectiveCurve};
+use ark_ff::PrimeField;
 use ark_ff::{Field, One, UniformRand, Zero};
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
 use bls_crypto::{

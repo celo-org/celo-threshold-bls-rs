@@ -1,4 +1,4 @@
-version: 2
+on: 2
 
 jobs:
   contracts:
