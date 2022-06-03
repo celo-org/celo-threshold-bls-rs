@@ -1320,6 +1320,7 @@ dependencies = [
  "rand_chacha",
  "rand_core",
  "serde",
+ "thiserror",
  "threshold-bls",
  "wasm-bindgen",
 ]

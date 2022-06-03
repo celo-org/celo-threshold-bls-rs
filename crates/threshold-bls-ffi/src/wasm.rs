@@ -4,6 +4,7 @@ use wasm_bindgen::prelude::*;
 use blake2::{Blake2s256, Digest};
 use rand_chacha::ChaChaRng;
 use rand_core::{RngCore, SeedableRng};
+use wasm_bindgen::JsStatic;
 
 use threshold_bls::{
     poly::{Idx as Index, Poly},
@@ -35,7 +36,7 @@ pub fn blind(message: Vec<u8>, seed: &[u8]) -> BlindedMessage {
     // convert the seed to randomness
     // TODO(victor): If it is not a back compat concern, change this to the BLAKE2 function and
     // include the message in the seed generation.
-    let mut rng = get_rng_deprecated(seed);
+    let mut rng = get_rng(seed);
 
     // blind the message with this randomness
     let (blinding_factor, blinded_message) = SigScheme::blind_msg(&message, &mut rng);
@@ -268,7 +269,7 @@ pub fn combine(threshold: usize, signatures: Vec<u8>) -> Result<Vec<u8>> {
 ///
 /// The seed MUST be at least 32 bytes long
 pub fn threshold_keygen(n: usize, t: usize, seed: &[u8]) -> Keys {
-    let mut rng = get_rng(&[seed]);
+    let mut rng = get_rng(seed);
     let private = Poly::<PrivateKey>::new_from(t - 1, &mut rng);
     let shares = (0..n)
         .map(|i| private.eval(i as Index))
@@ -342,7 +343,7 @@ impl Keypair {
 /// The seed MUST be at least 32 bytes long
 #[wasm_bindgen]
 pub fn keygen(seed: Vec<u8>) -> Keypair {
-    let mut rng = get_rng(&[&seed]);
+    let mut rng = get_rng(&seed);
     let (private, public) = SigScheme::keypair(&mut rng);
     Keypair { private, public }
 }
@@ -379,30 +380,6 @@ impl Keys {
     }
 }
 
-// Creates a PRNG for use in deterministic blinding of messages or in key generation from the array
-// of seeds provided as input.
-fn get_rng(seeds: &[&[u8]]) -> impl RngCore {
-    let mut outer = Blake2s256::new();
-    outer.update("Celo POPRF WASM RNG Seed");
-    for seed in seeds.iter() {
-        outer.update(Blake2s256::digest(seed));
-    }
-    let seed = outer.finalize();
-    ChaChaRng::from_seed(seed.into())
-}
-
-// TODO(victor) Remove this when it is no longer used.
-fn get_rng_deprecated(digest: &[u8]) -> impl RngCore {
-    let seed = from_slice(digest);
-    ChaChaRng::from_seed(seed)
-}
-
-fn from_slice(bytes: &[u8]) -> [u8; 32] {
-    let mut array = [0; 32];
-    let bytes = &bytes[..array.len()]; // panics if not enough data
-    array.copy_from_slice(bytes);
-    array
-}
 
 #[cfg(test)]
 mod tests {
