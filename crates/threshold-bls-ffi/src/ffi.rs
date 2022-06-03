@@ -501,7 +501,7 @@ fn serialize<T: Serialize>(in_obj: *const T, out_bytes: *mut *mut u8) -> bool {
 ///
 /// The seed MUST be at least 32 bytes long
 #[no_mangle]
-pub unsafe extern "C" fn threshold_keygen(
+pub extern "C" fn threshold_keygen(
     n: usize,
     t: usize,
     seed: *const Buffer,
@@ -547,7 +547,7 @@ pub unsafe extern "C" fn threshold_keygen(
 ///
 /// The seed MUST be at least 32 bytes long
 #[no_mangle]
-pub unsafe extern "C" fn keygen(seed: *const Buffer, keypair: *mut *mut Keypair) -> bool {
+pub extern "C" fn keygen(seed: *const Buffer, keypair: *mut *mut Keypair) -> bool {
     let seed = <&[u8]>::from(unsafe { &*seed });
     let mut rng = match get_rng(seed) {
         Ok(r) => r,
