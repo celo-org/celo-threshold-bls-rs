@@ -708,6 +708,7 @@ pub struct Keys {
 }
 
 #[derive(Clone)]
+#[repr(C)]
 /// A BLS12-377 Keypair
 pub struct Keypair {
     /// The private key
