@@ -57,7 +57,10 @@ pub async fn deploy(opts: DeployOpts) -> Result<()> {
     let bytecode = bytecode.from_hex::<Vec<u8>>()?;
 
     let provider = Provider::<Http>::try_from(opts.node_url.as_str())?;
-    let client = opts.private_key.parse::<LocalWallet>()?.connect(provider);
+    let wallet = opts.private_key.parse::<LocalWallet>()?;
+    let client = SignerMiddleware::new(provider, wallet);
+    let client = Arc::new(client);
+
     let abi = DKG_ABI.clone();
 
     let factory = ContractFactory::new(abi, Bytes::from(bytecode), client);
@@ -72,7 +75,9 @@ pub async fn deploy(opts: DeployOpts) -> Result<()> {
 
 pub async fn allow(opts: AllowlistOpts) -> Result<()> {
     let provider = Provider::<Http>::try_from(opts.node_url.as_str())?;
-    let client = opts.private_key.parse::<LocalWallet>()?.connect(provider);
+    let wallet = opts.private_key.parse::<LocalWallet>()?;
+    let client = SignerMiddleware::new(provider, wallet);
+    let client = Arc::new(client);
 
     let contract = DKGContract::new(opts.contract_address, client);
 
@@ -84,7 +89,8 @@ pub async fn allow(opts: AllowlistOpts) -> Result<()> {
             .send()
             .await?;
         println!("Sent `allow` tx for {:?} (hash: {:?})", addr, tx);
-        tx_futs.push(contract.client().pending_transaction(tx));
+        //tx_futs.push(contract.client().pending_transaction(tx));
+        tx_futs.push(tx);
     }
 
     // Await them all
@@ -95,8 +101,9 @@ pub async fn allow(opts: AllowlistOpts) -> Result<()> {
 
 pub async fn start(opts: StartOpts) -> Result<()> {
     let provider = Provider::<Http>::try_from(opts.node_url.as_str())?;
-    let client = opts.private_key.parse::<LocalWallet>()?.connect(provider);
-
+    let wallet = opts.private_key.parse::<LocalWallet>()?;
+    let client = SignerMiddleware::new(provider, wallet);
+    let client = Arc::new(client);
     let contract = DKGContract::new(opts.contract_address, client);
 
     // Submit the tx and wait for the confirmation
@@ -114,7 +121,9 @@ where
     R: RngCore,
 {
     let provider = Provider::<Http>::try_from(opts.node_url.as_str())?;
-    let client = Arc::new(opts.private_key.parse::<LocalWallet>()?.connect(provider));
+    let wallet = opts.private_key.parse::<LocalWallet>()?;
+    let client = SignerMiddleware::new(provider, wallet);
+    let client = Arc::new(client);
 
     // we need the previous group and public poly for resharing
     let previous_group = {
@@ -157,7 +166,10 @@ where
     R: RngCore,
 {
     let provider = Provider::<Http>::try_from(opts.node_url.as_str())?;
-    let client = opts.private_key.parse::<LocalWallet>()?.connect(provider);
+    let wallet = opts.private_key.parse::<LocalWallet>()?;
+    let client = SignerMiddleware::new(provider, wallet);
+    let client = Arc::new(client);
+
     let dkg = DKGContract::new(opts.contract_address, client);
 
     // 1. Generate the keys
