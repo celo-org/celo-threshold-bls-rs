@@ -81,20 +81,14 @@ pub async fn allow(opts: AllowlistOpts) -> Result<()> {
 
     let contract = DKGContract::new(opts.contract_address, client);
 
-    let mut tx_futs = Vec::new();
     for addr in opts.address {
         let tx = contract
             .allowlist(addr)
-            .block(BlockNumber::Pending)
-            .send()
-            .await?;
+            .block(BlockNumber::Pending);
+        let tx = tx.send()
+            .await?.await?;
         println!("Sent `allow` tx for {:?} (hash: {:?})", addr, tx);
-        //tx_futs.push(contract.client().pending_transaction(tx));
-        tx_futs.push(tx);
     }
-
-    // Await them all
-    futures::future::join_all(tx_futs).await;
 
     Ok(())
 }
@@ -107,17 +101,17 @@ pub async fn start(opts: StartOpts) -> Result<()> {
     let contract = DKGContract::new(opts.contract_address, client);
 
     // Submit the tx and wait for the confirmation
-    let tx_hash = contract.start().send().await?;
-    let _tx_receipt = contract.client().pending_transaction(tx_hash).await?;
+    let tx_hash = contract.start().send().await?.await?;
 
     Ok(())
 }
 
-pub async fn reshare<S, C, R>(opts: ReshareConfig, rng: &mut R) -> Result<()>
+pub async fn reshare<S, M, C, R>(opts: ReshareConfig, rng: &mut R) -> Result<()>
 where
     C: Curve,
     // We need to bind the Curve's Point and Scalars to the Scheme
     S: Scheme<Public = <C as Curve>::Point, Private = <C as Curve>::Scalar>,
+    M: Middleware,
     R: RngCore,
 {
     let provider = Provider::<Http>::try_from(opts.node_url.as_str())?;
@@ -139,7 +133,7 @@ where
 
     let (private_key, public_key) = S::keypair(rng);
 
-    register::<S>(&dkg, &public_key).await?;
+    register::<S,M>(&dkg, &public_key).await?;
     let new_group = get_group::<C>(&dkg).await?;
 
     let phase0 = if let Some(share) = opts.share {
@@ -191,8 +185,7 @@ async fn register<S: Scheme, M: Middleware>(
 ) -> Result<()> {
     println!("Registering...");
     let public_key_serialized = bincode::serialize(public_key)?;
-    let pending_tx = dkg.register(public_key_serialized).send().await?;
-    let _tx_receipt = dkg.pending_transaction(pending_tx).await?;
+    let pending_tx = dkg.register(public_key_serialized).send().await?.await?;
 
     // Wait for Phase 1
     wait_for_phase(&dkg, 1).await?;
@@ -233,7 +226,7 @@ fn confirm_group(pubkeys: &(U256, Vec<Vec<u8>>), participants: Vec<Address>) -> 
 }
 
 // Pass the result of `get_bls_keys` to convert the raw data to a group
-fn pubkeys_to_group<C: Curve>(pubkeys: (U256, Vec<Vec<u8>>)) -> Result<Group<C>> {
+fn pubkeys_to_group<C: Curve>(pubkeys: (U256, Vec<ethers::prelude::Bytes>)) -> Result<Group<C>> {
     let nodes = pubkeys
         .1
         .into_iter()
