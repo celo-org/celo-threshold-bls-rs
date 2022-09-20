@@ -7,8 +7,7 @@ use dkg_contract::DKG;
 use ethers::{
     contract::ContractError,
     prelude::Middleware,
-    providers::{JsonRpcClient, ProviderError},
-    signers::Signer,
+    providers::ProviderError,
 };
 
 use dkg_core::{
@@ -37,7 +36,7 @@ impl<C: Curve, M: Middleware> BoardPublisher<C> for DKG<M> {
         C: 'async_trait,
     {
         let serialized = ethers::prelude::Bytes::from(bincode::serialize(&shares)?);
-        let pending_tx = self.publish(serialized).send().await?.await?;
+        let _pending_tx = self.publish(serialized).send().await?.await?;
         Ok(())
     }
 
@@ -46,7 +45,7 @@ impl<C: Curve, M: Middleware> BoardPublisher<C> for DKG<M> {
         C: 'async_trait,
     {
         let serialized = ethers::prelude::Bytes::from(bincode::serialize(&responses)?);
-        let pending_tx = self.publish(serialized).send().await?.await?;
+        let _pending_tx = self.publish(serialized).send().await?.await?;
         Ok(())
     }
 
@@ -58,7 +57,7 @@ impl<C: Curve, M: Middleware> BoardPublisher<C> for DKG<M> {
         C: 'async_trait,
     {
         let serialized = ethers::prelude::Bytes::from(bincode::serialize(&justifications)?);
-        let pending_tx = self.publish(serialized).send().await?.await?;
+        let _pending_tx = self.publish(serialized).send().await?.await?;
         Ok(())
     }
 }

@@ -1,7 +1,6 @@
 use ethers::{contract::Abigen};
-use std::{fs::File, io::Write};
+use std::fs::File;
 use ethers_solc::{Project, ProjectPathsConfig};
-//use rustc_hex::{FromHex, ToHex};
 
 const PATH: &str = "../../solidity/";
 const CONTRACT_NAME: &str = "DKG";
@@ -18,7 +17,7 @@ fn main() {
     let compiler_output = project.compile().unwrap();
     let contract = compiler_output.find(CONTRACT_NAME).unwrap();
     
-    let mut f = File::create("dkg.bin").expect("could not create DKG bytecode file");
+    //let mut f = File::create("dkg.bin").expect("could not create DKG bytecode file");
     let bytes = contract.bytecode.clone().unwrap().object.into_bytes().unwrap();
     //let bytes_str = hex::encode(bytes);
     //let bytes_vec = bytes.to_vec();

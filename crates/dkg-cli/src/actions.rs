@@ -101,7 +101,7 @@ pub async fn start(opts: StartOpts) -> Result<()> {
     let contract = DKGContract::new(opts.contract_address, client);
 
     // Submit the tx and wait for the confirmation
-    let tx_hash = contract.start().send().await?.await?;
+    let _tx_hash = contract.start().send().await?.await?;
 
     Ok(())
 }
@@ -187,7 +187,7 @@ async fn register<S: Scheme, M: Middleware + 'static, Z: Signer + 'static>(
     println!("Registering...");
     let public_key_serialized = bincode::serialize(public_key)?;
     let public_key_bytes = ethers::prelude::Bytes::from(public_key_serialized);
-    let pending_tx = dkg.register(public_key_bytes).send().await?.await?;
+    let _pending_tx = dkg.register(public_key_bytes).send().await?.await?;
 
     // Wait for Phase 1
     wait_for_phase(&dkg, 1).await?;
