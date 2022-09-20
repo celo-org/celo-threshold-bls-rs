@@ -2,6 +2,8 @@ use dkg_cli::{actions::*, opts::*};
 
 use gumdrop::Options;
 use std::process;
+use ethers::providers::Provider;
+use ethers::prelude::Http;
 
 use threshold_bls::schemes::bls12_377::{G2Curve as Curve, G2Scheme as Scheme};
 
@@ -23,7 +25,7 @@ async fn main() -> anyhow::Result<()> {
         Command::Start(opts) => start(opts).await?,
         Command::Deploy(opts) => deploy(opts).await?,
         Command::Allow(opts) => allow(opts).await?,
-        Command::Reshare(opts) => reshare::<Scheme, Curve, _>(opts, rng).await?,
+        Command::Reshare(opts) => reshare::<Scheme, Provider<Http>, Curve, _>(opts, rng).await?,
     };
 
     Ok(())
