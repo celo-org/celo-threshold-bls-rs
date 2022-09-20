@@ -37,7 +37,7 @@ where
 {
     let wallet = Wallet::new(rng);
     let output = CeloKeypairJson {
-        private_key: hex::encode(bincode::serialize(wallet.private_key())?),
+        private_key: hex::encode(&wallet.signer().to_bytes()),
         address: wallet.address(),
     };
 
@@ -180,13 +180,14 @@ where
     run_dkg(dkg, phase0, rng, opts.output_path).await
 }
 
-async fn register<S: Scheme, M: Middleware, Z: Signer>(
+async fn register<S: Scheme, M: Middleware + 'static, Z: Signer + 'static>(
     dkg: &DKGContract<SignerMiddleware<M, Z>>,
     public_key: &S::Public,
 ) -> Result<()> {
     println!("Registering...");
     let public_key_serialized = bincode::serialize(public_key)?;
-    let pending_tx = dkg.register(public_key_serialized).send().await?.await?;
+    let public_key_bytes = ethers::prelude::Bytes::from(public_key_serialized);
+    let pending_tx = dkg.register(public_key_bytes).send().await?.await?;
 
     // Wait for Phase 1
     wait_for_phase(&dkg, 1).await?;
@@ -210,7 +211,7 @@ fn confirm_group(pubkeys: &(U256, Vec<ethers::prelude::Bytes>), participants: Ve
         pubkeys.0
     );
     for (bls_pubkey, address) in pubkeys.1.iter().zip(&participants) {
-        let key = bls_pubkey.to_hex::<String>();
+        let key = bls_pubkey.to_vec().to_hex::<String>();
         println!("{:?} -> {}", address, key)
     }
 
@@ -231,10 +232,10 @@ fn pubkeys_to_group<C: Curve>(pubkeys: (U256, Vec<ethers::prelude::Bytes>)) -> R
     let nodes = pubkeys
         .1
         .into_iter()
-        .filter(|pubkey| !pubkey.is_empty()) // skip users that did not register
+        .filter(|pubkey| !pubkey.to_vec().is_empty()) // skip users that did not register
         .enumerate()
         .map(|(i, pubkey)| {
-            let pubkey: C::Point = bincode::deserialize(&pubkey)?;
+            let pubkey: C::Point = bincode::deserialize(&pubkey.to_vec()[..])?;
             Ok(Node::<C>::new(i as Idx, pubkey))
         })
         .collect::<Result<_>>()?;
@@ -344,8 +345,8 @@ async fn wait_for_phase<M: Middleware>(
 fn parse_bundle<D: serde::de::DeserializeOwned>(bundle: &Vec<ethers::prelude::Bytes>) -> Result<Vec<D>> {
     bundle
         .iter()
-        .filter(|item| !item.is_empty()) // filter out empty items
-        .map(|item| Ok(bincode::deserialize::<D>(&item)?))
+        .filter(|item| !item.to_vec().is_empty()) // filter out empty items
+        .map(|item| Ok(bincode::deserialize::<D>(&item.to_vec()[..])?))
         .collect()
 }
 

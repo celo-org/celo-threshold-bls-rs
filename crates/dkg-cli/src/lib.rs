@@ -36,9 +36,8 @@ impl<C: Curve, M: Middleware> BoardPublisher<C> for DKG<M> {
     where
         C: 'async_trait,
     {
-        let serialized = bincode::serialize(&shares)?;
-        let pending_tx = self.publish(serialized).send().await?;
-        let _tx_receipt = self.pending_transaction(pending_tx).await?;
+        let serialized = ethers::prelude::Bytes::from(bincode::serialize(&shares)?);
+        let pending_tx = self.publish(serialized).send().await?.await?;
         Ok(())
     }
 
@@ -46,9 +45,8 @@ impl<C: Curve, M: Middleware> BoardPublisher<C> for DKG<M> {
     where
         C: 'async_trait,
     {
-        let serialized = bincode::serialize(&responses)?;
-        let pending_tx = self.publish(serialized).send().await?;
-        let _tx_receipt = self.pending_transaction(pending_tx).await?;
+        let serialized = ethers::prelude::Bytes::from(bincode::serialize(&responses)?);
+        let pending_tx = self.publish(serialized).send().await?.await?;
         Ok(())
     }
 
@@ -59,9 +57,8 @@ impl<C: Curve, M: Middleware> BoardPublisher<C> for DKG<M> {
     where
         C: 'async_trait,
     {
-        let serialized = bincode::serialize(&justifications)?;
-        let pending_tx = self.publish(serialized).send().await?;
-        let _tx_receipt = self.pending_transaction(pending_tx).await?;
+        let serialized = ethers::prelude::Bytes::from(bincode::serialize(&justifications)?);
+        let pending_tx = self.publish(serialized).send().await?.await?;
         Ok(())
     }
 }
