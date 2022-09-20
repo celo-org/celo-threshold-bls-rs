@@ -1,5 +1,6 @@
 use ethers::{contract::Abigen};
 use std::fs::File;
+use std::io::Write;
 use ethers_solc::{Project, ProjectPathsConfig};
 
 const PATH: &str = "../../solidity/";
@@ -17,13 +18,11 @@ fn main() {
     let compiler_output = project.compile().unwrap();
     let contract = compiler_output.find(CONTRACT_NAME).unwrap();
     
-    //let mut f = File::create("dkg.bin").expect("could not create DKG bytecode file");
-    let bytes = contract.bytecode.clone().unwrap().object.into_bytes().unwrap();
-    //let bytes_str = hex::encode(bytes);
-    //let bytes_vec = bytes.to_vec();
-    //let sbytes = std::str::from_utf8(&bytes_vec).unwrap();
-    //f.write_all(&sbytes.as_bytes())
-    //    .expect("could not write DKG bytecode to the file");
+    let mut f = File::create("dkg.bin").expect("could not create DKG bytecode file");
+    let bytecode_obj = contract.bytecode.clone().unwrap().object;
+    let s = serde_json::to_string(&bytecode_obj).unwrap();
+    f.write_all(&s.as_bytes())//&sbytes.as_bytes())
+    .expect("could not write DKG bytecode to the file");
 
     // generate type-safe bindings to it
     let abi = contract.abi.as_ref().unwrap();
