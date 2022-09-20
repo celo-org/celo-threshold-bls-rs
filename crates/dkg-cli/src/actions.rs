@@ -12,8 +12,8 @@ use dkg_core::{
 
 use anyhow::Result;
 use ethers::prelude::*;
-use ethers::signers::LocalWallet;
 use ethers::providers::Middleware;
+use ethers::signers::LocalWallet;
 use rustc_hex::{FromHex, ToHex};
 use serde::{Deserialize, Serialize};
 use std::convert::TryFrom;
@@ -82,11 +82,8 @@ pub async fn allow(opts: AllowlistOpts) -> Result<()> {
     let contract = DKGContract::new(opts.contract_address, client);
 
     for addr in opts.address {
-        let tx = contract
-            .allowlist(addr)
-            .block(BlockNumber::Pending);
-        let tx = tx.send()
-            .await?.await?;
+        let tx = contract.allowlist(addr).block(BlockNumber::Pending);
+        let tx = tx.send().await?.await?;
         println!("Sent `allow` tx for {:?} (hash: {:?})", addr, tx);
     }
 
@@ -195,7 +192,9 @@ async fn register<S: Scheme, M: Middleware + 'static, Z: Signer + 'static>(
     Ok(())
 }
 
-async fn get_group<C: Curve, M: Middleware + 'static, Z: Signer + 'static>(dkg: &DKGContract<SignerMiddleware<M,Z>>) -> Result<Group<C>> {
+async fn get_group<C: Curve, M: Middleware + 'static, Z: Signer + 'static>(
+    dkg: &DKGContract<SignerMiddleware<M, Z>>,
+) -> Result<Group<C>> {
     let group = dkg.get_bls_keys().call().await?;
     let participants = dkg.get_participants().call().await?;
     confirm_group(&group, participants)?;
@@ -204,7 +203,10 @@ async fn get_group<C: Curve, M: Middleware + 'static, Z: Signer + 'static>(dkg: 
     Ok(group)
 }
 
-fn confirm_group(pubkeys: &(U256, Vec<ethers::prelude::Bytes>), participants: Vec<Address>) -> Result<()> {
+fn confirm_group(
+    pubkeys: &(U256, Vec<ethers::prelude::Bytes>),
+    participants: Vec<Address>,
+) -> Result<()> {
     // print some debug info
     println!(
         "Will run DKG with the group listed below and threshold {}",
@@ -342,7 +344,9 @@ async fn wait_for_phase<M: Middleware>(
     Ok(())
 }
 
-fn parse_bundle<D: serde::de::DeserializeOwned>(bundle: &Vec<ethers::prelude::Bytes>) -> Result<Vec<D>> {
+fn parse_bundle<D: serde::de::DeserializeOwned>(
+    bundle: &Vec<ethers::prelude::Bytes>,
+) -> Result<Vec<D>> {
     bundle
         .iter()
         .filter(|item| !item.to_vec().is_empty()) // filter out empty items

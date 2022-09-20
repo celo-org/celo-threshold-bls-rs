@@ -4,11 +4,7 @@ pub mod opts;
 
 use async_trait::async_trait;
 use dkg_contract::DKG;
-use ethers::{
-    contract::ContractError,
-    prelude::Middleware,
-    providers::ProviderError,
-};
+use ethers::{contract::ContractError, prelude::Middleware, providers::ProviderError};
 
 use dkg_core::{
     primitives::{BundledJustification, BundledResponses, BundledShares},

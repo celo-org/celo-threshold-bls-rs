@@ -8,8 +8,8 @@ use ark_bls12_377 as zexe;
 //    CanonicalDeserialize, CanonicalSerialize, ConstantSerializedSize,
 //};
 use ark_ec::{AffineCurve, PairingEngine, ProjectiveCurve};
-use ark_ff::{One, Zero, UniformRand, Field};
-use ark_serialize::{CanonicalSerialize, CanonicalDeserialize};
+use ark_ff::{Field, One, UniformRand, Zero};
+use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
 use bls_crypto::{
     hash_to_curve::{try_and_increment::TryAndIncrement, HashToCurve},
     hashers::DirectHasher,
@@ -333,7 +333,7 @@ where
         where
             S: SeqAccess<'de>,
         {
-            let len = C::Affine::zero().serialized_size();//C::Affine::SERIALIZED_SIZE;
+            let len = C::Affine::zero().serialized_size(); //C::Affine::SERIALIZED_SIZE;
             let bytes: Vec<u8> = (0..len)
                 .map(|_| {
                     seq.next_element()?
