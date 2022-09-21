@@ -16,12 +16,13 @@ fn main() {
         .build()
         .unwrap();
     let compiler_output = project.compile().unwrap();
+    println!("compielr output: {:?}", compiler_output);
     let contract = compiler_output.find(CONTRACT_NAME).unwrap();
 
     let mut f = File::create("dkg.bin").expect("could not create DKG bytecode file");
     let bytecode_obj = contract.bytecode.clone().unwrap().object;
     let s = serde_json::to_string(&bytecode_obj).unwrap();
-    f.write_all(&s.as_bytes()) //&sbytes.as_bytes())
+    f.write_all(s.as_bytes()) 
         .expect("could not write DKG bytecode to the file");
 
     // generate type-safe bindings to it
