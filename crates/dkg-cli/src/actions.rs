@@ -187,7 +187,7 @@ async fn register<S: Scheme, M: Middleware + 'static, Z: Signer + 'static>(
     let _pending_tx = dkg.register(public_key_bytes).send().await?.await?;
 
     // Wait for Phase 1
-    wait_for_phase(&dkg, 1).await?;
+    wait_for_phase(dkg, 1).await?;
 
     Ok(())
 }
@@ -345,7 +345,7 @@ async fn wait_for_phase<M: Middleware>(
 }
 
 fn parse_bundle<D: serde::de::DeserializeOwned>(
-    bundle: &Vec<ethers::prelude::Bytes>,
+    bundle: &[ethers::prelude::Bytes],
 ) -> Result<Vec<D>> {
     bundle
         .iter()

@@ -70,7 +70,7 @@ pub fn set_statuses<C: Curve>(
 /// evaluated at the given point.
 pub fn share_correct<C: Curve>(idx: Idx, share: &C::Scalar, public: &PublicPoly<C>) -> bool {
     let mut commit = C::Point::one();
-    commit.mul(&share);
+    commit.mul(share);
     let pub_eval = public.eval(idx);
     pub_eval.value == commit
 }
@@ -407,7 +407,7 @@ pub mod tests {
                         }
                         ndkg
                     }
-                    Err(e) => panic!(e),
+                    Err(e) => panic!("{}", e),
                 },
             })
             .collect();
