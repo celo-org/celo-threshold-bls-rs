@@ -16,8 +16,7 @@ fn main() {
         .build()
         .unwrap();
     let compiler_output = project.compile().unwrap();
-    println!("compielr output: {:?}", compiler_output);
-    let contract = compiler_output.find(CONTRACT_NAME).unwrap();
+    let contract = compiler_output.find(".", CONTRACT_NAME).unwrap();
 
     let mut f = File::create("dkg.bin").expect("could not create DKG bytecode file");
     let bytecode_obj = contract.bytecode.clone().unwrap().object;

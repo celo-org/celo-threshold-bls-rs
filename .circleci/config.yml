@@ -24,8 +24,8 @@ jobs:
         name: Install rustup
         command: curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
     - run:
-        name: Install Rust 1.41
-        command: rustup install 1.41.0 && rustup default 1.41.0
+        name: Install Rust 1.64
+        command: rustup install 1.64.0 && rustup default 1.64.0
     - run:
         name: Install iOS targets
         command: rustup target add armv7-apple-ios armv7s-apple-ios aarch64-apple-ios x86_64-apple-ios
