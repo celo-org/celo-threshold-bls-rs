@@ -86,8 +86,8 @@ jobs:
         name: Install rustup
         command: curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
     - run:
-        name: Install Rust 1.41
-        command: rustup install 1.41.0 && rustup default 1.41.0
+        name: Install Rust 1.64
+        command: rustup install 1.64.0 && rustup default 1.64.0
     - run:
         name: Install Android targets
         command: rustup target add aarch64-linux-android armv7-linux-androideabi arm-linux-androideabi i686-linux-android x86_64-linux-android

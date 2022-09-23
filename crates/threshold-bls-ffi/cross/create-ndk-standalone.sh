@@ -18,7 +18,7 @@ cd NDK
 
 for ARCH in arm64 arm x86 x86_64; do
     echo "($ARCH)..."
-    "$MAKER" --arch $ARCH --api 21 --install-dir $ARCH
+    "python3 $MAKER" --arch $ARCH --api 21 --install-dir $ARCH
 done
 
 echo 'Updating .cargo/config.toml...'
