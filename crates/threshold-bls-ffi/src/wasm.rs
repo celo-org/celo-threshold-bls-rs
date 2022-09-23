@@ -1,6 +1,7 @@
 //! # BLS12-377 WASM Bindings for Blind Threshold Signatures.
 use wasm_bindgen::prelude::*;
 
+use blake2::{Blake2s256, Digest};
 use rand_chacha::ChaChaRng;
 use rand_core::{RngCore, SeedableRng};
 
@@ -32,7 +33,9 @@ type Result<T> = std::result::Result<T, JsValue>;
 /// - If the same seed is used twice, the blinded result WILL be the same
 pub fn blind(message: Vec<u8>, seed: &[u8]) -> BlindedMessage {
     // convert the seed to randomness
-    let mut rng = get_rng(&seed);
+    // TODO(victor): If it is not a back compat concern, change this to the BLAKE2 function and
+    // include the message in the seed generation.
+    let mut rng = get_rng_deprecated(seed);
 
     // blind the message with this randomness
     let (blinding_factor, blinded_message) = SigScheme::blind_msg(&message, &mut rng);
@@ -265,7 +268,7 @@ pub fn combine(threshold: usize, signatures: Vec<u8>) -> Result<Vec<u8>> {
 ///
 /// The seed MUST be at least 32 bytes long
 pub fn threshold_keygen(n: usize, t: usize, seed: &[u8]) -> Keys {
-    let mut rng = get_rng(seed);
+    let mut rng = get_rng(&[seed]);
     let private = Poly::<PrivateKey>::new_from(t - 1, &mut rng);
     let shares = (0..n)
         .map(|i| private.eval(i as Index))
@@ -339,7 +342,7 @@ impl Keypair {
 /// The seed MUST be at least 32 bytes long
 #[wasm_bindgen]
 pub fn keygen(seed: Vec<u8>) -> Keypair {
-    let mut rng = get_rng(&seed);
+    let mut rng = get_rng(&[&seed]);
     let (private, public) = SigScheme::keypair(&mut rng);
     Keypair { private, public }
 }
@@ -376,7 +379,20 @@ impl Keys {
     }
 }
 
-fn get_rng(digest: &[u8]) -> impl RngCore {
+// Creates a PRNG for use in deterministic blinding of messages or in key generation from the array
+// of seeds provided as input.
+fn get_rng(seeds: &[&[u8]]) -> impl RngCore {
+    let mut outer = Blake2s256::new();
+    outer.update("Celo POPRF WASM RNG Seed");
+    for seed in seeds.iter() {
+        outer.update(Blake2s256::digest(seed));
+    }
+    let seed = outer.finalize();
+    ChaChaRng::from_seed(seed.into())
+}
+
+// TODO(victor) Remove this when it is no longer used.
+fn get_rng_deprecated(digest: &[u8]) -> impl RngCore {
     let seed = from_slice(digest);
     ChaChaRng::from_seed(seed)
 }

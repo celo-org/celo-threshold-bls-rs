@@ -407,7 +407,7 @@ pub mod tests {
                         }
                         ndkg
                     }
-                    Err(e) => panic!("{}", e),
+                    Err(e) => std::panic::panic_any(e),
                 },
             })
             .collect();
