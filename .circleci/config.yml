@@ -82,9 +82,9 @@ jobs:
     working_directory: ~/work
     steps:
     - checkout
-    - run:
-        name: Install Python
-        command: apt install python
+      # - run:
+        #  name: Install Python
+        #command: apt install python
    - run:
         name: Install rustup
         command: curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
