@@ -20,7 +20,7 @@ serde = { version = "1.0.106", default-features =  false }
 
 # Required for WASM interface
 blake2 = { version = "0.10", default-features = false, optional = true }
-getrandom = { version = "0.2", default-features = false, optional = true }
+getrandom = { version = "0.2", default-features = false, features = ["js"] }
 wasm-bindgen = { version = "0.2.60", optional = true }
 
 # The `console_error_panic_hook` crate provides better debugging of panics by
@@ -30,6 +30,10 @@ wasm-bindgen = { version = "0.2.60", optional = true }
 console_error_panic_hook = { version = "0.1.7", optional = true }
 
 cfg-if = "0.1"
+
+[target.aarch64-linux-android]
+ar = "<project path>/greetings/NDK/arm64/bin/aarch64-linux-android-ar"
+linker = "<project path>/greetings/NDK/arm64/bin/aarch64-linux-android-clang"
 
 [features]
 # Build WASM bindings for use in JS environments
