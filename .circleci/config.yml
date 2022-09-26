@@ -89,6 +89,9 @@ jobs:
         name: Install Rust 1.64
         command: rustup install 1.64.0 && rustup default 1.64.0
     - run:
+        name: Install Python
+        command: apt get python
+    - run:
         name: Install Android targets
         command: rustup target add aarch64-linux-android armv7-linux-androideabi arm-linux-androideabi i686-linux-android x86_64-linux-android
     - run:
