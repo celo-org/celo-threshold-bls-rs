@@ -460,7 +460,7 @@ pub mod tests {
     }
 
     #[test]
-    fn eval(d in 0..100usize, idx in 0..(100 as Idx)) {
+    fn eval(d in 0..100usize, idx in 0..100_u32) {
         let mut x = Sc::new();
         x.set_int(idx as u64 + 1);
 
