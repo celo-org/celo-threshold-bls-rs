@@ -119,11 +119,9 @@ mod tests {
             .collect();
 
         // verify if each blind partial signatures is correct
-        assert!(
-            !partials
-                .iter()
-                .any(|p| B::verify_blind_partial(&public, &blinded, p).is_err())
-        );
+        assert!(!partials
+            .iter()
+            .any(|p| B::verify_blind_partial(&public, &blinded, p).is_err()));
 
         // unblind each partial sig
         let unblindeds_partials: Vec<_> = partials

@@ -573,10 +573,7 @@ mod tests {
 
         let mut dkgs = prev_privs
             .into_iter()
-            .zip(prev_group
-             .nodes
-             .iter()
-             .map(|n| private_poly.eval(n.id())))
+            .zip(prev_group.nodes.iter().map(|n| private_poly.eval(n.id())))
             .map(|(p, sh)| {
                 let out = DKGOutput {
                     share: Share {

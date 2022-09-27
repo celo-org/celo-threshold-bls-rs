@@ -133,11 +133,9 @@ mod tests {
             .map(|s| T::partial_sign(s, &msg).unwrap())
             .collect();
 
-        assert!(
-            !partials
-                .iter()
-                .any(|p| T::partial_verify(&public, &msg, p).is_err())
-        );
+        assert!(!partials
+            .iter()
+            .any(|p| T::partial_verify(&public, &msg, p).is_err()));
         let final_sig = T::aggregate(threshold, &partials).unwrap();
 
         T::verify(public.public_key(), &msg, &final_sig).unwrap();
