@@ -6,7 +6,7 @@ use threshold_bls::{group::Curve, poly::Idx};
 /// participant must be identified both by an index and a public key. At the end
 /// of the protocol, if sucessful, the index is used to verify the validity of
 /// the share this node holds.
-#[derive(Clone, Serialize, Deserialize, PartialEq, Debug)]
+#[derive(Clone, Serialize, Deserialize, PartialEq, Eq, Debug)]
 pub struct Node<C: Curve>(Idx, C::Point);
 
 impl<C: Curve> Node<C> {
@@ -32,7 +32,7 @@ impl<C: Curve> Node<C> {
 /// new group that contains members that succesfully ran the protocol. When
 /// creating a new group using the `from()` or `from_list()`method, the module
 /// sets the threshold to the output of `default_threshold()`.
-#[derive(Clone, Serialize, Deserialize, PartialEq, Debug)]
+#[derive(Clone, Serialize, Deserialize, PartialEq, Eq, Debug)]
 #[serde(bound = "C::Scalar: DeserializeOwned")]
 pub struct Group<C: Curve> {
     /// The vector of nodes in the group

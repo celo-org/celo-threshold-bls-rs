@@ -96,7 +96,7 @@ pub trait PairingCurve: Debug {
     fn pair(a: &Self::G1, b: &Self::G2) -> Self::GT;
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 /// Helper which binds together a scalar with a group type to form a curve
 pub struct CurveFrom<S: Scalar, P: Point> {
     s: PhantomData<S>,

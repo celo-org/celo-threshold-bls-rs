@@ -24,7 +24,7 @@ impl<A: fmt::Display> fmt::Display for Eval<A> {
 /// A polynomial that is using a scalar for the variable x and a generic
 /// element for the coefficients. The coefficients must be able to multiply
 /// the type of the variable, which is always a scalar.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Poly<C>(Vec<C>);
 
 impl<C> Poly<C> {

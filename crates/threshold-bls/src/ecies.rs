@@ -87,7 +87,7 @@ pub fn encrypt<C: Curve, R: RngCore>(to: &C::Point, msg: &[u8], rng: &mut R) -> 
 
     // do the encryption
     let aead = aead
-        .encrypt(&nonce.into(), &*msg)
+        .encrypt(&nonce.into(), msg)
         .expect("aead should not fail");
 
     EciesCipher {

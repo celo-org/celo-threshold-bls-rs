@@ -5,7 +5,7 @@ use crate::sig::{Partial, SignatureScheme, ThresholdScheme};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 /// A private share which is part of the threshold signing key
 pub struct Share<S> {
     /// The share's index in the polynomial
