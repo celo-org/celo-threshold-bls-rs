@@ -354,6 +354,7 @@ pub mod tests {
         o
     }
 
+    #[allow(clippy::needless_collect)]
     pub fn invalid_shares<C, P>(
         thr: usize,
         dkgs: Vec<P>,
@@ -432,6 +433,7 @@ pub mod tests {
         Ok(recovered_public)
     }
 
+    #[allow(clippy::needless_collect)]
     pub fn full_dkg<C, P>(nthr: usize, dkgs: Vec<P>) -> (Vec<DKGOutput<C>>, PublicPoly<C>)
     where
         C: Curve,
