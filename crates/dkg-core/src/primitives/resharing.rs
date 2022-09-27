@@ -538,11 +538,6 @@ mod tests {
         let (prev_privs, prev_group) = setup_group::<C>(old_n, old_thr);
         // simulate shares
         let private_poly = Poly::<C::Scalar>::new_from(prev_group.threshold - 1, &mut thread_rng());
-        let shares = prev_group
-            .nodes
-            .iter()
-            .map(|n| private_poly.eval(n.id()))
-            .collect::<Vec<_>>();
         let public_poly = private_poly.commit::<C::Point>();
 
         // assume strictly greater group
@@ -578,7 +573,10 @@ mod tests {
 
         let mut dkgs = prev_privs
             .into_iter()
-            .zip(shares.into_iter())
+            .zip(prev_group
+             .nodes
+             .iter()
+             .map(|n| private_poly.eval(n.id())))
             .map(|(p, sh)| {
                 let out = DKGOutput {
                     share: Share {
