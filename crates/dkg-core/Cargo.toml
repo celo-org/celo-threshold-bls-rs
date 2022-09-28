@@ -21,4 +21,4 @@ thiserror = "1.0.15"
 
 [dev-dependencies]
 threshold-bls = { path = "../threshold-bls", default-features = false }
-tokio = { version = "0.2.21", features = ["rt-core", "macros"] }
+tokio = { version = "1.21.1", features = ["full"] }
