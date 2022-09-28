@@ -1,8 +1,8 @@
 [package]
 name = "threshold-bls"
-version = "0.2.0"
-authors = ["nikkolasg"]
-edition = "2018"
+version = "0.3.0"
+authors = ["nikkolasg", "Michael Straka <mstraka100@gmail.com>"]
+edition = "2021"
 
 [lib]
 crate-type = ["lib"]

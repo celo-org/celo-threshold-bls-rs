@@ -631,7 +631,7 @@ dependencies = [
 
 [[package]]
 name = "dkg-core"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "async-trait",
  "bincode",
@@ -1347,7 +1347,7 @@ dependencies = [
 
 [[package]]
 name = "threshold-bls"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "ark-bls12-377",
  "ark-ec",
@@ -1368,7 +1368,7 @@ dependencies = [
 
 [[package]]
 name = "threshold-bls-ffi"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "bincode",
  "blake2 0.10.4",
