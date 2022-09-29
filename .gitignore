@@ -21,3 +21,4 @@ react-native
 solidity/cache
 solidity/build
 *.swp
+.DS_Store
