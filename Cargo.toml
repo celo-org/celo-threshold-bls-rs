@@ -1,6 +1,7 @@
 [workspace]
 
 members = [ 
+    "crates/dkg-cli",
     "crates/dkg-core", 
     "crates/threshold-bls",
     "crates/threshold-bls-ffi",
