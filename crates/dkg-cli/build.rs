@@ -17,7 +17,7 @@ fn main() {
         .paths(ProjectPathsConfig::hardhat(PATH).unwrap())
         .build()
         .unwrap();
-        
+
     let full_path = Path::new(CONTRACT_PATH).canonicalize().unwrap();
     let full_path = full_path.to_str().unwrap();
 
@@ -27,7 +27,7 @@ fn main() {
     let mut f = File::create("dkg.bin").expect("could not create DKG bytecode file");
     let bytecode_obj = contract.bytecode.clone().unwrap().object;
     let s = serde_json::to_string(&bytecode_obj).unwrap();
-    f.write_all(s.as_bytes()) 
+    f.write_all(s.as_bytes())
         .expect("could not write DKG bytecode to the file");
 
     // generate type-safe bindings to it
