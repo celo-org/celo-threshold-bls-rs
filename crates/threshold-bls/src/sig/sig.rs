@@ -33,7 +33,7 @@ pub trait Scheme: Debug {
     }
 }
 
-/*/// SignatureScheme is the trait that defines the operations of a sinature
+/// SignatureScheme is the trait that defines the operations of a sinature
 /// scheme, namely `sign` and `verify`. Below is an example of using the
 /// signature scheme based on BLS, using the BLS12-381 curves.
 ///
@@ -52,7 +52,7 @@ pub trait Scheme: Debug {
 ///     Err(e) => println!("signature is invalid: {}",e),
 ///  };
 /// # }
-/// ```*/
+/// ```
 /// Note signature scheme handles the format of the signature itself.
 pub trait SignatureScheme: Scheme {
     /// Error produced when signing a message
