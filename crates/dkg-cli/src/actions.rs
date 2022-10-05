@@ -116,7 +116,6 @@ where
     let client = SignerMiddleware::new(provider, wallet);
     let client = Arc::new(client);
 
-    //ethers::signers::Wallet, ethers::providers::Provider
     // we need the previous group and public poly for resharing
     let previous_group = {
         let previous_dkg = DKGContract::new(opts.previous_contract_address, client.clone());
