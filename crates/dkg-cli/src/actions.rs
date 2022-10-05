@@ -336,7 +336,7 @@ async fn wait_for_phase<M: Middleware>(
         }
         print!(".");
         // 6s for 1 Celo block
-        tokio::time::delay_for(std::time::Duration::from_millis(6000)).await;
+        tokio::time::sleep(std::time::Duration::from_millis(6000)).await;
     }
 
     println!("\nIn Phase {}. Moving to the next step.", num);

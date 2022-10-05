@@ -2,7 +2,7 @@
 name = "dkg-cli"
 version = "0.3.0"
 authors = ["Georgios Konstantopoulos <me@gakonst.com>", "Michael Straka <mstraka100@gmail.com>"]
-edition = "2022"
+edition = "2021"
 build = "build.rs"
 
 [[bin]]
@@ -28,7 +28,7 @@ ethers = { git = "https://github.com/gakonst/ethers-rs", features = ["celo"] }
 ethers-solc = { git = "https://github.com/gakonst/ethers-rs" }
 futures = "0.3.5"
 async-trait = "0.1.35"
-tokio = { version = "0.2.21", features = ["macros", "time"] }
+tokio = { version = "1", features = ["macros", "time"] }
 rustc-hex = "2.1.0"
 clt = "0.0.6"
 

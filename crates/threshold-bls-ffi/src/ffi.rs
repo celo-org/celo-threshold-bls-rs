@@ -496,7 +496,7 @@ fn serialize<T: Serialize>(in_obj: *const T, out_bytes: *mut *mut u8) -> bool {
 ///
 /// The pointer must point to a valid instance of the data type
 pub unsafe extern "C" fn destroy_token(token: *mut Token<PrivateKey>) {
-    Box::from_raw(token);
+    drop(Box::from_raw(token));
 }
 
 #[no_mangle]
@@ -506,7 +506,7 @@ pub unsafe extern "C" fn destroy_token(token: *mut Token<PrivateKey>) {
 ///
 /// The pointer must point to a valid instance of the data type
 pub unsafe extern "C" fn destroy_keys(keys: *mut Keys) {
-    Box::from_raw(keys);
+    drop(Box::from_raw(keys));
 }
 
 #[no_mangle]
@@ -516,7 +516,7 @@ pub unsafe extern "C" fn destroy_keys(keys: *mut Keys) {
 ///
 /// The pointer must point to a valid instance of the data type
 pub unsafe extern "C" fn destroy_keypair(keypair: *mut Keypair) {
-    Box::from_raw(keypair);
+    drop(Box::from_raw(keypair));
 }
 
 #[no_mangle]
@@ -526,7 +526,7 @@ pub unsafe extern "C" fn destroy_keypair(keypair: *mut Keypair) {
 ///
 /// The pointer must point to a valid instance of the data type
 pub unsafe extern "C" fn destroy_privkey(private_key: *mut PrivateKey) {
-    Box::from_raw(private_key);
+    drop(Box::from_raw(private_key));
 }
 
 #[no_mangle]
@@ -546,7 +546,7 @@ pub unsafe extern "C" fn free_vector(bytes: *mut u8, len: usize) {
 ///
 /// The pointer must point to a valid instance of the data type
 pub unsafe extern "C" fn destroy_pubkey(public_key: *mut PublicKey) {
-    Box::from_raw(public_key);
+    drop(Box::from_raw(public_key));
 }
 
 #[no_mangle]
@@ -556,7 +556,7 @@ pub unsafe extern "C" fn destroy_pubkey(public_key: *mut PublicKey) {
 ///
 /// The pointer must point to a valid instance of the data type
 pub unsafe extern "C" fn destroy_sig(signature: *mut Signature) {
-    Box::from_raw(signature);
+    drop(Box::from_raw(signature));
 }
 
 ///////////////////////////////////////////////////////////////////////////
