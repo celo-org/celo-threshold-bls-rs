@@ -2,7 +2,7 @@
 name = "dkg-cli"
 version = "0.3.0"
 authors = ["Georgios Konstantopoulos <me@gakonst.com>", "Michael Straka <mstraka100@gmail.com>"]
-edition = "2022"
+edition = "2021"
 build = "build.rs"
 
 [[bin]]
