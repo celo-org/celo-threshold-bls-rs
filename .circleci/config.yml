@@ -41,6 +41,12 @@ jobs:
     steps:
       - checkout
       - run:
+          name: Install rustup
+          command: curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
+      - run:
+          name: Install Rust 1.64
+          command: rustup install 1.64.0 && rustup default 1.64.0
+      - run:
           name: Install Dependencies
           command: |
               cargo install cargo-audit
