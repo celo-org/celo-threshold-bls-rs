@@ -13,14 +13,14 @@ Build with `cargo build (--release)`.
 
 Test with `cargo test`.
 
-All crates require Rust 2018 edition and are tested on the following channels:
-- `1.41.0`
+All crates require Rust 2021 edition and are tested on the following channels:
+- `1.64.0`
 
 If you do not have Rust installed, run: `curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh`
 
 ## Android and iOS
 
-The library compiles to Android and iOS. This has been tested with Rust v1.41.0.
+The library compiles to Android and iOS. This has been tested with Rust v1.64.0.
 
 To compile to Android:
 
