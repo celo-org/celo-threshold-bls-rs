@@ -3,7 +3,7 @@ version: 2
 jobs:
   contracts:
     docker:
-      - image: circleci/node:latest
+      - image: cimg/node:lts
     steps:
       - checkout
       - run:
