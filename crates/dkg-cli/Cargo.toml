@@ -24,8 +24,8 @@ serde_json = "1.0.53"
 hex = "0.4.2"
 anyhow = "1.0.31"
 
-ethers = { git = "https://github.com/gakonst/ethers-rs", features = ["celo"] }
-ethers-solc = { git = "https://github.com/gakonst/ethers-rs" }
+ethers = { git = "https://github.com/gakonst/ethers-rs", rev = "123e2def9d96668e202d7b11842821c7f4080283", features = ["celo"] }
+ethers-solc = { git = "https://github.com/gakonst/ethers-rs", rev = "123e2def9d96668e202d7b11842821c7f4080283" }
 futures = "0.3.5"
 async-trait = "0.1.35"
 tokio = { version = "1", features = ["macros", "time"] }
@@ -33,7 +33,7 @@ rustc-hex = "2.1.0"
 clt = "0.0.6"
 
 [build-dependencies]
-ethers = { git = "https://github.com/gakonst/ethers-rs", features = ["celo", "abigen"] }
-ethers-solc = { git = "https://github.com/gakonst/ethers-rs" }
+ethers = { git = "https://github.com/gakonst/ethers-rs", rev = "123e2def9d96668e202d7b11842821c7f4080283", features = ["celo", "abigen"] }
+ethers-solc = { git = "https://github.com/gakonst/ethers-rs", rev = "123e2def9d96668e202d7b11842821c7f4080283" }
 serde = "1.0.106"
 serde_json = "1.0.53"
