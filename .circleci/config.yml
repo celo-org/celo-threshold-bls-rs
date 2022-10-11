@@ -3,7 +3,7 @@ version: 2
 jobs:
   contracts:
     docker:
-      - image: circleci/node:latest
+      - image: cimg/node:lts
     steps:
       - checkout
       - run:
@@ -37,21 +37,14 @@ jobs:
 
   test:
     docker:
-      - image: circleci/rust:latest
+      - image: cimg/rust:1.64.0
     resource_class: large
     steps:
       - checkout
       - run:
-          name: Install rustup
-          command: curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
-      - run:
-          name: Install Rust 1.64
-          command: rustup install 1.64.0 && rustup default 1.64.0
-      - run:
           name: Install Dependencies
           command: |
               cargo install cargo-audit
-              rustup component add clippy
               mkdir -p "$HOME/bin"
               wget -q https://github.com/ethereum/solidity/releases/download/v0.6.6/solc-static-linux -O $HOME/bin/solc
               chmod u+x "$HOME/bin/solc"
@@ -73,7 +66,7 @@ jobs:
 
   wasm:
     docker:
-      - image: circleci/rust:latest
+      - image: cimg/rust:1.64.0
     steps:
     - checkout
     - run:
@@ -85,16 +78,10 @@ jobs:
 
   cross-android:
     docker:
-      - image: circleci/rust:latest
+      - image: cimg/rust:1.64.0
     working_directory: ~/work
     steps:
     - checkout
-    - run:
-        name: Install rustup
-        command: curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
-    - run:
-        name: Install Rust 1.64
-        command: rustup install 1.64.0 && rustup default 1.64.0
     - run:
         name: Install Python
         command: sudo apt install python
