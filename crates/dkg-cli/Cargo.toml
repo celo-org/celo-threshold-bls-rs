@@ -14,7 +14,7 @@ path = "build.rs"
 dkg-core = { path = "../dkg-core" }
 threshold-bls = { path = "../threshold-bls", default-features = false }
 
-gumdrop = "0.7.0"
+gumdrop = "0.8.1"
 rand = "0.8.5"
 bincode = "1.2.1"
 glob = "0.3.0"
