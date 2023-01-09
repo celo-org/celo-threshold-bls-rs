@@ -14,7 +14,7 @@ path = "build.rs"
 dkg-core = { path = "../dkg-core" }
 threshold-bls = { path = "../threshold-bls", default-features = false }
 
-gumdrop = "0.7.0"
+gumdrop = "0.8.1"
 rand = "0.8.5"
 bincode = "1.2.1"
 glob = "0.3.0"
@@ -24,8 +24,8 @@ serde_json = "1.0.53"
 hex = "0.4.2"
 anyhow = "1.0.31"
 
-ethers = { git = "https://github.com/gakonst/ethers-rs", version = "0.17.0" , features = ["celo"] }
-ethers-solc = { git = "https://github.com/gakonst/ethers-rs", version = "0.17.0"  }
+ethers = { version = "1.0.0" , features = ["celo"] }
+ethers-solc = "1.0.0"
 futures = "0.3.5"
 async-trait = "0.1.35"
 tokio = { version = "1", features = ["macros", "time"] }
@@ -33,7 +33,7 @@ rustc-hex = "2.1.0"
 clt = "0.0.6"
 
 [build-dependencies]
-ethers = { git = "https://github.com/gakonst/ethers-rs", version = "0.17.0" , features = ["celo", "abigen"] }
-ethers-solc = { git = "https://github.com/gakonst/ethers-rs", version = "0.17.0"  }
+ethers = { version = "1.0.0" , features = ["celo", "abigen"] }
+ethers-solc = "1.0.0"
 serde = "1.0.106"
 serde_json = "1.0.53"
