@@ -1,6 +1,7 @@
 //! # BLS12-377 WASM Bindings for Blind Threshold Signatures.
 use wasm_bindgen::prelude::*;
 
+use blake2::{Blake2s256, Digest};
 use rand_chacha::ChaChaRng;
 use rand_core::{RngCore, SeedableRng};
 
@@ -32,7 +33,9 @@ type Result<T> = std::result::Result<T, JsValue>;
 /// - If the same seed is used twice, the blinded result WILL be the same
 pub fn blind(message: Vec<u8>, seed: &[u8]) -> BlindedMessage {
     // convert the seed to randomness
-    let mut rng = get_rng(&seed);
+    // TODO(victor): If it is not a back compat concern, change this to the BLAKE2 function and
+    // include the message in the seed generation.
+    let mut rng = get_rng_deprecated(seed);
 
     // blind the message with this randomness
     let (blinding_factor, blinded_message) = SigScheme::blind_msg(&message, &mut rng);
@@ -56,7 +59,7 @@ pub fn blind(message: Vec<u8>, seed: &[u8]) -> BlindedMessage {
 /// - If unblinding fails.
 pub fn unblind(blinded_signature: &[u8], blinding_factor_buf: &[u8]) -> Result<Vec<u8>> {
     let blinding_factor: Token<PrivateKey> =
-        bincode::deserialize(&blinding_factor_buf).map_err(|err| {
+        bincode::deserialize(blinding_factor_buf).map_err(|err| {
             JsValue::from_str(&format!("could not deserialize blinding factor {}", err))
         })?;
 
@@ -76,11 +79,11 @@ pub fn unblind(blinded_signature: &[u8], blinding_factor_buf: &[u8]) -> Result<V
 ///
 /// - If verification fails
 pub fn verify(public_key_buf: &[u8], message: &[u8], signature: &[u8]) -> Result<()> {
-    let public_key: PublicKey = bincode::deserialize(&public_key_buf)
+    let public_key: PublicKey = bincode::deserialize(public_key_buf)
         .map_err(|err| JsValue::from_str(&format!("could not deserialize public key {}", err)))?;
 
     // checks the signature on the message hash
-    SigScheme::verify(&public_key, &message, &signature)
+    SigScheme::verify(&public_key, message, signature)
         .map_err(|err| JsValue::from_str(&format!("signature verification failed: {}", err)))
 }
 
@@ -100,11 +103,11 @@ pub fn verify_blind_signature(
     message: &[u8],
     signature: &[u8],
 ) -> Result<()> {
-    let public_key: PublicKey = bincode::deserialize(&public_key_buf)
+    let public_key: PublicKey = bincode::deserialize(public_key_buf)
         .map_err(|err| JsValue::from_str(&format!("could not deserialize public key {}", err)))?;
 
     // checks the signature on the message hash
-    SigScheme::blind_verify(&public_key, &message, &signature)
+    SigScheme::blind_verify(&public_key, message, signature)
         .map_err(|err| JsValue::from_str(&format!("signature verification failed: {}", err)))
 }
 
@@ -119,10 +122,10 @@ pub fn verify_blind_signature(
 ///
 /// - If signing fails
 pub fn sign(private_key_buf: &[u8], message: &[u8]) -> Result<Vec<u8>> {
-    let private_key: PrivateKey = bincode::deserialize(&private_key_buf)
+    let private_key: PrivateKey = bincode::deserialize(private_key_buf)
         .map_err(|err| JsValue::from_str(&format!("could not deserialize private key {}", err)))?;
 
-    SigScheme::sign(&private_key, &message)
+    SigScheme::sign(&private_key, message)
         .map_err(|err| JsValue::from_str(&format!("could not sign message: {}", err)))
 }
 
@@ -133,10 +136,10 @@ pub fn sign(private_key_buf: &[u8], message: &[u8]) -> Result<Vec<u8>> {
 ///
 /// - If signing fails
 pub fn sign_blinded_message(private_key_buf: &[u8], message: &[u8]) -> Result<Vec<u8>> {
-    let private_key: PrivateKey = bincode::deserialize(&private_key_buf)
+    let private_key: PrivateKey = bincode::deserialize(private_key_buf)
         .map_err(|err| JsValue::from_str(&format!("could not deserialize private key {}", err)))?;
 
-    SigScheme::blind_sign(&private_key, &message)
+    SigScheme::blind_sign(&private_key, message)
         .map_err(|err| JsValue::from_str(&format!("could not sign message: {}", err)))
 }
 
@@ -151,11 +154,11 @@ pub fn sign_blinded_message(private_key_buf: &[u8], message: &[u8]) -> Result<Ve
 /// NOTE: This method must NOT be called with a PrivateKey which is not generated via a
 /// secret sharing scheme.
 pub fn partial_sign(share_buf: &[u8], message: &[u8]) -> Result<Vec<u8>> {
-    let share: Share<PrivateKey> = bincode::deserialize(&share_buf).map_err(|err| {
+    let share: Share<PrivateKey> = bincode::deserialize(share_buf).map_err(|err| {
         JsValue::from_str(&format!("could not deserialize private key share {}", err))
     })?;
 
-    SigScheme::partial_sign(&share, &message)
+    SigScheme::partial_sign(&share, message)
         .map_err(|err| JsValue::from_str(&format!("could not partially sign message: {}", err)))
 }
 
@@ -170,11 +173,11 @@ pub fn partial_sign(share_buf: &[u8], message: &[u8]) -> Result<Vec<u8>> {
 /// NOTE: This method must NOT be called with a PrivateKey which is not generated via a
 /// secret sharing scheme.
 pub fn partial_sign_blinded_message(share_buf: &[u8], message: &[u8]) -> Result<Vec<u8>> {
-    let share: Share<PrivateKey> = bincode::deserialize(&share_buf).map_err(|err| {
+    let share: Share<PrivateKey> = bincode::deserialize(share_buf).map_err(|err| {
         JsValue::from_str(&format!("could not deserialize private key share {}", err))
     })?;
 
-    SigScheme::sign_blind_partial(&share, &message)
+    SigScheme::sign_blind_partial(&share, message)
         .map_err(|err| JsValue::from_str(&format!("could not partially sign message: {}", err)))
 }
 
@@ -190,7 +193,7 @@ pub fn partial_sign_blinded_message(share_buf: &[u8], message: &[u8]) -> Result<
 ///
 /// - If verification fails
 pub fn partial_verify(polynomial_buf: &[u8], blinded_message: &[u8], sig: &[u8]) -> Result<()> {
-    let polynomial: Poly<PublicKey> = bincode::deserialize(&polynomial_buf)
+    let polynomial: Poly<PublicKey> = bincode::deserialize(polynomial_buf)
         .map_err(|err| JsValue::from_str(&format!("could not deserialize polynomial {}", err)))?;
 
     SigScheme::partial_verify(&polynomial, blinded_message, sig)
@@ -209,7 +212,7 @@ pub fn partial_verify_blind_signature(
     blinded_message: &[u8],
     sig: &[u8],
 ) -> Result<()> {
-    let polynomial: Poly<PublicKey> = bincode::deserialize(&polynomial_buf)
+    let polynomial: Poly<PublicKey> = bincode::deserialize(polynomial_buf)
         .map_err(|err| JsValue::from_str(&format!("could not deserialize polynomial {}", err)))?;
 
     SigScheme::verify_blind_partial(&polynomial, blinded_message, sig)
@@ -265,7 +268,7 @@ pub fn combine(threshold: usize, signatures: Vec<u8>) -> Result<Vec<u8>> {
 ///
 /// The seed MUST be at least 32 bytes long
 pub fn threshold_keygen(n: usize, t: usize, seed: &[u8]) -> Keys {
-    let mut rng = get_rng(seed);
+    let mut rng = get_rng(&[seed]);
     let private = Poly::<PrivateKey>::new_from(t - 1, &mut rng);
     let shares = (0..n)
         .map(|i| private.eval(i as Index))
@@ -339,7 +342,7 @@ impl Keypair {
 /// The seed MUST be at least 32 bytes long
 #[wasm_bindgen]
 pub fn keygen(seed: Vec<u8>) -> Keypair {
-    let mut rng = get_rng(&seed);
+    let mut rng = get_rng(&[&seed]);
     let (private, public) = SigScheme::keypair(&mut rng);
     Keypair { private, public }
 }
@@ -376,7 +379,20 @@ impl Keys {
     }
 }
 
-fn get_rng(digest: &[u8]) -> impl RngCore {
+// Creates a PRNG for use in deterministic blinding of messages or in key generation from the array
+// of seeds provided as input.
+fn get_rng(seeds: &[&[u8]]) -> impl RngCore {
+    let mut outer = Blake2s256::new();
+    outer.update("Celo POPRF WASM RNG Seed");
+    for seed in seeds.iter() {
+        outer.update(Blake2s256::digest(seed));
+    }
+    let seed = outer.finalize();
+    ChaChaRng::from_seed(seed.into())
+}
+
+// TODO(victor) Remove this when it is no longer used.
+fn get_rng_deprecated(digest: &[u8]) -> impl RngCore {
     let seed = from_slice(digest);
     ChaChaRng::from_seed(seed)
 }
@@ -467,7 +483,7 @@ mod tests {
             .collect::<Vec<Vec<_>>>();
 
         sigs.iter()
-            .for_each(|sig| verify_fn(&keys.polynomial(), &message, &sig).unwrap());
+            .for_each(|sig| verify_fn(&keys.polynomial(), &message, sig).unwrap());
 
         let concatenated = sigs.concat();
         let asig = combine(3, concatenated).unwrap();

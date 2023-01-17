@@ -54,6 +54,9 @@ where
 
     fn blind_msg<R: RngCore>(msg: &[u8], rng: &mut R) -> (Self::Token, Vec<u8>) {
         let r = I::Private::rand(rng);
+        if r == I::Private::zero() || r == I::Private::one() {
+            panic!("weak blinding because of broken RNG");
+        }
 
         let mut h = I::Signature::new();
 
@@ -102,21 +105,18 @@ where
 }
 
 #[cfg(test)]
-#[cfg(feature = "bls12_381")]
 mod tests {
     use super::*;
-    use crate::curve::bls12381::PairingCurve as PCurve;
+    use crate::curve::bls12377::PairingCurve as PCurve;
     use crate::sig::bls::{G1Scheme, G2Scheme};
     use crate::sig::SignatureScheme;
     use rand::thread_rng;
 
-    #[cfg(feature = "bls12_381")]
     #[test]
     fn blind_g1() {
         blind_test::<G1Scheme<PCurve>>();
     }
 
-    #[cfg(feature = "bls12_381")]
     #[test]
     fn blind_g2() {
         blind_test::<G2Scheme<PCurve>>();

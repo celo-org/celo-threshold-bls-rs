@@ -1,25 +1,46 @@
 [package]
 name = "threshold-bls-ffi"
-version = "0.1.0"
-authors = ["Georgios Konstantopoulos <me@gakonst.com>"]
-edition = "2018"
+version = "0.3.0"
+authors = ["Georgios Konstantopoulos <me@gakonst.com>", "Michael Straka <mstraka100@gmail.com>"]
+edition = "2021"
 
 [lib]
 crate-type = ["lib", "cdylib", "staticlib"]
 name = "blind_threshold_bls"
 
 [dependencies]
-threshold-bls = { path = "../threshold-bls", default-features = false, features = ["bls12_377"] }
-bls-crypto = { git = "https://github.com/celo-org/bls-zexe" }
+threshold-bls = { path = "../threshold-bls", default-features = false }
+bls-crypto = { git = "https://github.com/celo-org/bls-crypto" }
 
-rand_core = { version = "0.5.1", default-features = false }
-rand_chacha = { version = "0.2.2", default-features = false }
+rand_core = { version = "0.6.3", default-features = false }
+rand_chacha = { version = "0.3.1", default-features = false }
 
-wasm-bindgen = { version = "0.2.60", optional = true }
 bincode = { version = "1.2.1", default-features = false }
 serde = { version = "1.0.106", default-features =  false }
 
+# Required for WASM interface
+blake2 = { version = "0.10", default-features = false, optional = true }
+getrandom = { version = "0.2", default-features = false, features = ["js"] }
+wasm-bindgen = { version = "0.2.60", optional = true }
+
+# The `console_error_panic_hook` crate provides better debugging of panics by
+# logging them with `console.error`. This is great for development, but requires
+# all the `std::fmt` and `std::panicking` infrastructure, so isn't great for
+# code size when deploying.
+console_error_panic_hook = { version = "0.1.7", optional = true }
+
 cfg-if = "0.1"
 
+[target.aarch64-linux-android]
+ar = "<project path>/greetings/NDK/arm64/bin/aarch64-linux-android-ar"
+linker = "<project path>/greetings/NDK/arm64/bin/aarch64-linux-android-clang"
+
 [features]
-wasm = ["wasm-bindgen"]
+# Build WASM bindings for use in JS environments
+wasm = ["wasm-bindgen", "getrandom/js", "blake2"]
+
+# Include a panic hook for printing panic messages to the JS console.
+wasm-debug = ["wasm", "console_error_panic_hook"]
+
+# Enable parallel computation in arkworks code. Cannot be used with WASM.
+parallel = ["bls-crypto/parallel", "threshold-bls/parallel"]

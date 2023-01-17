@@ -59,7 +59,7 @@ pub unsafe extern "C" fn blind(
 
     // blind the message with this randomness
     let message = <&[u8]>::from(unsafe { &*message });
-    let (blinding_factor, blinded_message_bytes) = SigScheme::blind_msg(&message, &mut rng);
+    let (blinding_factor, blinded_message_bytes) = SigScheme::blind_msg(message, &mut rng);
 
     unsafe { *blinded_message_out = Buffer::from(&blinded_message_bytes[..]) };
     std::mem::forget(blinded_message_bytes);
@@ -133,7 +133,7 @@ pub unsafe extern "C" fn verify(
 
     // checks the signature on the message hash
     let signature = <&[u8]>::from(unsafe { &*signature });
-    SigScheme::verify(public_key, &message, signature).is_ok()
+    SigScheme::verify(public_key, message, signature).is_ok()
 }
 
 ///////////////////////////////////////////////////////////////////////////
@@ -161,7 +161,7 @@ pub unsafe extern "C" fn sign(
     let private_key = unsafe { &*private_key };
     let message = <&[u8]>::from(unsafe { &*message });
 
-    let sig = match SigScheme::sign(&private_key, &message) {
+    let sig = match SigScheme::sign(private_key, message) {
         Ok(s) => s,
         Err(_) => return false,
     };
@@ -193,7 +193,7 @@ pub unsafe extern "C" fn sign_blinded_message(
     let private_key = unsafe { &*private_key };
     let message = <&[u8]>::from(unsafe { &*message });
 
-    let sig = match SigScheme::blind_sign(&private_key, &message) {
+    let sig = match SigScheme::blind_sign(private_key, message) {
         Ok(s) => s,
         Err(_) => return false,
     };
@@ -297,7 +297,7 @@ pub unsafe extern "C" fn partial_verify(
     let blinded_message = <&[u8]>::from(unsafe { &*blinded_message });
     let signature = <&[u8]>::from(unsafe { &*signature });
 
-    SigScheme::partial_verify(&polynomial, blinded_message, signature).is_ok()
+    SigScheme::partial_verify(polynomial, blinded_message, signature).is_ok()
 }
 
 /// Verifies a partial *blinded* signature against the public key corresponding to the secret shared
@@ -325,7 +325,7 @@ pub unsafe extern "C" fn partial_verify_blind_signature(
     let blinded_message = <&[u8]>::from(unsafe { &*blinded_message });
     let signature = <&[u8]>::from(unsafe { &*signature });
 
-    SigScheme::verify_blind_partial(&polynomial, blinded_message, signature).is_ok()
+    SigScheme::verify_blind_partial(polynomial, blinded_message, signature).is_ok()
 }
 
 /// Combines a flattened vector of partial signatures to a single threshold signature
@@ -459,14 +459,10 @@ pub unsafe extern "C" fn serialize_sig(sig: *const Signature, sig_buf: *mut *mut
     serialize(sig, sig_buf)
 }
 
-unsafe fn deserialize<T: DeserializeOwned>(
-    in_buf: *const u8,
-    len: usize,
-    out: *mut *mut T,
-) -> bool {
+fn deserialize<T: DeserializeOwned>(in_buf: *const u8, len: usize, out: *mut *mut T) -> bool {
     let buf = unsafe { std::slice::from_raw_parts(in_buf, len) };
 
-    let obj = if let Ok(res) = bincode::deserialize(&buf) {
+    let obj = if let Ok(res) = bincode::deserialize(buf) {
         res
     } else {
         return false;
@@ -477,7 +473,7 @@ unsafe fn deserialize<T: DeserializeOwned>(
     true
 }
 
-unsafe fn serialize<T: Serialize>(in_obj: *const T, out_bytes: *mut *mut u8) -> bool {
+fn serialize<T: Serialize>(in_obj: *const T, out_bytes: *mut *mut u8) -> bool {
     let obj = unsafe { &*in_obj };
     let mut marshalled = if let Ok(res) = bincode::serialize(obj) {
         res
@@ -500,7 +496,7 @@ unsafe fn serialize<T: Serialize>(in_obj: *const T, out_bytes: *mut *mut u8) -> 
 ///
 /// The pointer must point to a valid instance of the data type
 pub unsafe extern "C" fn destroy_token(token: *mut Token<PrivateKey>) {
-    Box::from_raw(token);
+    drop(Box::from_raw(token));
 }
 
 #[no_mangle]
@@ -510,7 +506,7 @@ pub unsafe extern "C" fn destroy_token(token: *mut Token<PrivateKey>) {
 ///
 /// The pointer must point to a valid instance of the data type
 pub unsafe extern "C" fn destroy_keys(keys: *mut Keys) {
-    Box::from_raw(keys);
+    drop(Box::from_raw(keys));
 }
 
 #[no_mangle]
@@ -520,7 +516,7 @@ pub unsafe extern "C" fn destroy_keys(keys: *mut Keys) {
 ///
 /// The pointer must point to a valid instance of the data type
 pub unsafe extern "C" fn destroy_keypair(keypair: *mut Keypair) {
-    Box::from_raw(keypair);
+    drop(Box::from_raw(keypair));
 }
 
 #[no_mangle]
@@ -530,7 +526,7 @@ pub unsafe extern "C" fn destroy_keypair(keypair: *mut Keypair) {
 ///
 /// The pointer must point to a valid instance of the data type
 pub unsafe extern "C" fn destroy_privkey(private_key: *mut PrivateKey) {
-    Box::from_raw(private_key);
+    drop(Box::from_raw(private_key));
 }
 
 #[no_mangle]
@@ -550,7 +546,7 @@ pub unsafe extern "C" fn free_vector(bytes: *mut u8, len: usize) {
 ///
 /// The pointer must point to a valid instance of the data type
 pub unsafe extern "C" fn destroy_pubkey(public_key: *mut PublicKey) {
-    Box::from_raw(public_key);
+    drop(Box::from_raw(public_key));
 }
 
 #[no_mangle]
@@ -560,7 +556,7 @@ pub unsafe extern "C" fn destroy_pubkey(public_key: *mut PublicKey) {
 ///
 /// The pointer must point to a valid instance of the data type
 pub unsafe extern "C" fn destroy_sig(signature: *mut Signature) {
-    Box::from_raw(signature);
+    drop(Box::from_raw(signature));
 }
 
 ///////////////////////////////////////////////////////////////////////////
@@ -581,7 +577,13 @@ pub unsafe extern "C" fn destroy_sig(signature: *mut Signature) {
 ///
 /// The seed MUST be at least 32 bytes long
 #[no_mangle]
-pub unsafe extern "C" fn threshold_keygen(n: usize, t: usize, seed: &[u8], keys: *mut *mut Keys) {
+pub unsafe extern "C" fn threshold_keygen(
+    n: usize,
+    t: usize,
+    seed: *const Buffer,
+    keys: *mut *mut Keys,
+) {
+    let seed = <&[u8]>::from(unsafe { &*seed });
     let mut rng = get_rng(seed);
     let private = Poly::<PrivateKey>::new_from(t - 1, &mut rng);
     let shares = (0..n)
@@ -617,7 +619,7 @@ pub unsafe extern "C" fn threshold_keygen(n: usize, t: usize, seed: &[u8], keys:
 #[no_mangle]
 pub unsafe extern "C" fn keygen(seed: *const Buffer, keypair: *mut *mut Keypair) {
     let seed = <&[u8]>::from(unsafe { &*seed });
-    let mut rng = get_rng(&seed);
+    let mut rng = get_rng(seed);
     let (private, public) = SigScheme::keypair(&mut rng);
     let keypair_local = Keypair { private, public };
     unsafe { *keypair = Box::into_raw(Box::new(keypair_local)) };
@@ -749,7 +751,7 @@ mod tests {
 
         let (n, t) = (5, 3);
         let mut keys = MaybeUninit::<*mut Keys>::uninit();
-        unsafe { threshold_keygen(n, t, &seed[..], keys.as_mut_ptr()) };
+        unsafe { threshold_keygen(n, t, &Buffer::from(&seed[..]), keys.as_mut_ptr()) };
         let keys = unsafe { &*keys.assume_init() };
 
         let (message_to_sign, blinding_factor) = if should_blind {
@@ -907,7 +909,7 @@ mod tests {
         let message = unsafe { std::slice::from_raw_parts(privkey_buf, PRIVKEY_LEN) };
         assert_eq!(marshalled, message);
 
-        let unmarshalled: PrivateKey = bincode::deserialize(&message).unwrap();
+        let unmarshalled: PrivateKey = bincode::deserialize(message).unwrap();
         assert_eq!(&unmarshalled, private_key);
 
         let mut de = MaybeUninit::<*mut PrivateKey>::uninit();
@@ -941,7 +943,7 @@ mod tests {
         let message = unsafe { std::slice::from_raw_parts(pubkey_buf, PUBKEY_LEN) };
         assert_eq!(marshalled, message);
 
-        let unmarshalled: PublicKey = bincode::deserialize(&message).unwrap();
+        let unmarshalled: PublicKey = bincode::deserialize(message).unwrap();
         assert_eq!(&unmarshalled, public_key);
 
         let mut de = MaybeUninit::<*mut PublicKey>::uninit();

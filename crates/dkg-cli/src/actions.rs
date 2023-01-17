@@ -2,7 +2,7 @@ use crate::{
     dkg_contract::{DKG as DKGContract, DKG_ABI},
     opts::*,
 };
-use rand::RngCore;
+use rand::{CryptoRng, RngCore};
 use std::{fs::File, io::Write, sync::Arc};
 
 use dkg_core::{
@@ -12,6 +12,8 @@ use dkg_core::{
 
 use anyhow::Result;
 use ethers::prelude::*;
+use ethers::providers::Middleware;
+use ethers::signers::LocalWallet;
 use rustc_hex::{FromHex, ToHex};
 use serde::{Deserialize, Serialize};
 use std::convert::TryFrom;
@@ -31,11 +33,11 @@ struct CeloKeypairJson {
 
 pub fn keygen<R>(opts: KeygenOpts, rng: &mut R) -> Result<()>
 where
-    R: RngCore,
+    R: CryptoRng + RngCore,
 {
     let wallet = Wallet::new(rng);
     let output = CeloKeypairJson {
-        private_key: hex::encode(bincode::serialize(wallet.private_key())?),
+        private_key: hex::encode(&wallet.signer().to_bytes()),
         address: wallet.address(),
     };
 
@@ -55,7 +57,10 @@ pub async fn deploy(opts: DeployOpts) -> Result<()> {
     let bytecode = bytecode.from_hex::<Vec<u8>>()?;
 
     let provider = Provider::<Http>::try_from(opts.node_url.as_str())?;
-    let client = opts.private_key.parse::<Wallet>()?.connect(provider);
+    let wallet = opts.private_key.parse::<LocalWallet>()?;
+    let client = SignerMiddleware::new(provider, wallet);
+    let client = Arc::new(client);
+
     let abi = DKG_ABI.clone();
 
     let factory = ContractFactory::new(abi, Bytes::from(bytecode), client);
@@ -70,49 +75,46 @@ pub async fn deploy(opts: DeployOpts) -> Result<()> {
 
 pub async fn allow(opts: AllowlistOpts) -> Result<()> {
     let provider = Provider::<Http>::try_from(opts.node_url.as_str())?;
-    let client = opts.private_key.parse::<Wallet>()?.connect(provider);
+    let wallet = opts.private_key.parse::<LocalWallet>()?;
+    let client = SignerMiddleware::new(provider, wallet);
+    let client = Arc::new(client);
 
     let contract = DKGContract::new(opts.contract_address, client);
 
-    let mut tx_futs = Vec::new();
     for addr in opts.address {
-        let tx = contract
-            .allowlist(addr)
-            .block(BlockNumber::Pending)
-            .send()
-            .await?;
+        let tx = contract.allowlist(addr).block(BlockNumber::Pending);
+        let tx = tx.send().await?.await?;
         println!("Sent `allow` tx for {:?} (hash: {:?})", addr, tx);
-        tx_futs.push(contract.client().pending_transaction(tx));
     }
-
-    // Await them all
-    futures::future::join_all(tx_futs).await;
 
     Ok(())
 }
 
 pub async fn start(opts: StartOpts) -> Result<()> {
     let provider = Provider::<Http>::try_from(opts.node_url.as_str())?;
-    let client = opts.private_key.parse::<Wallet>()?.connect(provider);
-
+    let wallet = opts.private_key.parse::<LocalWallet>()?;
+    let client = SignerMiddleware::new(provider, wallet);
+    let client = Arc::new(client);
     let contract = DKGContract::new(opts.contract_address, client);
 
     // Submit the tx and wait for the confirmation
-    let tx_hash = contract.start().send().await?;
-    let _tx_receipt = contract.client().pending_transaction(tx_hash).await?;
+    let _tx_hash = contract.start().send().await?.await?;
 
     Ok(())
 }
 
-pub async fn reshare<S, C, R>(opts: ReshareConfig, rng: &mut R) -> Result<()>
+pub async fn reshare<S, M, C, R>(opts: ReshareConfig, rng: &mut R) -> Result<()>
 where
     C: Curve,
     // We need to bind the Curve's Point and Scalars to the Scheme
     S: Scheme<Public = <C as Curve>::Point, Private = <C as Curve>::Scalar>,
+    M: Middleware,
     R: RngCore,
 {
     let provider = Provider::<Http>::try_from(opts.node_url.as_str())?;
-    let client = Arc::new(opts.private_key.parse::<Wallet>()?.connect(provider));
+    let wallet = opts.private_key.parse::<LocalWallet>()?;
+    let client = SignerMiddleware::new(provider, wallet);
+    let client = Arc::new(client);
 
     // we need the previous group and public poly for resharing
     let previous_group = {
@@ -128,8 +130,8 @@ where
 
     let (private_key, public_key) = S::keypair(rng);
 
-    register::<S>(&dkg, &public_key).await?;
-    let new_group = get_group::<C>(&dkg).await?;
+    register::<S, Provider<Http>, LocalWallet>(&dkg, &public_key).await?;
+    let new_group = get_group::<C, Provider<Http>, LocalWallet>(&dkg).await?;
 
     let phase0 = if let Some(share) = opts.share {
         let share = share.from_hex::<Vec<u8>>()?;
@@ -155,38 +157,43 @@ where
     R: RngCore,
 {
     let provider = Provider::<Http>::try_from(opts.node_url.as_str())?;
-    let client = opts.private_key.parse::<Wallet>()?.connect(provider);
+    let wallet = opts.private_key.parse::<LocalWallet>()?;
+    let client = SignerMiddleware::new(provider, wallet);
+    let client = Arc::new(client);
+
     let dkg = DKGContract::new(opts.contract_address, client);
 
     // 1. Generate the keys
     let (private_key, public_key) = S::keypair(rng);
 
     // 2. Register
-    register::<S>(&dkg, &public_key).await?;
+    register::<S, Provider<Http>, LocalWallet>(&dkg, &public_key).await?;
 
     // Get the group info
-    let group = get_group::<C>(&dkg).await?;
+    let group = get_group::<C, Provider<Http>, LocalWallet>(&dkg).await?;
     let phase0 = DKG::new(private_key, group)?;
 
     run_dkg(dkg, phase0, rng, opts.output_path).await
 }
 
-async fn register<S: Scheme>(
-    dkg: &DKGContract<Http, Wallet>,
+async fn register<S: Scheme, M: Middleware + 'static, Z: Signer + 'static>(
+    dkg: &DKGContract<SignerMiddleware<M, Z>>,
     public_key: &S::Public,
 ) -> Result<()> {
     println!("Registering...");
     let public_key_serialized = bincode::serialize(public_key)?;
-    let pending_tx = dkg.register(public_key_serialized).send().await?;
-    let _tx_receipt = dkg.pending_transaction(pending_tx).await?;
+    let public_key_bytes = ethers::prelude::Bytes::from(public_key_serialized);
+    let _pending_tx = dkg.register(public_key_bytes).send().await?.await?;
 
     // Wait for Phase 1
-    wait_for_phase(&dkg, 1).await?;
+    wait_for_phase(dkg, 1).await?;
 
     Ok(())
 }
 
-async fn get_group<C: Curve>(dkg: &DKGContract<Http, Wallet>) -> Result<Group<C>> {
+async fn get_group<C: Curve, M: Middleware + 'static, Z: Signer + 'static>(
+    dkg: &DKGContract<SignerMiddleware<M, Z>>,
+) -> Result<Group<C>> {
     let group = dkg.get_bls_keys().call().await?;
     let participants = dkg.get_participants().call().await?;
     confirm_group(&group, participants)?;
@@ -195,14 +202,17 @@ async fn get_group<C: Curve>(dkg: &DKGContract<Http, Wallet>) -> Result<Group<C>
     Ok(group)
 }
 
-fn confirm_group(pubkeys: &(U256, Vec<Vec<u8>>), participants: Vec<Address>) -> Result<()> {
+fn confirm_group(
+    pubkeys: &(U256, Vec<ethers::prelude::Bytes>),
+    participants: Vec<Address>,
+) -> Result<()> {
     // print some debug info
     println!(
         "Will run DKG with the group listed below and threshold {}",
         pubkeys.0
     );
     for (bls_pubkey, address) in pubkeys.1.iter().zip(&participants) {
-        let key = bls_pubkey.to_hex::<String>();
+        let key = bls_pubkey.to_vec().to_hex::<String>();
         println!("{:?} -> {}", address, key)
     }
 
@@ -219,14 +229,14 @@ fn confirm_group(pubkeys: &(U256, Vec<Vec<u8>>), participants: Vec<Address>) -> 
 }
 
 // Pass the result of `get_bls_keys` to convert the raw data to a group
-fn pubkeys_to_group<C: Curve>(pubkeys: (U256, Vec<Vec<u8>>)) -> Result<Group<C>> {
+fn pubkeys_to_group<C: Curve>(pubkeys: (U256, Vec<ethers::prelude::Bytes>)) -> Result<Group<C>> {
     let nodes = pubkeys
         .1
         .into_iter()
-        .filter(|pubkey| !pubkey.is_empty()) // skip users that did not register
+        .filter(|pubkey| !pubkey.to_vec().is_empty()) // skip users that did not register
         .enumerate()
         .map(|(i, pubkey)| {
-            let pubkey: C::Point = bincode::deserialize(&pubkey)?;
+            let pubkey: C::Point = bincode::deserialize(&pubkey.to_vec()[..])?;
             Ok(Node::<C>::new(i as Idx, pubkey))
         })
         .collect::<Result<_>>()?;
@@ -238,8 +248,8 @@ fn pubkeys_to_group<C: Curve>(pubkeys: (U256, Vec<Vec<u8>>)) -> Result<Group<C>>
 }
 
 // Shared helper for running the DKG in both normal and re-sharing mode
-async fn run_dkg<P, C, R>(
-    mut dkg: DKGContract<Http, Wallet>,
+async fn run_dkg<P, C, R, M: Middleware + 'static>(
+    mut dkg: DKGContract<M>,
     phase0: P,
     rng: &mut R,
     output_path: Option<String>,
@@ -312,10 +322,10 @@ struct OutputJson {
     share: String,
 }
 
-async fn wait_for_phase<P: JsonRpcClient, S: Signer>(
-    dkg: &DKGContract<P, S>,
+async fn wait_for_phase<M: Middleware>(
+    dkg: &DKGContract<M>,
     num: u64,
-) -> Result<(), ContractError> {
+) -> Result<(), ContractError<M>> {
     println!("Waiting for Phase {} to start", num);
 
     loop {
@@ -325,7 +335,7 @@ async fn wait_for_phase<P: JsonRpcClient, S: Signer>(
         }
         print!(".");
         // 6s for 1 Celo block
-        tokio::time::delay_for(std::time::Duration::from_millis(6000)).await;
+        tokio::time::sleep(std::time::Duration::from_millis(6000)).await;
     }
 
     println!("\nIn Phase {}. Moving to the next step.", num);
@@ -333,11 +343,13 @@ async fn wait_for_phase<P: JsonRpcClient, S: Signer>(
     Ok(())
 }
 
-fn parse_bundle<D: serde::de::DeserializeOwned>(bundle: &[Vec<u8>]) -> Result<Vec<D>> {
+fn parse_bundle<D: serde::de::DeserializeOwned>(
+    bundle: &[ethers::prelude::Bytes],
+) -> Result<Vec<D>> {
     bundle
         .iter()
-        .filter(|item| !item.is_empty()) // filter out empty items
-        .map(|item| Ok(bincode::deserialize::<D>(&item)?))
+        .filter(|item| !item.to_vec().is_empty()) // filter out empty items
+        .map(|item| Ok(bincode::deserialize::<D>(&item.to_vec()[..])?))
         .collect()
 }
 

@@ -3,7 +3,7 @@ version: 2
 jobs:
   contracts:
     docker:
-      - image: circleci/node:latest
+      - image: cimg/node:lts
     steps:
       - checkout
       - run:
@@ -16,7 +16,7 @@ jobs:
 
   cross-ios:
     macos:
-      xcode: 11.4.0
+      xcode: 13.3.0
     working_directory: ~/work
     steps:
     - checkout
@@ -24,11 +24,11 @@ jobs:
         name: Install rustup
         command: curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
     - run:
-        name: Install Rust 1.41
-        command: rustup install 1.41.0 && rustup default 1.41.0
+        name: Install Rust 1.64
+        command: rustup install 1.64.0 && rustup default 1.64.0
     - run:
         name: Install iOS targets
-        command: rustup target add armv7-apple-ios armv7s-apple-ios aarch64-apple-ios x86_64-apple-ios
+        command: rustup target add aarch64-apple-ios x86_64-apple-ios
     - run:
         name: Build iOS
         command: cd crates/threshold-bls-ffi/cross && make ios
@@ -37,14 +37,14 @@ jobs:
 
   test:
     docker:
-      - image: circleci/rust:latest
+      - image: cimg/rust:1.64.0
+    resource_class: large
     steps:
       - checkout
       - run:
           name: Install Dependencies
           command: |
               cargo install cargo-audit
-              rustup component add clippy
               mkdir -p "$HOME/bin"
               wget -q https://github.com/ethereum/solidity/releases/download/v0.6.6/solc-static-linux -O $HOME/bin/solc
               chmod u+x "$HOME/bin/solc"
@@ -59,14 +59,14 @@ jobs:
           name: Check style
           command: |
               cargo fmt --all -- --check
-              cargo clippy --all-targets --all-features -- -D warnings
+              cargo clippy --all-targets --all-features -- -D warnings -Aclippy::upper_case_acronyms
       - run:
           name: Audit Dependencies
           command: cargo audit --ignore RUSTSEC-2019-0031 # ignore lazy static warning
 
   wasm:
     docker:
-      - image: circleci/rust:latest
+      - image: cimg/rust:1.64.0
     steps:
     - checkout
     - run:
@@ -78,16 +78,13 @@ jobs:
 
   cross-android:
     docker:
-      - image: circleci/rust:latest
+      - image: cimg/rust:1.64.0
     working_directory: ~/work
     steps:
     - checkout
     - run:
-        name: Install rustup
-        command: curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
-    - run:
-        name: Install Rust 1.41
-        command: rustup install 1.41.0 && rustup default 1.41.0
+        name: Install Python
+        command: sudo apt install python
     - run:
         name: Install Android targets
         command: rustup target add aarch64-linux-android armv7-linux-androideabi arm-linux-androideabi i686-linux-android x86_64-linux-android

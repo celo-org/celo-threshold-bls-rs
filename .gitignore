@@ -20,3 +20,8 @@ react-native
 
 solidity/cache
 solidity/build
+*.swp
+*.bin
+.DS_Store
+solidity/artifacts/DKG.sol/DKG.json
+crates/dkg-cli/src/dkg_contract.rs

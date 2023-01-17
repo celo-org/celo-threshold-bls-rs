@@ -1,24 +1,40 @@
-use ethers::{contract::Abigen, utils::Solc};
-use std::{fs::File, io::Write};
+use ethers::contract::Abigen;
+use ethers_solc::{Project, ProjectPathsConfig};
+use std::fs::File;
+use std::io::Write;
+use std::path::Path;
 
-const PATH: &str = "../../solidity/contracts/DKG.sol";
+const PATH: &str = "../../solidity/";
+const CONTRACT_PATH: &str = "../../solidity/contracts/DKG.sol";
+const CONTRACT_NAME: &str = "DKG";
 // Generates the bindings under `src/`
 fn main() {
     // Only re-run the builder script if the contract changes
     println!("cargo:rerun-if-changed={}", PATH);
 
     // compile the DKG contract (requires solc on the builder's system)
-    let contracts = Solc::new(PATH).build_raw().expect("could not compile");
-    let contract = contracts.get("DKG").expect("contract not found");
+    let project = Project::builder()
+        .paths(ProjectPathsConfig::hardhat(PATH).unwrap())
+        .build()
+        .unwrap();
 
-    let abi = contract.abi.clone();
+    let full_path = Path::new(CONTRACT_PATH).canonicalize().unwrap();
+    let full_path = full_path.to_str().unwrap();
+
+    let compiler_output = project.compile().unwrap();
+    let contract = compiler_output.find(full_path, CONTRACT_NAME).unwrap();
 
     let mut f = File::create("dkg.bin").expect("could not create DKG bytecode file");
-    f.write_all(contract.bin.as_bytes())
+    let bytecode_obj = contract.bytecode.clone().unwrap().object;
+    let s = serde_json::to_string(&bytecode_obj).unwrap();
+    f.write_all(s.as_bytes())
         .expect("could not write DKG bytecode to the file");
 
     // generate type-safe bindings to it
-    let bindings = Abigen::new("DKG", abi)
+    let abi = contract.abi.as_ref().unwrap();
+    let abi_string = serde_json::to_string(&abi.clone()).unwrap();
+
+    let bindings = Abigen::new("DKG", abi_string)
         .expect("could not instantiate Abigen")
         .generate()
         .expect("could not generate bindings");

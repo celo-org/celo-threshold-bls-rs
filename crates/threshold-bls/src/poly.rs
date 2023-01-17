@@ -24,7 +24,7 @@ impl<A: fmt::Display> fmt::Display for Eval<A> {
 /// A polynomial that is using a scalar for the variable x and a generic
 /// element for the coefficients. The coefficients must be able to multiply
 /// the type of the variable, which is always a scalar.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Poly<C>(Vec<C>);
 
 impl<C> Poly<C> {
@@ -91,7 +91,7 @@ impl<C: Element> Poly<C> {
             self.0.resize(other.0.len(), C::zero())
         }
 
-        self.0.iter_mut().zip(&other.0).for_each(|(a, b)| a.add(&b))
+        self.0.iter_mut().zip(&other.0).for_each(|(a, b)| a.add(b))
     }
 }
 
@@ -352,12 +352,11 @@ impl<C: fmt::Display> fmt::Display for Poly<C> {
     }
 }
 
-#[cfg(feature = "bls12_381")]
 #[cfg(test)]
 pub mod tests {
     use super::*;
-    use crate::curve::bls12381::Scalar as Sc;
-    use crate::curve::bls12381::G1;
+    use crate::curve::bls12377::Scalar as Sc;
+    use crate::curve::bls12377::G1;
     use rand::prelude::*;
 
     #[test]
@@ -461,7 +460,7 @@ pub mod tests {
     }
 
     #[test]
-    fn eval(d in 0..100usize, idx in 0..(100 as Idx)) {
+    fn eval(d in 0..100usize, idx in 0..100_u32) {
         let mut x = Sc::new();
         x.set_int(idx as u64 + 1);
 

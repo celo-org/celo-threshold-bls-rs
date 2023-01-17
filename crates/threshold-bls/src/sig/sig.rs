@@ -65,7 +65,7 @@ pub trait SignatureScheme: Scheme {
     fn verify(public: &Self::Public, msg: &[u8], sig: &[u8]) -> Result<(), Self::Error>;
 }
 
-/// BlindScheme is a signature scheme where the message can be blinded before
+/*/// BlindScheme is a signature scheme where the message can be blinded before
 /// signing so the signer does not know the real message. The signature can
 /// later be "unblinded" as to reveal a valid signature over the initial
 /// message.
@@ -102,7 +102,7 @@ pub trait SignatureScheme: Scheme {
 ///     Err(e) => println!("signature is invalid: {}",e),
 ///  };
 /// # }
-/// ```
+/// ```*/
 pub trait BlindScheme: Scheme {
     /// The blinding factor which will be used to unblind the message
     type Token: Serialize + DeserializeOwned;

@@ -1,5 +1,7 @@
 use dkg_cli::{actions::*, opts::*};
 
+use ethers::prelude::Http;
+use ethers::providers::Provider;
 use gumdrop::Options;
 use std::process;
 
@@ -23,7 +25,7 @@ async fn main() -> anyhow::Result<()> {
         Command::Start(opts) => start(opts).await?,
         Command::Deploy(opts) => deploy(opts).await?,
         Command::Allow(opts) => allow(opts).await?,
-        Command::Reshare(opts) => reshare::<Scheme, Curve, _>(opts, rng).await?,
+        Command::Reshare(opts) => reshare::<Scheme, Provider<Http>, Curve, _>(opts, rng).await?,
     };
 
     Ok(())

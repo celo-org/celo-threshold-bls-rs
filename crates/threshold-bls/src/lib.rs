@@ -1,4 +1,4 @@
-//! # Threshold BLS Signatures
+/*//! # Threshold BLS Signatures
 //!
 //! This crate provides implementations for BLS signatures on G1 and G2, with additional support
 //! for blind and threshold signing modes.
@@ -170,7 +170,7 @@
 //! [bls12_377]: ./curve/zexe/index.html
 //!
 //! [`curve`]: ./curve/index.html
-//! [`SignatureSchemeExt`]: ./sig/trait.SignatureSchemeExt.html
+//! [`SignatureSchemeExt`]: ./sig/trait.SignatureSchemeExt.html*/
 
 /// Curve implementations for the traits defined in the [`group`](group/index.html) module.
 pub mod curve;
@@ -193,24 +193,10 @@ pub mod sig;
 pub mod schemes {
     use crate::sig::{G1Scheme, G2Scheme};
 
-    #[cfg(feature = "bls12_381")]
-    /// BLS12-381 Schemes
-    pub mod bls12_381 {
-        use crate::curve::bls12381::PairingCurve;
-
-        pub use crate::curve::bls12381::{Curve as G1Curve, G2Curve};
-
-        /// Public Keys on G1, Signatures on G2
-        pub type G1Scheme = super::G1Scheme<PairingCurve>;
-        /// Public Keys on G2, Signatures on G1
-        pub type G2Scheme = super::G2Scheme<PairingCurve>;
-    }
-
-    #[cfg(feature = "bls12_377")]
     /// BLS12-377 Schemes
     pub mod bls12_377 {
-        use crate::curve::zexe::PairingCurve;
-        pub use crate::curve::zexe::{G1Curve, G2Curve};
+        use crate::curve::bls12377::PairingCurve;
+        pub use crate::curve::bls12377::{G1Curve, G2Curve};
 
         /// Public Keys on G1, Signatures on G2
         pub type G1Scheme = super::G1Scheme<PairingCurve>;

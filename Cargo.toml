@@ -1,8 +1,8 @@
 [workspace]
 
 members = [ 
-    "crates/dkg-core", 
     "crates/dkg-cli",
+    "crates/dkg-core", 
     "crates/threshold-bls",
     "crates/threshold-bls-ffi",
 ]
@@ -30,3 +30,4 @@ opt-level = 3
 incremental = true
 debug-assertions = true
 debug = true
+

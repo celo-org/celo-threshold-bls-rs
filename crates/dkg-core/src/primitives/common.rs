@@ -70,7 +70,7 @@ pub fn set_statuses<C: Curve>(
 /// evaluated at the given point.
 pub fn share_correct<C: Curve>(idx: Idx, share: &C::Scalar, public: &PublicPoly<C>) -> bool {
     let mut commit = C::Point::one();
-    commit.mul(&share);
+    commit.mul(share);
     let pub_eval = public.eval(idx);
     pub_eval.value == commit
 }
@@ -354,6 +354,7 @@ pub mod tests {
         o
     }
 
+    #[allow(clippy::needless_collect)]
     pub fn invalid_shares<C, P>(
         thr: usize,
         dkgs: Vec<P>,
@@ -407,7 +408,7 @@ pub mod tests {
                         }
                         ndkg
                     }
-                    Err(e) => panic!(e),
+                    Err(e) => std::panic::panic_any(e),
                 },
             })
             .collect();
@@ -432,6 +433,7 @@ pub mod tests {
         Ok(recovered_public)
     }
 
+    #[allow(clippy::needless_collect)]
     pub fn full_dkg<C, P>(nthr: usize, dkgs: Vec<P>) -> (Vec<DKGOutput<C>>, PublicPoly<C>)
     where
         C: Curve,
@@ -454,7 +456,9 @@ pub mod tests {
 
         // Step 2. verify the received shares (there should be no complaints)
         let response_bundles = Vec::with_capacity(n);
-        let dkgs: Vec<_> = dkgs
+
+        // Step 3. get the responses
+        let outputs = dkgs
             .into_iter()
             .map(|dkg| {
                 let (ndkg, bundle_o) = dkg.process_shares(&all_shares, false).unwrap();
@@ -464,11 +468,6 @@ pub mod tests {
                 );
                 ndkg
             })
-            .collect();
-
-        // Step 3. get the responses
-        let outputs = dkgs
-            .into_iter()
             .map(|dkg| dkg.process_responses(&response_bundles).expect("wholo"))
             .collect::<Vec<_>>();
 

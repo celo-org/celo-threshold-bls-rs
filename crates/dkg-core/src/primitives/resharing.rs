@@ -397,7 +397,7 @@ where
                 !check_public_resharing::<C>(
                     b.dealer_idx,
                     // take the public polynomial we received in the first step
-                    &publics.get(&b.dealer_idx).unwrap(),
+                    publics.get(&b.dealer_idx).unwrap(),
                     &info.prev_public,
                 )
             })
@@ -523,7 +523,7 @@ mod tests {
         default_threshold,
     };
     use threshold_bls::{
-        curve::bls12381::{Curve as BCurve, Scalar, G1},
+        curve::bls12377::{G1Curve as BCurve, Scalar, G1},
         ecies,
     };
 
@@ -538,11 +538,6 @@ mod tests {
         let (prev_privs, prev_group) = setup_group::<C>(old_n, old_thr);
         // simulate shares
         let private_poly = Poly::<C::Scalar>::new_from(prev_group.threshold - 1, &mut thread_rng());
-        let shares = prev_group
-            .nodes
-            .iter()
-            .map(|n| private_poly.eval(n.id()))
-            .collect::<Vec<_>>();
         let public_poly = private_poly.commit::<C::Point>();
 
         // assume strictly greater group
@@ -578,7 +573,7 @@ mod tests {
 
         let mut dkgs = prev_privs
             .into_iter()
-            .zip(shares.into_iter())
+            .zip(prev_group.nodes.iter().map(|n| private_poly.eval(n.id())))
             .map(|(p, sh)| {
                 let out = DKGOutput {
                     share: Share {
