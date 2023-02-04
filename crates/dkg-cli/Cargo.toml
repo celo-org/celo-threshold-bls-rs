@@ -28,7 +28,7 @@ ethers = { version = "1.0.0" , features = ["celo"] }
 ethers-solc = "1.0.0"
 futures = "0.3.5"
 async-trait = "0.1.35"
-tokio = { version = "1.23.1", features = ["macros", "time"] }
+tokio = { version = "1.24.2", features = ["macros", "time"] }
 rustc-hex = "2.1.0"
 clt = "0.0.6"
 
