@@ -1,4 +1,4 @@
-FROM cimg/rust:1.65.0
+FROM cimg/rust:1.67.0
 
 ENV HOME=/home/circleci
 ENV PATH=$HOME/bin:$PATH
