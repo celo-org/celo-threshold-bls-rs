@@ -37,7 +37,7 @@ where
 {
     let wallet = Wallet::new(rng);
     let output = CeloKeypairJson {
-        private_key: hex::encode(&wallet.signer().to_bytes()),
+        private_key: hex::encode(wallet.signer().to_bytes()),
         address: wallet.address(),
     };
 
@@ -355,9 +355,9 @@ fn parse_bundle<D: serde::de::DeserializeOwned>(
 
 fn write_output<C: Curve, W: Write>(writer: W, out: &DKGOutput<C>) -> Result<()> {
     let output = OutputJson {
-        public_key: hex::encode(&bincode::serialize(&out.public.public_key())?),
-        public_polynomial: hex::encode(&bincode::serialize(&out.public)?),
-        share: hex::encode(&bincode::serialize(&out.share)?),
+        public_key: hex::encode(bincode::serialize(&out.public.public_key())?),
+        public_polynomial: hex::encode(bincode::serialize(&out.public)?),
+        share: hex::encode(bincode::serialize(&out.share)?),
     };
     serde_json::to_writer(writer, &output)?;
     Ok(())

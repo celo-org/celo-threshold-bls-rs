@@ -536,7 +536,7 @@ pub unsafe extern "C" fn destroy_privkey(private_key: *mut PrivateKey) {
 ///
 /// The pointer must point to a valid instance of the data type
 pub unsafe extern "C" fn free_vector(bytes: *mut u8, len: usize) {
-    drop(unsafe { Vec::from_raw_parts(bytes, len as usize, len as usize) });
+    drop(unsafe { Vec::from_raw_parts(bytes, len, len) });
 }
 
 #[no_mangle]

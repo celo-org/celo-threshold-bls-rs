@@ -666,7 +666,7 @@ mod tests {
                             return b;
                         }
                         let msg = vec![1, 9, 6, 9];
-                        b.shares[((b.dealer_idx + 1) as usize % group.len()) as usize].secret =
+                        b.shares[(b.dealer_idx + 1) as usize % group.len()].secret =
                             ecies::encrypt::<BCurve, _>(
                                 &G1::rand(&mut thread_rng()),
                                 &msg,
