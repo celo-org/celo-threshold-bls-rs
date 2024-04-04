@@ -14,15 +14,14 @@ serde = {version = "1.0.106", features = ["derive"] }
 
 # for ECIES
 chacha20poly1305 = "0.9"
-hkdf = "0.8"
-sha2 = "0.8"
+hkdf = "0.12"
+sha2 = "0.10"
 
 # bls12_377
-ark-bls12-377 = { version = "0.3.0" }
-ark-serialize = { version = "0.3.0", features = [ "derive" ] }
-ark-ff = { version = "0.3.0", features = [ "std" ] }
-ark-ec = { version = "0.3.0", features = [ "std" ] }
-bls-crypto = { git = "https://github.com/celo-org/bls-crypto" }
+ark-bls12-377 = { version = "0.4.0" }
+ark-serialize = { version = "0.4.0", features = [ "derive" ] }
+ark-ff = { version = "0.4.0", features = [ "std" ] }
+ark-ec = { version = "0.4.0", features = [ "std" ] }
 thiserror = "1.0.15"
 bincode = "1.2.1"
 
@@ -32,4 +31,4 @@ proptest = "1.0.0"
 
 [features]
 # Enable parallel computation. Cannot be used with WASM.
-parallel = ["ark-ec/parallel", "ark-ff/parallel", "bls-crypto/parallel"]
+parallel = ["ark-ec/parallel", "ark-ff/parallel"]
