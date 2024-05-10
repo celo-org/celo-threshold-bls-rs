@@ -5,7 +5,7 @@ use ethers::providers::Provider;
 use gumdrop::Options;
 use std::process;
 
-use threshold_bls::schemes::bls12_377::{G2Curve as Curve, G2Scheme as Scheme};
+use threshold_bls::schemes::bls12_381::{G1Curve as Curve, G1Scheme as Scheme};
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {

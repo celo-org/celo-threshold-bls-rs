@@ -3,7 +3,7 @@ use crate::{
     opts::*,
 };
 use rand::{CryptoRng, RngCore};
-use std::{fs::File, io::Write, sync::Arc};
+use std::{fs::File, io::Write, sync::Arc, time::Duration};
 
 use dkg_core::{
     primitives::{joint_feldman::*, resharing::RDKG, *},
@@ -24,8 +24,15 @@ use threshold_bls::{
     sig::Share,
 };
 
+/// Target chain ID
+/// TODO: move it to config
+pub const CHAIN_ID: u32 = 128123;
+/// Polling interval
+/// TODO: move it to config
+pub const INTERVAL_MS: u64 = 1000;
+
 #[derive(Serialize, Deserialize, Debug)]
-struct CeloKeypairJson {
+struct KeypairJson {
     address: Address,
     #[serde(rename = "privateKey")]
     private_key: String,
@@ -36,8 +43,8 @@ where
     R: CryptoRng + RngCore,
 {
     let wallet = Wallet::new(rng);
-    let output = CeloKeypairJson {
-        private_key: hex::encode(&wallet.signer().to_bytes()),
+    let output = KeypairJson {
+        private_key: hex::encode(wallet.signer().to_bytes()),
         address: wallet.address(),
     };
 
@@ -56,8 +63,12 @@ pub async fn deploy(opts: DeployOpts) -> Result<()> {
     let bytecode = include_str!["../dkg.bin"];
     let bytecode = bytecode.from_hex::<Vec<u8>>()?;
 
-    let provider = Provider::<Http>::try_from(opts.node_url.as_str())?;
-    let wallet = opts.private_key.parse::<LocalWallet>()?;
+    let provider = Provider::<Http>::try_from(opts.node_url.as_str())?
+        .interval(Duration::from_millis(INTERVAL_MS));
+    let wallet = opts
+        .private_key
+        .parse::<LocalWallet>()?
+        .with_chain_id(CHAIN_ID);
     let client = SignerMiddleware::new(provider, wallet);
     let client = Arc::new(client);
 
@@ -74,8 +85,12 @@ pub async fn deploy(opts: DeployOpts) -> Result<()> {
 }
 
 pub async fn allow(opts: AllowlistOpts) -> Result<()> {
-    let provider = Provider::<Http>::try_from(opts.node_url.as_str())?;
-    let wallet = opts.private_key.parse::<LocalWallet>()?;
+    let provider = Provider::<Http>::try_from(opts.node_url.as_str())?
+        .interval(Duration::from_millis(INTERVAL_MS));
+    let wallet = opts
+        .private_key
+        .parse::<LocalWallet>()?
+        .with_chain_id(CHAIN_ID);
     let client = SignerMiddleware::new(provider, wallet);
     let client = Arc::new(client);
 
@@ -91,8 +106,12 @@ pub async fn allow(opts: AllowlistOpts) -> Result<()> {
 }
 
 pub async fn start(opts: StartOpts) -> Result<()> {
-    let provider = Provider::<Http>::try_from(opts.node_url.as_str())?;
-    let wallet = opts.private_key.parse::<LocalWallet>()?;
+    let provider = Provider::<Http>::try_from(opts.node_url.as_str())?
+        .interval(Duration::from_millis(INTERVAL_MS));
+    let wallet = opts
+        .private_key
+        .parse::<LocalWallet>()?
+        .with_chain_id(CHAIN_ID);
     let client = SignerMiddleware::new(provider, wallet);
     let client = Arc::new(client);
     let contract = DKGContract::new(opts.contract_address, client);
@@ -111,8 +130,12 @@ where
     M: Middleware,
     R: RngCore,
 {
-    let provider = Provider::<Http>::try_from(opts.node_url.as_str())?;
-    let wallet = opts.private_key.parse::<LocalWallet>()?;
+    let provider = Provider::<Http>::try_from(opts.node_url.as_str())?
+        .interval(Duration::from_millis(INTERVAL_MS));
+    let wallet = opts
+        .private_key
+        .parse::<LocalWallet>()?
+        .with_chain_id(CHAIN_ID);
     let client = SignerMiddleware::new(provider, wallet);
     let client = Arc::new(client);
 
@@ -156,8 +179,12 @@ where
     S: Scheme<Public = <C as Curve>::Point, Private = <C as Curve>::Scalar>,
     R: RngCore,
 {
-    let provider = Provider::<Http>::try_from(opts.node_url.as_str())?;
-    let wallet = opts.private_key.parse::<LocalWallet>()?;
+    let provider = Provider::<Http>::try_from(opts.node_url.as_str())?
+        .interval(Duration::from_millis(INTERVAL_MS));
+    let wallet = opts
+        .private_key
+        .parse::<LocalWallet>()?
+        .with_chain_id(CHAIN_ID);
     let client = SignerMiddleware::new(provider, wallet);
     let client = Arc::new(client);
 
@@ -334,8 +361,7 @@ async fn wait_for_phase<M: Middleware>(
             break;
         }
         print!(".");
-        // 6s for 1 Celo block
-        tokio::time::sleep(std::time::Duration::from_millis(6000)).await;
+        tokio::time::sleep(std::time::Duration::from_millis(INTERVAL_MS)).await;
     }
 
     println!("\nIn Phase {}. Moving to the next step.", num);
@@ -355,9 +381,9 @@ fn parse_bundle<D: serde::de::DeserializeOwned>(
 
 fn write_output<C: Curve, W: Write>(writer: W, out: &DKGOutput<C>) -> Result<()> {
     let output = OutputJson {
-        public_key: hex::encode(&bincode::serialize(&out.public.public_key())?),
-        public_polynomial: hex::encode(&bincode::serialize(&out.public)?),
-        share: hex::encode(&bincode::serialize(&out.share)?),
+        public_key: hex::encode(bincode::serialize(&out.public.public_key())?),
+        public_polynomial: hex::encode(bincode::serialize(&out.public)?),
+        share: hex::encode(bincode::serialize(&out.share)?),
     };
     serde_json::to_writer(writer, &output)?;
     Ok(())

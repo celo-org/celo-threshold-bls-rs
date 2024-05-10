@@ -2,7 +2,7 @@
 
 This crate provides a CLI to the provided DKG. 
 
-As explained in [`dkg-core`](../dkg-core), there are a few phases. For each phase, users perform some computation which is then published to a "board". An authenticated channel is assumed for publishing to the board. In this CLI, the board is assumed to be a smart contract on the Celo Blockchain. Before advancing to each of the next phases, the board gathers all participants' contributions and combines them in a data structure which gets downloaded from the chain. These contributions are then used by each participant in the next round.
+As explained in [`dkg-core`](../dkg-core), there are a few phases. For each phase, users perform some computation which is then published to a "board". An authenticated channel is assumed for publishing to the board. In this CLI, the board is assumed to be a smart contract on a EVM compatible chain. Before advancing to each of the next phases, the board gathers all participants' contributions and combines them in a data structure which gets downloaded from the chain. These contributions are then used by each participant in the next round.
 
 ## Participating in the DKG
 
@@ -17,7 +17,7 @@ We will use the Alfajores testnet for this example, which you can access by usin
 
 1. `dkg-cli keygen --path ./keypair` 
 
-This will generate your keypair. You should then fund the `address` with some CGLD 
+This will generate your keypair. You should then fund the `address` with some tokens 
 to pay for transaction fees and send it to the DKG deployer, so that they allow 
 you to participate in the DKG.
 
@@ -52,9 +52,9 @@ Usage: dkg-cli run [OPTIONS]
 
 Optional arguments:
   -h, --help
-  -n, --node-url NODE-URL  the celo node's endpoint
+  -n, --node-url NODE-URL  the RPC node's endpoint
   -p, --private-key PRIVATE-KEY
-                           path to your celo private key (hint: use the `keygen` command to generate a new one if you don't have one)
+                           path to your private key (hint: use the `keygen` command to generate a new one if you don't have one)
   -c, --contract-address CONTRACT-ADDRESS
                            the DKG contract's address
   -o, --output-path OUTPUT-PATH
@@ -75,9 +75,9 @@ Usage: dkg-cli reshare [OPTIONS]
 
 Optional arguments:
   -h, --help
-  -n, --node-url NODE-URL  the celo node's endpoint
+  -n, --node-url NODE-URL  the RPC node's endpoint
   -p, --private-key PRIVATE-KEY
-                           path to your celo private key (hint: use the `keygen` command to generate a new one if you don't have one)
+                           path to your private key (hint: use the `keygen` command to generate a new one if you don't have one)
   -c, --contract-address CONTRACT-ADDRESS
                            the DKG resharing contract's address
   -o, --output-path OUTPUT-PATH
@@ -96,9 +96,9 @@ Usage: dkg-cli deploy [OPTIONS]
 
 Optional arguments:
   -h, --help
-  -n, --node-url NODE-URL    the celo node's endpoint
+  -n, --node-url NODE-URL    the RPC node's endpoint
   -p, --private-key PRIVATE-KEY
-                             path to your celo private key (hint: use the `keygen` command to generate a new one if you don't have one)
+                             path to your private key (hint: use the `keygen` command to generate a new one if you don't have one)
   -t, --threshold THRESHOLD  the minimum number of DKG participants required
   -P, --phase-duration PHASE-DURATION
                              the number of blocks per phase
@@ -112,9 +112,9 @@ Usage: dkg-cli allow [OPTIONS]
 
 Optional arguments:
   -h, --help
-  -n, --node-url NODE-URL  the celo node's endpoint
+  -n, --node-url NODE-URL  the RPC node's endpoint
   -p, --private-key PRIVATE-KEY
-                           path to your celo private key (hint: use the `keygen` command to generate a new one if you don't have one)
+                           path to your private key (hint: use the `keygen` command to generate a new one if you don't have one)
   -a, --address ADDRESS    the addresses to allow for the DKG
   -c, --contract-address CONTRACT-ADDRESS
                            the DKG contract's address
@@ -129,15 +129,15 @@ Usage: dkg-cli start [OPTIONS]
 
 Optional arguments:
   -h, --help
-  -n, --node-url NODE-URL  the celo node's endpoint
+  -n, --node-url NODE-URL  the RPC node's endpoint
   -p, --private-key PRIVATE-KEY
-                           path to your celo private key (hint: use the `keygen` command to generate a new one if you don't have one)
+                           path to your private key (hint: use the `keygen` command to generate a new one if you don't have one)
   -c, --contract-address CONTRACT-ADDRESS
                            the DKG contract's address
 ```
 
 ## Using Docker
 
-A docker image of the CLI can be used instead via `docker run -ti kobigurk/celo-dkg`
+A docker image of the CLI can be used instead via `docker run -ti ghcr.io/m-kus/dkg-cli`
 
-NOTE: Docker is tricky to install on recent Fedora, but Podman works fine. The only changes needed are changing docker to podman, and adding a parameter to override SELinux for the mount: `podman run -ti --security-opt label=disable -v $PWD:/dkg kobigurk/celo-dkg`.
+NOTE: Docker is tricky to install on recent Fedora, but Podman works fine. The only changes needed are changing docker to podman, and adding a parameter to override SELinux for the mount: `podman run -ti --security-opt label=disable -v $PWD:/dkg ghcr.io/m-kus/dkg-cli`.

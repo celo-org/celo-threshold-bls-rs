@@ -12,7 +12,7 @@ pub struct DKGOpts {
 // The supported commands
 #[derive(Debug, Options, Clone)]
 pub enum Command {
-    #[options(help = "creates a new Celo keypair which you must fund to participate in the DKG")]
+    #[options(help = "creates a new keypair which you must fund to participate in the DKG")]
     Keygen(KeygenOpts),
 
     #[options(help = "runs the DKG and produces your share")]
@@ -43,11 +43,11 @@ pub struct KeygenOpts {
 pub struct DKGConfig {
     help: bool,
 
-    #[options(help = "the celo node's endpoint")]
+    #[options(help = "the RPC node's endpoint")]
     pub node_url: String,
 
     #[options(
-        help = "path to your celo private key (hint: use the `keygen` command to generate a new one if you don't have one)"
+        help = "path to your private key (hint: use the `keygen` command to generate a new one if you don't have one)"
     )]
     pub private_key: String,
 
@@ -64,11 +64,11 @@ pub struct DKGConfig {
 pub struct ReshareConfig {
     help: bool,
 
-    #[options(help = "the celo node's endpoint")]
+    #[options(help = "the RPC node's endpoint")]
     pub node_url: String,
 
     #[options(
-        help = "path to your celo private key (hint: use the `keygen` command to generate a new one if you don't have one)"
+        help = "path to your private key (hint: use the `keygen` command to generate a new one if you don't have one)"
     )]
     pub private_key: String,
 
@@ -98,11 +98,11 @@ pub struct ReshareConfig {
 pub struct DeployOpts {
     help: bool,
 
-    #[options(help = "the celo node's endpoint")]
+    #[options(help = "the RPC node's endpoint", default = "")]
     pub node_url: String,
 
     #[options(
-        help = "path to your celo private key (hint: use the `keygen` command to generate a new one if you don't have one)"
+        help = "path to your private key (hint: use the `keygen` command to generate a new one if you don't have one)"
     )]
     pub private_key: String,
 
@@ -117,11 +117,11 @@ pub struct DeployOpts {
 pub struct StartOpts {
     help: bool,
 
-    #[options(help = "the celo node's endpoint")]
+    #[options(help = "node's RPC endpoint")]
     pub node_url: String,
 
     #[options(
-        help = "path to your celo private key (hint: use the `keygen` command to generate a new one if you don't have one)"
+        help = "path to your private key (hint: use the `keygen` command to generate a new one if you don't have one)"
     )]
     pub private_key: String,
 
@@ -133,11 +133,11 @@ pub struct StartOpts {
 pub struct AllowlistOpts {
     help: bool,
 
-    #[options(help = "the celo node's endpoint")]
+    #[options(help = "the RPC node's endpoint")]
     pub node_url: String,
 
     #[options(
-        help = "path to your celo private key (hint: use the `keygen` command to generate a new one if you don't have one)"
+        help = "path to your private key (hint: use the `keygen` command to generate a new one if you don't have one)"
     )]
     pub private_key: String,
 

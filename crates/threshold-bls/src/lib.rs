@@ -203,4 +203,15 @@ pub mod schemes {
         /// Public Keys on G2, Signatures on G1
         pub type G2Scheme = super::G2Scheme<PairingCurve>;
     }
+
+    /// BLS12-381 Schemes
+    pub mod bls12_381 {
+        use crate::curve::bls12381::PairingCurve;
+        pub use crate::curve::bls12381::{G1Curve, G2Curve};
+
+        /// Public Keys on G1, Signatures on G2
+        pub type G1Scheme = super::G1Scheme<PairingCurve>;
+        /// Public Keys on G2, Signatures on G1
+        pub type G2Scheme = super::G2Scheme<PairingCurve>;
+    }
 }

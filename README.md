@@ -1,5 +1,7 @@
 <h1 align="center">Threshold BLS Signatures and DKG</h1>
 
+Fork of the Celo [project](https://github.com/celo-org/celo-threshold-bls-rs).
+
 ## Overview
 
 This crate provides libraries and command line interfaces for producing threshold BLS signatures. The signatures can also be [blind](https://en.wikipedia.org/wiki/Blind_signature) in order to preserve the privacy of the user asking for a signature from another set of parties. 

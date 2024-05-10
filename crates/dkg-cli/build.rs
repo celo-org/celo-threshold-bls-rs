@@ -1,4 +1,5 @@
 use ethers::contract::Abigen;
+use ethers::utils::hex::ToHex;
 use ethers_solc::{Project, ProjectPathsConfig};
 use std::fs::File;
 use std::io::Write;
@@ -25,9 +26,9 @@ fn main() {
     let contract = compiler_output.find(full_path, CONTRACT_NAME).unwrap();
 
     let mut f = File::create("dkg.bin").expect("could not create DKG bytecode file");
-    let bytecode_obj = contract.bytecode.clone().unwrap().object;
-    let s = serde_json::to_string(&bytecode_obj).unwrap();
-    f.write_all(s.as_bytes())
+    let bytecode: String = contract.bytecode.clone().unwrap().object.encode_hex();
+
+    f.write_all(bytecode.as_bytes())
         .expect("could not write DKG bytecode to the file");
 
     // generate type-safe bindings to it
@@ -41,4 +42,16 @@ fn main() {
     bindings
         .write_to_file("./src/dkg_contract.rs")
         .expect("could not write bindings to file");
+
+    let verification_input = project
+        .standard_json_input(project.sources_path().join("DKG.sol"))
+        .unwrap();
+    let mut j = File::create("dkg.json").expect("could not create DKG standard sol input file");
+
+    j.write_all(
+        serde_json::to_string(&verification_input)
+            .unwrap()
+            .as_bytes(),
+    )
+    .expect("could not write DKG standard json input to the file");
 }

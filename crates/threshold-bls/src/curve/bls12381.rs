@@ -1,6 +1,6 @@
 use crate::group::PrimeOrder;
 use crate::group::{self, Element, PairingCurve as PC, Point, Scalar as Sc};
-use ark_bls12_377 as bls377;
+use ark_bls12_381 as bls381;
 use ark_ec::hashing::curve_maps::wb::WBMap;
 use ark_ec::hashing::map_to_curve_hasher::MapToCurveBasedHasher;
 use ark_ec::hashing::{HashToCurve, HashToCurveError};
@@ -31,10 +31,10 @@ pub const SIG_DOMAIN: &[u8] = b"ULforxof";
 pub struct Scalar(
     #[serde(deserialize_with = "deserialize_field")]
     #[serde(serialize_with = "serialize_field")]
-    <bls377::Bls12_377 as Pairing>::ScalarField,
+    <bls381::Bls12_381 as Pairing>::ScalarField,
 );
 
-type ZG1 = <bls377::Bls12_377 as Pairing>::G1;
+type ZG1 = <bls381::Bls12_381 as Pairing>::G1;
 
 #[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
 pub struct G1(
@@ -43,7 +43,7 @@ pub struct G1(
     ZG1,
 );
 
-type ZG2 = <bls377::Bls12_377 as Pairing>::G2;
+type ZG2 = <bls381::Bls12_381 as Pairing>::G2;
 
 #[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
 pub struct G2(
@@ -56,7 +56,7 @@ pub struct G2(
 pub struct GT(
     #[serde(deserialize_with = "deserialize_field")]
     #[serde(serialize_with = "serialize_field")]
-    <bls377::Bls12_377 as Pairing>::TargetField,
+    <bls381::Bls12_381 as Pairing>::TargetField,
 );
 
 impl Element for Scalar {
@@ -79,13 +79,13 @@ impl Element for Scalar {
     }
 
     fn rand<R: rand_core::RngCore>(rng: &mut R) -> Self {
-        Self(bls377::Fr::rand(rng))
+        Self(bls381::Fr::rand(rng))
     }
 }
 
 impl Sc for Scalar {
     fn set_int(&mut self, i: u64) {
-        *self = Self(bls377::Fr::from(i))
+        *self = Self(bls381::Fr::from(i))
     }
 
     fn inverse(&self) -> Option<Self> {
@@ -101,7 +101,7 @@ impl Sc for Scalar {
     }
 
     fn from_random_bytes(bytes: &[u8]) -> Option<Self> {
-        let fr = bls377::Fr::from_random_bytes(bytes)?;
+        let fr = bls381::Fr::from_random_bytes(bytes)?;
         Some(Self(fr))
     }
 
@@ -149,7 +149,7 @@ impl Point for G1 {
         let hasher = MapToCurveBasedHasher::<
             ZG1,
             DefaultFieldHasher<Sha256>,
-            WBMap<bls377::g1::Config>,
+            WBMap<bls381::g1::Config>,
         >::new(SIG_DOMAIN)?;
 
         let hash = hasher.hash(data)?;
@@ -199,7 +199,7 @@ impl Point for G2 {
         let hasher = MapToCurveBasedHasher::<
             ZG2,
             DefaultFieldHasher<sha2::Sha256>,
-            WBMap<bls377::g2::Config>,
+            WBMap<bls381::g2::Config>,
         >::new(SIG_DOMAIN)?;
 
         let hash = hasher.hash(data)?;
@@ -242,7 +242,7 @@ impl Element for GT {
         *self = res.clone();
     }
     fn rand<R: RngCore>(rng: &mut R) -> Self {
-        Self(bls377::Fq12::rand(rng))
+        Self(bls381::Fq12::rand(rng))
     }
 }
 
@@ -250,7 +250,7 @@ impl Element for GT {
 impl PrimeOrder for GT {
     fn in_correct_subgroup(&self) -> bool {
         self.0
-            .pow(<bls377::Bls12_377 as Pairing>::ScalarField::characteristic())
+            .pow(<bls381::Bls12_381 as Pairing>::ScalarField::characteristic())
             .is_one()
     }
 }
@@ -274,7 +274,7 @@ impl PC for PairingCurve {
     type GT = GT;
 
     fn pair(a: &Self::G1, b: &Self::G2) -> Self::GT {
-        GT(<bls377::Bls12_377 as Pairing>::pairing(a.0, b.0).0)
+        GT(<bls381::Bls12_381 as Pairing>::pairing(a.0, b.0).0)
     }
 }
 

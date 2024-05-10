@@ -23,5 +23,9 @@ solidity/build
 *.swp
 *.bin
 .DS_Store
-solidity/artifacts/DKG.sol/DKG.json
+*.json
 crates/dkg-cli/src/dkg_contract.rs
+
+keypair
+dkg-output
+*.env
