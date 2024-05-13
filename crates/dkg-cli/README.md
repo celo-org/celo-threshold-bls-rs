@@ -13,7 +13,6 @@ in the [Solidity docs](https://solidity.readthedocs.io/en/latest/installing-soli
 
 
 Install the DKG CLI with `cargo build --release`. 
-We will use the Alfajores testnet for this example, which you can access by using `https://alfajores-forno.celo-testnet.org` as a `NODE_URL`. You can fund your account by inserting your `address` to the [Alfajores faucet](https://celo.org/developers/faucet).
 
 1. `dkg-cli keygen --path ./keypair` 
 

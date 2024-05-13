@@ -14,3 +14,6 @@ run:
 
 start:
 	./target/release/dkg-cli start -n $(NODE_URL) -p $(PRIVATE_KEY) -c $(CONTRACT_ADDRESS)
+
+image:
+	docker build -t dkg-cli -f crates/dkg-cli/Dockerfile .
