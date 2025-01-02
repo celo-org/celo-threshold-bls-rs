@@ -16,7 +16,7 @@ rand_core = { version = "0.6.3", default-features = false }
 rand_chacha = { version = "0.3.1", default-features = false }
 
 bincode = { version = "1.2.1", default-features = false }
-serde = { version = "1.0.106", default-features =  false }
+serde = { version = "1.0.106", default-features = false }
 
 # Required for WASM interface
 blake2 = { version = "0.10", default-features = false, optional = true }
@@ -31,6 +31,8 @@ console_error_panic_hook = { version = "0.1.7", optional = true }
 
 cfg-if = "0.1"
 
+jni = { version = "0.21.1", optional = true }
+
 [target.aarch64-linux-android]
 ar = "<project path>/greetings/NDK/arm64/bin/aarch64-linux-android-ar"
 linker = "<project path>/greetings/NDK/arm64/bin/aarch64-linux-android-clang"
@@ -44,3 +46,5 @@ wasm-debug = ["wasm", "console_error_panic_hook"]
 
 # Enable parallel computation in arkworks code. Cannot be used with WASM.
 parallel = ["bls-crypto/parallel", "threshold-bls/parallel"]
+
+jvm = ["dep:jni"]
