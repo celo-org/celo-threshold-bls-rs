@@ -19,7 +19,7 @@ android-setup:
 
 android-build: $(ARCHS_ANDROID)
 
-ios-setup: 
+ios-setup:
 	rustup target add aarch64-apple-ios x86_64-apple-ios
 
 ios: ios-setup $(LIB)
@@ -44,31 +44,31 @@ android: android-setup android-build
 	cp $(TARGET_DIR)/armv7-linux-androideabi/release/$(SO) ${ANDROID_DEST}/armeabi-v7a/$(SO)
 
 aarch64-linux-android:
-	PATH=$(PATH):$(NDK_STANDALONE)/arm64/bin \
+	PATH="$(PATH)":$(NDK_STANDALONE)/arm64/bin \
 	CC=$@-gcc \
 	CXX=$@-g++ \
 	cargo build $(CARGO_PARAMS) --target $@ --release --lib
 
 arm-linux-androideabi:
-	PATH=$(PATH):$(NDK_STANDALONE)/arm/bin \
+	PATH="$(PATH)":$(NDK_STANDALONE)/arm/bin \
 	CC=$@-gcc \
 	CXX=$@-g++ \
 	cargo build $(CARGO_PARAMS) --target $@ --release --lib
 
 armv7-linux-androideabi:
-	PATH=$(PATH):$(NDK_STANDALONE)/arm/bin \
+	PATH="$(PATH)":$(NDK_STANDALONE)/arm/bin \
 	CC=arm-linux-androideabi-gcc \
 	CXX=arm-linux-androideabi-g++ \
 	cargo build $(CARGO_PARAMS) --target $@ --release --lib
 
 i686-linux-android:
-	PATH=$(PATH):$(NDK_STANDALONE)/x86/bin \
+	PATH="$(PATH)":$(NDK_STANDALONE)/x86/bin \
 	CC=$@-gcc \
 	CXX=$@-g++ \
 	cargo build $(CARGO_PARAMS) --target $@ --release --lib
 
 x86_64-linux-android:
-	PATH=$(PATH):$(NDK_STANDALONE)/x86_64/bin \
+	PATH="$(PATH)":$(NDK_STANDALONE)/x86_64/bin \
 	CC=$@-gcc \
 	CXX=$@-g++ \
 	cargo build $(CARGO_PARAMS) --target $@ --release --lib
