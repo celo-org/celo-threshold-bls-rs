@@ -25,3 +25,5 @@ solidity/build
 .DS_Store
 solidity/artifacts/DKG.sol/DKG.json
 crates/dkg-cli/src/dkg_contract.rs
+
+.idea
