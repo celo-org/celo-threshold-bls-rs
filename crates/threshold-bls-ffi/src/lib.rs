@@ -8,7 +8,7 @@ cfg_if::cfg_if! {
         pub mod wasm;
     } else if #[cfg(feature = "jvm")] {
         pub mod jvm;
-    } else {
+    } else if #[cfg(feature = "ffi")] {
         pub mod ffi;
         pub(crate) type Signature = <SigScheme as Scheme>::Signature;
         pub(crate) const PUBKEY_LEN: usize = 96;
