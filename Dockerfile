@@ -1,5 +1,7 @@
-# Use an official Ubuntu image (20.04 in this example)
+ARG RUST_VERSION=1.41.0
 FROM ubuntu:20.04
+
+ARG RUST_VERSION
 
 # Set non-interactive mode for apt-get
 ENV DEBIAN_FRONTEND=noninteractive
@@ -14,13 +16,13 @@ RUN apt-get update && apt-get install -y \
     ca-certificates
 
 # Install rustup without a default toolchain (we'll install 1.41 manually)
-RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain none
+RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain ${RUST_VERSION}
 
 # Add Cargo's bin directory to the PATH
 ENV PATH="/root/.cargo/bin:${PATH}"
 
 # Install Rust 1.41.0 and set it as the default toolchain
-RUN rustup toolchain install 1.41.0 && rustup default 1.41.0
+RUN rustup toolchain install ${RUST_VERSION} && rustup default ${RUST_VERSION}
 
 # Install wasm-pack
 # There is no cargo-installable version of wasm-pack that will "just work" with Rust 1.41.0 today, because of unpinned upstream dependencies like log.

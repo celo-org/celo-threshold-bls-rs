@@ -1,4 +1,5 @@
-IMAGE_NAME=celo-bls-rust-1.41
+RUST_VERSION ?= 1.41.0
+IMAGE_NAME = celo-bls-rust-$(subst .,_,$(RUST_VERSION))
 OUTPUT_DIR=output
 WASM_PATH=crates/threshold-bls-ffi
 
@@ -7,7 +8,7 @@ WASM_PATH=crates/threshold-bls-ffi
 all: clean build run
 
 build:
-	docker build --platform=linux/amd64 -t $(IMAGE_NAME) .
+	docker build --platform=linux/amd64 --build-arg RUST_VERSION=$(RUST_VERSION)  -t $(IMAGE_NAME) .
 
 run:
 	docker run --platform=linux/amd64 --rm \
