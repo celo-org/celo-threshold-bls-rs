@@ -8,7 +8,7 @@ ARCHS_ANDROID = aarch64-linux-android armv7-linux-androideabi arm-linux-androide
 NDK_STANDALONE = ./NDK
 ANDROID_DEST = ./react-native/android/app/src/main/jniLibs
 IOS_DEST = ./react-native/ios
-CARGO_PARAMS = --no-default-features
+CARGO_PARAMS = --no-default-features --features $(FEATURES)
 
 TARGET_DIR = ../../../target
 
@@ -44,31 +44,31 @@ android: android-setup android-build
 	cp $(TARGET_DIR)/armv7-linux-androideabi/release/$(SO) ${ANDROID_DEST}/armeabi-v7a/$(SO)
 
 aarch64-linux-android:
-	PATH=$(PATH):$(NDK_STANDALONE)/arm64/bin \
+	PATH="$(PATH)":$(NDK_STANDALONE)/arm64/bin \
 	CC=$@-gcc \
 	CXX=$@-g++ \
 	cargo build $(CARGO_PARAMS) --target $@ --release --lib
 
 arm-linux-androideabi:
-	PATH=$(PATH):$(NDK_STANDALONE)/arm/bin \
+	PATH="$(PATH)":$(NDK_STANDALONE)/arm/bin \
 	CC=$@-gcc \
 	CXX=$@-g++ \
 	cargo build $(CARGO_PARAMS) --target $@ --release --lib
 
 armv7-linux-androideabi:
-	PATH=$(PATH):$(NDK_STANDALONE)/arm/bin \
+	PATH="$(PATH)":$(NDK_STANDALONE)/arm/bin \
 	CC=arm-linux-androideabi-gcc \
 	CXX=arm-linux-androideabi-g++ \
 	cargo build $(CARGO_PARAMS) --target $@ --release --lib
 
 i686-linux-android:
-	PATH=$(PATH):$(NDK_STANDALONE)/x86/bin \
+	PATH="$(PATH)":$(NDK_STANDALONE)/x86/bin \
 	CC=$@-gcc \
 	CXX=$@-g++ \
 	cargo build $(CARGO_PARAMS) --target $@ --release --lib
 
 x86_64-linux-android:
-	PATH=$(PATH):$(NDK_STANDALONE)/x86_64/bin \
+	PATH="$(PATH)":$(NDK_STANDALONE)/x86_64/bin \
 	CC=$@-gcc \
 	CXX=$@-g++ \
 	cargo build $(CARGO_PARAMS) --target $@ --release --lib
