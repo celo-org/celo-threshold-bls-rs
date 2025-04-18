@@ -6,7 +6,9 @@ extern crate cfg_if;
 cfg_if::cfg_if! {
     if #[cfg(feature = "wasm")] {
         pub mod wasm;
-    } else {
+    } else if #[cfg(feature = "jvm")] {
+        pub mod jvm;
+    } else if #[cfg(feature = "ffi")] {
         pub mod ffi;
         pub(crate) type Signature = <SigScheme as Scheme>::Signature;
         pub(crate) const PUBKEY_LEN: usize = 96;
