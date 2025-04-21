@@ -24,7 +24,7 @@ groupy = {version = "0.3.0", optional = true }
 
 
 # bls12_377
-algebra = { git = "https://github.com/scipr-lab/zexe", features = ["bls12_377", "edwards_sw6"], optional = true }
+algebra = { git = "https://github.com/arkworks-rs/snark", rev = "4ea6540322cee6d1f03a63284e5227ccfba6aea9", features = ["bls12_377", "edwards_sw6"], optional = true }
 bls-crypto = { git = "https://github.com/celo-org/bls-zexe", optional = true }
 thiserror = "1.0.15"
 bincode = "1.2.1"
