@@ -25,7 +25,7 @@ groupy = {version = "0.3.0", optional = true }
 
 # bls12_377
 algebra = { git = "https://github.com/celo-org/arkworks-v0.1.1-patch", package = "algebra", branch = "patch-rust-compat", features = ["bls12_377"], optional = true }
-bls-crypto = { git = "https://github.com/celo-org/bls-zexe", optional = true }
+bls-crypto = { git = "https://github.com/celo-org/bls-zexe", rev = "879630a7d95794994e31c874934d04b3c5904892", optional = true }
 thiserror = "1.0.15"
 bincode = "1.2.1"
 
