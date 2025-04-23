@@ -35,4 +35,8 @@ ar = "<project path>/greetings/NDK/arm64/bin/aarch64-linux-android-ar"
 linker = "<project path>/greetings/NDK/arm64/bin/aarch64-linux-android-clang"
 
 [features]
-wasm = ["wasm-bindgen"]
+# Include a panic hook for printing panic messages to the JS console.
+wasm-debug = ["wasm", "console_error_panic_hook"]
+
+jvm = ["jni"]
+ffi = ["rand_core", "rand_chacha", "serde"]
