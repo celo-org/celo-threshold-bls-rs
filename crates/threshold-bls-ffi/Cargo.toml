@@ -17,6 +17,7 @@ rand_chacha = { version = "0.2.2", default-features = false }
 
 # Required for WASM interface
 wasm-bindgen = { version = "=0.2.62", optional = true }
+blake2 = { version = "0.10", default-features = false, optional = true }
 bincode = { version = "1.2.1", default-features = false }
 serde = { version = "=1.0.106", default-features = false, optional = true }
 # The `console_error_panic_hook` crate provides better debugging of panics by
