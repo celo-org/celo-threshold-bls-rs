@@ -5,34 +5,54 @@
 This crate provides libraries and command line interfaces for producing threshold BLS signatures. The signatures can also be [blind](https://en.wikipedia.org/wiki/Blind_signature) in order to preserve the privacy of the user asking for a signature from another set of parties. 
 
 Distributed Key Generation for generating the threshold public key is based on [Secure Distributed Key Generation for Discrete-Log Based Cryptosystems
-](https://link.springer.com/article/10.1007/s00145-006-0347-3)
+](https://link.springer.com/article/10.1007/s00145-006-0347-3)`
 
-## Build Guide
+## Building with Docker
 
-Build with `cargo build (--release)`.
+The project includes a Makefile that supports building for multiple platforms using Docker:
 
-Test with `cargo test`.
+### WASM Build (Default)
+```
+make
+```
+or explicitly:
+```
+make BUILD_TYPE=wasm
+```
+This builds WebAssembly bindings that can be used with Node.js.
 
-All crates require Rust 2018 edition and are tested on the following channels:
-- `1.41.0`
+### JVM Build
+```
+make BUILD_TYPE=jvm
+```
+This builds JVM-compatible libraries.
 
-If you do not have Rust installed, run: `curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh`
+### iOS Build
+```
+make BUILD_TYPE=ios
+```
+This builds a static library for iOS (both aarch64 and x86_64 architectures).
 
-## Android and iOS
+### Android Build
+```
+make BUILD_TYPE=android
+```
+This builds dynamic libraries for the following Android architectures:
+- x86_64
+- x86
+- armeabi-v7a
+- armeabi
+- arm64-v8a
 
-The library compiles to Android and iOS. This has been tested with Rust v1.41.0.
+The output files are placed in the `output` directory, organized by platform.
 
-To compile to Android:
+### Rust version
 
-1. Download Android NDK r21 and unzip it
-2. Set the `NDK_HOME` env var to the extracted directory
-3. `cd cross`
-4. `./create-ndk-standalone`
-5. `make android`
-
-To compile to ios:
-3. `cd cross`
-4. `make ios`
+Rust 1.56.0 is used by default and tested for all builds. If desired, you can build with a different Rust version by setting the RUST_VERSION env var.
+e.g.
+``` 
+make RUST_VERSION=1.56.1
+```
 
 ## Directory Structure
 
@@ -42,6 +62,8 @@ This repository contains several Rust crates that implement the different buildi
 - [`dkg-core`](crates/dkg-core): Rust crate that provides the implementation utilities for the DKG
 - [`threshold-bls`](crates/threshold-bls): (blind) threshold BLS signatures for BLS12-381 and BLS12-377
 - [`threshold-bls-ffi`](crates/threshold-bls-ffi): FFI and WASM bindings to `threshold-bls` for cross platform interoperability
+
+Note: the dkg crates have been removed from the workspace in this branch as they are not needed to build the bls crates.
 
 
 ## Disclaimers
