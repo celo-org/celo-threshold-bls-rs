@@ -18,6 +18,11 @@ rand_chacha = { version = "0.2.2", default-features = false }
 wasm-bindgen = { version = "0.2.60", optional = true }
 bincode = { version = "1.2.1", default-features = false }
 serde = { version = "1.0.106", default-features =  false }
+# The `console_error_panic_hook` crate provides better debugging of panics by
+# logging them with `console.error`. This is great for development, but requires
+# all the `std::fmt` and `std::panicking` infrastructure, so isn't great for
+# code size when deploying.
+console_error_panic_hook = { version = "0.1.7", optional = true }
 
 cfg-if = "0.1"
 jni = { version = "0.21.1", optional = true }
