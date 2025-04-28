@@ -10,7 +10,7 @@ use crate::*;
 // crate.
 #[no_mangle]
 pub extern "system" fn Java_org_celo_BlindThresholdBls_verify<'local>(
-    mut env: JNIEnv<'local>,
+    env: JNIEnv<'local>,
     _class: JClass<'local>,
     pub_key: JByteArray<'local>,
     message: JByteArray<'local>,

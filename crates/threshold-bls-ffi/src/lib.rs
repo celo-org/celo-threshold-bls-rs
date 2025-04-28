@@ -19,9 +19,13 @@ cfg_if::cfg_if! {
 use threshold_bls::{poly::Idx, schemes::bls12_377::G2Scheme as SigScheme, sig::Scheme};
 
 pub(crate) type PublicKey = <SigScheme as Scheme>::Public;
+#[allow(dead_code)]
 pub(crate) type PrivateKey = <SigScheme as Scheme>::Private;
 
+#[allow(dead_code)]
 pub(crate) const VEC_LENGTH: usize = 8;
+#[allow(dead_code)]
 pub(crate) const SIGNATURE_LEN: usize = 48;
+#[allow(dead_code)]
 pub(crate) const PARTIAL_SIG_LENGTH: usize =
     VEC_LENGTH + SIGNATURE_LEN + std::mem::size_of::<Idx>();

@@ -1,4 +1,4 @@
-RUST_VERSION ?= 1.56.0
+RUST_VERSION ?= 1.62.0
 IMAGE_NAME = celo-bls-rust-$(subst .,_,$(RUST_VERSION))
 OUTPUT_DIR=output
 WASM_PATH=crates/threshold-bls-ffi
