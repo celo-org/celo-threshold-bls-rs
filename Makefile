@@ -1,8 +1,6 @@
 RUST_VERSION ?= 1.62.0
 IMAGE_NAME = celo-bls-rust-$(subst .,_,$(RUST_VERSION))
 OUTPUT_DIR=output
-WASM_PATH=crates/threshold-bls-ffi
-JVM_PATH=crates/threshold-bls-ffi
 BUILD_TYPE ?= wasm  # Options: wasm, jvm, ios, android
 
 .PHONY: all build run clean build-ios build-android
@@ -15,14 +13,14 @@ build:
 run:
 ifeq ($(BUILD_TYPE),wasm)
 	docker run --platform=linux/amd64 --rm \
-		-v $(PWD)/$(OUTPUT_DIR):/app/$(WASM_PATH)/pkg \
-		-w /app/$(WASM_PATH) \
+		-v $(PWD)/$(OUTPUT_DIR):/app/crates/threshold-bls-ffi/pkg \
+		-w /app/crates/threshold-bls-ffi \
 		$(IMAGE_NAME) \
 		wasm-pack build --target nodejs -- --features=wasm
 else ifeq ($(BUILD_TYPE),jvm)
 	docker run --platform=linux/amd64 --rm \
-		-v $(PWD)/$(OUTPUT_DIR):/app/$(JVM_PATH)/target \
-		-w /app/$(JVM_PATH) \
+		-v $(PWD)/$(OUTPUT_DIR):/app/crates/threshold-bls-ffi/target \
+		-w /app/crates/threshold-bls-ffi \
 		$(IMAGE_NAME) \
 		cargo build --release --features=jvm
 else ifeq ($(BUILD_TYPE),ios)
@@ -34,8 +32,8 @@ endif
 build-ios:
 	mkdir -p $(OUTPUT_DIR)/ios
 	docker run --platform=linux/amd64 --rm \
-		-v $(PWD)/$(OUTPUT_DIR)/ios:/app/$(JVM_PATH)/target/ios \
-		-w /app/$(JVM_PATH) \
+		-v $(PWD)/$(OUTPUT_DIR)/ios:/app/crates/threshold-bls-ffi/target/ios \
+		-w /app/crates/threshold-bls-ffi \
 		$(IMAGE_NAME) \
 		sh -c "rustup target add aarch64-apple-ios x86_64-apple-ios && \
 		cargo build --release --target aarch64-apple-ios && \
@@ -47,21 +45,13 @@ build-ios:
 build-android:
 	mkdir -p $(OUTPUT_DIR)/android
 	docker run --platform=linux/amd64 --rm \
-		-v $(PWD)/$(OUTPUT_DIR)/android:/app/$(JVM_PATH)/target/android \
-		-w /app/$(JVM_PATH) \
+		-v $(PWD)/$(OUTPUT_DIR)/android:/app/crates/threshold-bls-ffi/target/android \
+		-w /app/crates/threshold-bls-ffi \
 		$(IMAGE_NAME) \
-		sh -c "rustup target add x86_64-linux-android i686-linux-android armv7-linux-androideabi arm-linux-androideabi aarch64-linux-android && \
-		cargo build --release --target x86_64-linux-android && \
-		cargo build --release --target i686-linux-android && \
-		cargo build --release --target armv7-linux-androideabi && \
-		cargo build --release --target arm-linux-androideabi && \
-		cargo build --release --target aarch64-linux-android && \
-		mkdir -p target/android/x86_64 target/android/x86 target/android/armeabi-v7a target/android/armeabi target/android/arm64-v8a && \
-		cp target/x86_64-linux-android/release/libthreshold_bls.so target/android/x86_64/ && \
-		cp target/i686-linux-android/release/libthreshold_bls.so target/android/x86/ && \
-		cp target/armv7-linux-androideabi/release/libthreshold_bls.so target/android/armeabi-v7a/ && \
-		cp target/arm-linux-androideabi/release/libthreshold_bls.so target/android/armeabi/ && \
-		cp target/aarch64-linux-android/release/libthreshold_bls.so target/android/arm64-v8a/"
+		sh -c "cd cross && export NDK_HOME=/opt/android-ndk && ./create-ndk-standalone.sh && \
+		make android && \
+		mkdir -p ../target/android && \
+		cp -r react-native/android/app/src/main/jniLibs/* ../target/android/"
 
 clean:
 	rm -rf $(OUTPUT_DIR)

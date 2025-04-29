@@ -18,6 +18,7 @@ cfg_if::cfg_if! {
 
 use threshold_bls::{poly::Idx, schemes::bls12_377::G2Scheme as SigScheme, sig::Scheme};
 
+#[allow(dead_code)]
 pub(crate) type PublicKey = <SigScheme as Scheme>::Public;
 #[allow(dead_code)]
 pub(crate) type PrivateKey = <SigScheme as Scheme>::Private;
