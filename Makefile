@@ -8,7 +8,15 @@ BUILD_TYPE ?= wasm  # Options: wasm, jvm, ios, android
 all: clean build run
 
 build:
+ifeq ($(BUILD_TYPE),ios)
+	mkdir -p $(OUTPUT_DIR)/ios
+	rustup target add aarch64-apple-ios x86_64-apple-ios
+	cd crates/threshold-bls-ffi/cross && make ios
+	cp crates/threshold-bls-ffi/cross/react-native/ios/* $(OUTPUT_DIR)/ios/
+	rm -rf crates/threshold-bls-ffi/cross/react-native
+else
 	docker build --platform=linux/amd64 --build-arg RUST_VERSION=$(RUST_VERSION) -t $(IMAGE_NAME) .
+endif
 
 run:
 ifeq ($(BUILD_TYPE),wasm)
@@ -23,26 +31,7 @@ else ifeq ($(BUILD_TYPE),jvm)
 		-w /app/crates/threshold-bls-ffi \
 		$(IMAGE_NAME) \
 		cargo build --release --features=jvm
-else ifeq ($(BUILD_TYPE),ios)
-	$(MAKE) build-ios
 else ifeq ($(BUILD_TYPE),android)
-	$(MAKE) build-android
-endif
-
-build-ios:
-	mkdir -p $(OUTPUT_DIR)/ios
-	docker run --platform=linux/amd64 --rm \
-		-v $(PWD)/$(OUTPUT_DIR)/ios:/app/crates/threshold-bls-ffi/target/ios \
-		-w /app/crates/threshold-bls-ffi \
-		$(IMAGE_NAME) \
-		sh -c "rustup target add aarch64-apple-ios x86_64-apple-ios && \
-		cargo build --release --target aarch64-apple-ios && \
-		cargo build --release --target x86_64-apple-ios && \
-		mkdir -p target/ios && \
-		cp target/aarch64-apple-ios/release/libthreshold_bls.a target/ios/ && \
-		cp target/x86_64-apple-ios/release/libthreshold_bls.a target/ios/libthreshold_bls_x86_64.a"
-
-build-android:
 	mkdir -p $(OUTPUT_DIR)/android
 	docker run --platform=linux/amd64 --rm \
 		-v $(PWD)/$(OUTPUT_DIR)/android:/app/crates/threshold-bls-ffi/target/android \
@@ -52,6 +41,7 @@ build-android:
 		make android && \
 		mkdir -p ../target/android && \
 		cp -r react-native/android/app/src/main/jniLibs/* ../target/android/"
+endif
 
 clean:
 	rm -rf $(OUTPUT_DIR)
