@@ -6,7 +6,7 @@ SO = $(NAME).so
 ARCHS_IOS = aarch64-apple-ios x86_64-apple-ios
 ARCHS_ANDROID = aarch64-linux-android armv7-linux-androideabi arm-linux-androideabi i686-linux-android x86_64-linux-android
 NDK_STANDALONE = ./NDK
-ANDROID_DEST = ./react-native/android/app/src/main/jniLibs
+ANDROID_DEST = /output/android
 IOS_DEST = ./react-native/ios
 CARGO_PARAMS = --no-default-features $(if $(FEATURES),--features $(FEATURES))
 
