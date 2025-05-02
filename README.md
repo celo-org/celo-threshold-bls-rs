@@ -9,47 +9,55 @@ Distributed Key Generation for generating the threshold public key is based on [
 
 ## Building with Docker
 
-The project includes a Makefile that supports building for multiple platforms using Docker:
+The project includes a Makefile that supports building for multiple platforms using Docker. All built libraries are placed in the `output` directory, organized by platform.
 
-### WASM Build (Default)
+### Clean Build
+
+To clean the output directory before building:
 ```
-make
+make clean
 ```
-or explicitly:
+
+### Build All Platforms
 ```
-make BUILD_TYPE=wasm
+make all
 ```
-This builds WebAssembly bindings that can be used with Node.js.
+This builds the libraries for all supported platforms.
+
+### WASM Build
+```
+make wasm
+```
+This builds WebAssembly bindings that can be used with Node.js and places them in `output/wasm`.
 
 ### JVM Build
 ```
-make BUILD_TYPE=jvm
+make jvm
 ```
-This builds JVM-compatible libraries.
+This builds JVM-compatible libraries and places them in `output/jvm`.
 
 ### iOS Build
 ```
-make BUILD_TYPE=ios
+make ios
 ```
-This builds a static library for iOS (both aarch64 and x86_64 architectures).
+This builds a universal static library for iOS (combining aarch64 and x86_64 architectures) and places it in `output/ios`. Note that iOS builds must be run on a macOS host as they cannot be built in Docker.
 
 ### Android Build
 ```
-make BUILD_TYPE=android
+make android
 ```
-This builds dynamic libraries for the following Android architectures:
-- x86_64
-- x86
-- armeabi-v7a
-- armeabi
-- arm64-v8a
+This builds dynamic libraries for Android architectures (x86, x86_64, arm64-v8a, armeabi, and armeabi-v7a) and places them in `output/android`.
 
-The output files are placed in the `output` directory, organized by platform.
+### Docker Build
+
+The docker image used for building the libraries can be built separately if needed:
+```
+make build-docker-image
+```
 
 ### Rust version
 
-Rust 1.56.0 is used by default and tested for all builds. If desired, you can build with a different Rust version by setting the RUST_VERSION env var.
-e.g.
+Rust 1.62.0 is used by default and tested for all builds. If desired, you can build with a different Rust version by setting the RUST_VERSION env var:
 ``` 
 make RUST_VERSION=1.56.1
 ```
@@ -64,7 +72,6 @@ This repository contains several Rust crates that implement the different buildi
 - [`threshold-bls-ffi`](crates/threshold-bls-ffi): FFI and WASM bindings to `threshold-bls` for cross platform interoperability
 
 Note: the dkg crates have been removed from the workspace in this branch as they are not needed to build the bls crates.
-
 
 ## Disclaimers
 
