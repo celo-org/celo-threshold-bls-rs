@@ -7,7 +7,7 @@ ARCHS_IOS = aarch64-apple-ios x86_64-apple-ios
 ARCHS_ANDROID = aarch64-linux-android armv7-linux-androideabi arm-linux-androideabi i686-linux-android x86_64-linux-android
 NDK_STANDALONE = ./NDK
 ANDROID_DEST = /output/android
-IOS_DEST = ./react-native/ios
+IOS_DEST = ./target/ios
 CARGO_PARAMS = --no-default-features $(if $(FEATURES),--features $(FEATURES))
 
 TARGET_DIR = ../../../target
@@ -79,4 +79,4 @@ $(ARCHS_IOS): %:
 
 $(LIB): $(ARCHS_IOS)
 	mkdir -p $(IOS_DEST)
-	lipo -create -output $(IOS_DEST)/$@ $(foreach arch,$(ARCHS_IOS),$(wildcard $(TARGET_DIR)/$(arch)/release/$(LIB)))
+	lipo -create -output $(IOS_DEST)/$(LIB) $(foreach arch,$(ARCHS_IOS),$(TARGET_DIR)/$(arch)/release/$(LIB))
