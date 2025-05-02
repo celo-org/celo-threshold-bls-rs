@@ -10,16 +10,33 @@ name = "blind_threshold_bls"
 
 [dependencies]
 threshold-bls = { path = "../threshold-bls", default-features = false, features = ["bls12_377"] }
-bls-crypto = { git = "https://github.com/celo-org/bls-zexe" }
+bls-crypto = { git = "https://github.com/celo-org/bls-zexe", rev = "879630a7d95794994e31c874934d04b3c5904892" }
 
-rand_core = { version = "0.5.1", default-features = false }
-rand_chacha = { version = "0.2.2", default-features = false }
+rand_core = { version = "0.5.1", default-features = false, optional = true }
+rand_chacha = { version = "0.2.2", default-features = false, optional = true }
 
-wasm-bindgen = { version = "0.2.60", optional = true }
+# Required for WASM interface
+wasm-bindgen = { version = "=0.2.62", optional = true }
+blake2 = { version = "0.10", default-features = false, optional = true }
+# getrandom = { version = "=0.2.9", default-features = false, optional = true, features = ["js"] } # breaking
 bincode = { version = "1.2.1", default-features = false }
-serde = { version = "1.0.106", default-features =  false }
+serde = { version = "=1.0.106", default-features = false, optional = true }
+# The `console_error_panic_hook` crate provides better debugging of panics by
+# logging them with `console.error`. This is great for development, but requires
+# all the `std::fmt` and `std::panicking` infrastructure, so isn't great for
+# code size when deploying.
+console_error_panic_hook = { version = "0.1.7", optional = true }
 
 cfg-if = "0.1"
 
+jni = { version = "0.21.1", optional = true }
+
 [features]
-wasm = ["wasm-bindgen"]
+# Build WASM bindings for use in JS environments
+# wasm = ["wasm-bindgen", "getrandom/js", "blake2", "rand_core", "rand_chacha", "serde"] # breaking
+wasm = ["wasm-bindgen", "blake2", "rand_core", "rand_chacha", "serde"]
+# Include a panic hook for printing panic messages to the JS console.
+wasm-debug = ["wasm", "console_error_panic_hook"]
+
+jvm = ["jni"]
+ffi = ["rand_core", "rand_chacha", "serde"]

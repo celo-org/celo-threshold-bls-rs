@@ -5,34 +5,62 @@
 This crate provides libraries and command line interfaces for producing threshold BLS signatures. The signatures can also be [blind](https://en.wikipedia.org/wiki/Blind_signature) in order to preserve the privacy of the user asking for a signature from another set of parties. 
 
 Distributed Key Generation for generating the threshold public key is based on [Secure Distributed Key Generation for Discrete-Log Based Cryptosystems
-](https://link.springer.com/article/10.1007/s00145-006-0347-3)
+](https://link.springer.com/article/10.1007/s00145-006-0347-3)`
 
-## Build Guide
+## Building with Docker
 
-Build with `cargo build (--release)`.
+The project includes a Makefile that supports building for multiple platforms using Docker. All built libraries are placed in the `output` directory, organized by platform.
 
-Test with `cargo test`.
+### Clean Build
 
-All crates require Rust 2018 edition and are tested on the following channels:
-- `1.41.0`
+To clean the output directory before building:
+```
+make clean
+```
 
-If you do not have Rust installed, run: `curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh`
+### Build All Platforms
+```
+make all
+```
+This builds the libraries for all supported platforms.
 
-## Android and iOS
+### WASM Build
+```
+make wasm
+```
+This builds WebAssembly bindings that can be used with Node.js and places them in `output/wasm`.
 
-The library compiles to Android and iOS. This has been tested with Rust v1.41.0.
+### JVM Build
+```
+make jvm
+```
+This builds JVM-compatible libraries and places them in `output/jvm`.
 
-To compile to Android:
+### iOS Build
+```
+make ios
+```
+This builds a universal static library for iOS (combining aarch64 and x86_64 architectures) and places it in `output/ios`. Note that iOS builds must be run on a macOS host as they cannot be built in Docker.
 
-1. Download Android NDK r21 and unzip it
-2. Set the `NDK_HOME` env var to the extracted directory
-3. `cd cross`
-4. `./create-ndk-standalone`
-5. `make android`
+### Android Build
+```
+make android
+```
+This builds dynamic libraries for Android architectures (x86, x86_64, arm64-v8a, armeabi, and armeabi-v7a) and places them in `output/android`.
 
-To compile to ios:
-3. `cd cross`
-4. `make ios`
+### Docker Build
+
+The docker image used for building the libraries can be built separately if needed:
+```
+make build-docker-image
+```
+
+### Rust version
+
+Rust 1.62.0 is used by default and tested for all builds. If desired, you can build with a different Rust version by setting the RUST_VERSION env var:
+``` 
+make RUST_VERSION=1.56.1
+```
 
 ## Directory Structure
 
@@ -43,6 +71,7 @@ This repository contains several Rust crates that implement the different buildi
 - [`threshold-bls`](crates/threshold-bls): (blind) threshold BLS signatures for BLS12-381 and BLS12-377
 - [`threshold-bls-ffi`](crates/threshold-bls-ffi): FFI and WASM bindings to `threshold-bls` for cross platform interoperability
 
+Note: the dkg crates have been removed from the workspace in this branch as they are not needed to build the bls crates.
 
 ## Disclaimers
 

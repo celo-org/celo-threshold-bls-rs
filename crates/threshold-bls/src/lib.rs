@@ -121,7 +121,7 @@
 //! you define the pairing-friendly curve's `Scalar` and `G_T` fields, its
 //! G1 and G2 groups and implement the `Scalar`, `Element` and `Point` traits for them.
 //! For reference, use the [existing implementation of BLS12-377](bls12_377) which wraps the implementation
-//! from [Zexe](https://github.com/scipr-lab/zexe/).
+//! from [Zexe](https://github.com/arkworks-rs/snark/).
 //!
 //! ### Switching Groups
 //!
