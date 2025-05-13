@@ -3,7 +3,7 @@ version: 2
 jobs:
   contracts:
     docker:
-      - image: circleci/node:latest
+      - image: cimg/node:24.0
     steps:
       - checkout
       - run:
@@ -16,7 +16,7 @@ jobs:
 
   cross-ios:
     macos:
-      xcode: 11.4.0
+      xcode: 14.3.1
     working_directory: ~/work
     steps:
     - checkout
@@ -37,7 +37,7 @@ jobs:
 
   test:
     docker:
-      - image: circleci/rust:latest
+      - image: cimg/rust:1.86.0
     steps:
       - checkout
       - run:
@@ -66,7 +66,7 @@ jobs:
 
   wasm:
     docker:
-      - image: circleci/rust:latest
+      - image: cimg/rust:1.86.0
     steps:
     - checkout
     - run:
@@ -78,7 +78,7 @@ jobs:
 
   cross-android:
     docker:
-      - image: circleci/rust:latest
+      - image: cimg/rust:1.86.0
     working_directory: ~/work
     steps:
     - checkout
