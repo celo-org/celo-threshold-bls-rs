@@ -1,6 +1,6 @@
-use jni::JNIEnv;
 use jni::objects::{JByteArray, JClass};
 use jni::sys::jboolean;
+use jni::JNIEnv;
 
 use threshold_bls::sig::SignatureScheme;
 
