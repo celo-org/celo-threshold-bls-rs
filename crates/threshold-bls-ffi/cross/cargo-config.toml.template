@@ -17,3 +17,6 @@ linker = "$PWD/NDK/x86/bin/i686-linux-android-gcc"
 [target.x86_64-linux-android]
 ar = "$PWD/NDK/x86_64/bin/x86_64-linux-android-ar"
 linker = "$PWD/NDK/x86_64/bin/x86_64-linux-android-gcc"
+
+[build]
+rustflags = ["-C", "link-args=-Wl,-z,max-page-size=16384"]
