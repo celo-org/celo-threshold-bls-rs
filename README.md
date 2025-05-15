@@ -4,7 +4,7 @@
 
 This crate provides libraries and command line interfaces for producing threshold BLS signatures. The signatures can also be [blind](https://en.wikipedia.org/wiki/Blind_signature) in order to preserve the privacy of the user asking for a signature from another set of parties. 
 
-> **Note:** The DKG (Distributed Key Generation) crates have been removed from this repository as they were unstable and not necessary for the BLS crates to work. TODO: They were removed in commit [COMMIT_HASH].
+> **Note:** The DKG (Distributed Key Generation) crates have been removed from this repository as they were unstable and not necessary for the BLS crates to work. They were removed in commit [a911f40f0fd31fabae197016b87640f2fdcf1c9f].
 
 ## Building with Docker
 
