@@ -1,11 +1,10 @@
-<h1 align="center">Threshold BLS Signatures and DKG</h1>
+<h1 align="center">Threshold BLS Signatures</h1>
 
 ## Overview
 
 This crate provides libraries and command line interfaces for producing threshold BLS signatures. The signatures can also be [blind](https://en.wikipedia.org/wiki/Blind_signature) in order to preserve the privacy of the user asking for a signature from another set of parties. 
 
-Distributed Key Generation for generating the threshold public key is based on [Secure Distributed Key Generation for Discrete-Log Based Cryptosystems
-](https://link.springer.com/article/10.1007/s00145-006-0347-3)`
+> **Note:** The DKG (Distributed Key Generation) crates have been removed from this repository as they were unstable and not necessary for the BLS crates to work. TODO: They were removed in commit [COMMIT_HASH].
 
 ## Building with Docker
 
@@ -64,14 +63,10 @@ make RUST_VERSION=1.56.1
 
 ## Directory Structure
 
-This repository contains several Rust crates that implement the different building blocks of the MPC. The high-level structure of the repository is as follows:
+This repository contains Rust crates that implement threshold BLS signatures. The high-level structure of the repository is as follows:
 
-- [`dkg-cli`](crates/dkg-cli): Rust crate that provides a CLI for the distributed key generation
-- [`dkg-core`](crates/dkg-core): Rust crate that provides the implementation utilities for the DKG
 - [`threshold-bls`](crates/threshold-bls): (blind) threshold BLS signatures for BLS12-381 and BLS12-377
 - [`threshold-bls-ffi`](crates/threshold-bls-ffi): FFI and WASM bindings to `threshold-bls` for cross platform interoperability
-
-Note: the dkg crates have been removed from the workspace in this branch as they are not needed to build the bls crates.
 
 ## Disclaimers
 

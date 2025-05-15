@@ -39,7 +39,7 @@ use chacha20poly1305::{
 use hkdf::Hkdf;
 use sha2::Sha256;
 
-// re-export for usage by dkg primitives
+// Re-export error type
 pub use chacha20poly1305::aead::Error as EciesError;
 
 /// The nonce length
