@@ -23,6 +23,15 @@ make all
 ```
 This builds the libraries for all supported platforms.
 
+### Running Tests
+
+To run tests:
+```
+make test
+```
+
+This runs the tests in a Docker container which is especially important for Apple Silicon (M1/M2/M3) Macs, as some dependencies have compatibility issues when running natively on ARM64 architecture. The Docker container provides an x86_64 / amd64 environment where all tests run successfully.
+
 ### WASM Build
 ```
 make wasm
