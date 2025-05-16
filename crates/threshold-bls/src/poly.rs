@@ -91,7 +91,7 @@ impl<C: Element> Poly<C> {
             self.0.resize(other.0.len(), C::zero())
         }
 
-        self.0.iter_mut().zip(&other.0).for_each(|(a, b)| a.add(&b))
+        self.0.iter_mut().zip(&other.0).for_each(|(a, b)| a.add(b))
     }
 }
 
