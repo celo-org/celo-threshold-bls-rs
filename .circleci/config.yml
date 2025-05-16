@@ -9,7 +9,7 @@ jobs:
       - run:
           name: Install Dependencies
           command: |
-            cargo install cargo-audit --locked
+            cargo install cargo-audit --version 0.17.6
             rustup component add clippy
       - run:
           name: Tests
