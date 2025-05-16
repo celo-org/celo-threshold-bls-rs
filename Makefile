@@ -2,7 +2,7 @@ RUST_VERSION ?= 1.62.0
 IMAGE_NAME = celo-bls-rust-$(subst .,_,$(RUST_VERSION))
 OUTPUT_DIR = $(PWD)/output
 
-.PHONY: all clean build-docker-image wasm jvm ios android
+.PHONY: all clean build-docker-image wasm jvm ios android test
 
 all: clean build-docker-image wasm jvm ios android
 
@@ -48,3 +48,7 @@ jvm:
 		-w /app/crates/threshold-bls-ffi \
 		$(IMAGE_NAME) \
 		cargo build --release --features=jvm
+
+test:
+	make build-docker-image
+	docker run --platform=linux/amd64 --rm -w /app ${IMAGE_NAME} cargo test
