@@ -78,7 +78,7 @@ jobs:
 
   cross-android:
     docker:
-      - image: cimg/rust:1.86.0
+      - image: cimg/python:3.9
     working_directory: ~/work
     steps:
     - checkout
@@ -86,11 +86,11 @@ jobs:
         name: Install rustup
         command: curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
     - run:
-        name: Install Rust 1.41
-        command: rustup install 1.41.0 && rustup default 1.41.0
+        name: Install Rust 1.62
+        command: . "$HOME/.cargo/env" && rustup install 1.62.0 && rustup default 1.62.0
     - run:
         name: Install Android targets
-        command: rustup target add aarch64-linux-android armv7-linux-androideabi arm-linux-androideabi i686-linux-android x86_64-linux-android
+        command: . "$HOME/.cargo/env" &&  rustup target add aarch64-linux-android armv7-linux-androideabi arm-linux-androideabi i686-linux-android x86_64-linux-android
     - run:
         name: Download NDK
         command: cd crates/threshold-bls-ffi && wget https://dl.google.com/android/repository/android-ndk-r21-linux-x86_64.zip && unzip android-ndk-r21-linux-x86_64.zip
@@ -99,9 +99,9 @@ jobs:
         command: cd crates/threshold-bls-ffi/cross && NDK_HOME=$PWD/../android-ndk-r21 ./create-ndk-standalone.sh
     - run:
         name: Build Android
-        command: cd crates/threshold-bls-ffi/cross && make android
+        command: . "$HOME/.cargo/env" && cd crates/threshold-bls-ffi/cross && make android
     - store_artifacts:
-        path: ~/work/cross/react-native/android
+        path: crates/threshold-bls-ffi/cross/output/android
 
 workflows:
   version: 2
