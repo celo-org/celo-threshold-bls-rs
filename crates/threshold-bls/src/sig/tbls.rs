@@ -92,12 +92,11 @@ impl<I: SignatureScheme> ThresholdScheme for I {
     }
 }
 
-#[cfg(feature = "bls12_381")]
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::{
-        curve::bls12381::PairingCurve as PCurve,
+        curve::bls12377::PairingCurve as PCurve,
         sig::{
             bls::{G1Scheme, G2Scheme},
             Scheme, SignatureScheme,

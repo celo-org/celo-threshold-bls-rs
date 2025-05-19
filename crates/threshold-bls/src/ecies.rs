@@ -8,7 +8,7 @@
 //! ```rust
 //! use threshold_bls::{
 //!     ecies::{encrypt, decrypt},
-//!     curve::bls12381::G2Curve,
+//!     curve::bls12377::G2Curve,
 //!     group::{Curve, Element}
 //! };
 //!
@@ -125,11 +125,10 @@ fn derive<C: Curve>(dh: &C::Point) -> [u8; KEY_LEN] {
     ephemeral_key
 }
 
-#[cfg(feature = "bls12_381")]
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::curve::bls12381::{Curve, Scalar, G1};
+    use crate::curve::bls12377::{G1Curve, Scalar, G1};
     use rand::thread_rng;
 
     fn kp() -> (Scalar, G1) {
@@ -146,15 +145,15 @@ mod tests {
         let data = vec![1, 2, 3, 4];
 
         // decryption with the right key OK
-        let mut cipher = encrypt::<Curve, _>(&p2, &data, &mut thread_rng());
-        let deciphered = decrypt::<Curve>(&s2, &cipher).unwrap();
+        let mut cipher = encrypt::<G1Curve, _>(&p2, &data, &mut thread_rng());
+        let deciphered = decrypt::<G1Curve>(&s2, &cipher).unwrap();
         assert_eq!(data, deciphered);
 
         // decrypting with wrong private key should fail
-        decrypt::<Curve>(&s1, &cipher).unwrap_err();
+        decrypt::<G1Curve>(&s1, &cipher).unwrap_err();
 
         // having an invalid ciphertext should fail
         cipher.aead = vec![0; 32];
-        decrypt::<Curve>(&s2, &cipher).unwrap_err();
+        decrypt::<G1Curve>(&s2, &cipher).unwrap_err();
     }
 }
