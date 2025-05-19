@@ -29,10 +29,3 @@ opt-level = 3
 incremental = true
 debug-assertions = true
 debug = true
-
-[patch."https://github.com/scipr-lab/zexe"]
-algebra = { git = "https://github.com/celo-org/arkworks-v0.1.1-patch", package = "algebra", branch = "patch-rust-compat" }
-algebra-core = { git = "https://github.com/celo-org/arkworks-v0.1.1-patch", package = "algebra-core", branch = "patch-rust-compat" }
-algebra-core-derive = { git = "https://github.com/celo-org/arkworks-v0.1.1-patch", package = "algebra-core-derive", branch = "patch-rust-compat" }
-bench-utils = { git = "https://github.com/celo-org/arkworks-v0.1.1-patch", package = "bench-utils", branch = "patch-rust-compat" }
-crypto-primitives = { git = "https://github.com/celo-org/arkworks-v0.1.1-patch", package = "crypto-primitives", branch = "patch-rust-compat" }
