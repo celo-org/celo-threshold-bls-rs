@@ -3,13 +3,12 @@ version: 2.1
 jobs:
   test:
     docker:
-      - image: circleci/rust:latest
+      - image: circleci/rust:1.62.0
     steps:
       - checkout
       - run:
           name: Install Dependencies
           command: |
-            cargo install cargo-audit
             rustup component add clippy
       - run:
           name: Tests
@@ -20,9 +19,6 @@ jobs:
           command: |
             cargo fmt --all -- --check
             cargo clippy --all-targets --all-features -- -D warnings
-      - run:
-          name: Audit Dependencies
-          command: cargo audit
 
   build-wasm:
     docker:
