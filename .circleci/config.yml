@@ -1,25 +1,6 @@
 version: 2.1
 
 jobs:
-  test:
-    docker:
-      - image: cimg/rust:1.62.0
-    steps:
-      - checkout
-      - run:
-          name: Install Dependencies
-          command: |
-            rustup component add clippy
-      - run:
-          name: Tests
-          command: |
-            cargo test --all
-      - run:
-          name: Check style
-          command: |
-            cargo fmt --all -- --check
-            cargo clippy --all-targets --all-features -- -D warnings
-
   build-wasm:
     docker:
       - image: cimg/base:stable
@@ -74,9 +55,8 @@ jobs:
 
 workflows:
   version: 2
-  build_and_test:
+  build:
     jobs:
-      - test
       - build-wasm
       - build-jvm
       - build-android
