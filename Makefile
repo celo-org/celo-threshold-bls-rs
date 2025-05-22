@@ -53,7 +53,7 @@ jvm:
 
 test:
 	make build-docker-image
-	docker run --platform=linux/amd64 --rm -w /app ${IMAGE_NAME} cargo test --features wasm
+	docker run --platform=linux/amd64 --rm -w /app ${IMAGE_NAME} cargo test --features wasm -- --nocapture
 
 # Create Docker volumes for caching Cargo and target directories
 create-cache-volumes:
@@ -61,8 +61,9 @@ create-cache-volumes:
 	docker volume create $(TARGET_CACHE_VOLUME)
 
 # Use cached volumes for faster testing
-test-cached: create-cache-volumes
+test-cached: create-cache-volumes build-docker-image
 	docker run --platform=linux/amd64 --rm \
 		-v $(CARGO_CACHE_VOLUME):/root/.cargo \
 		-v $(TARGET_CACHE_VOLUME):/app/target \
+		-v $(PWD):/app \
 		-w /app ${IMAGE_NAME} cargo test --features wasm -- --nocapture
