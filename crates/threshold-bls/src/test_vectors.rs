@@ -6,8 +6,6 @@ mod tests {
         use crate::poly::{Idx, Poly};
         use crate::schemes::bls12_381::G1Scheme;
         use crate::sig::{Scheme, Share, SignatureScheme, ThresholdScheme};
-        use bincode;
-        use hex;
         use rand::SeedableRng;
         use rand_chacha::ChaChaRng;
 
@@ -118,9 +116,10 @@ mod tests {
                 let n = 3;
 
                 // Create private keys using deterministic generation
-                let keys: Vec<(PrivateKey, PublicKey)> = (0..n).map(get_keypair).collect();
-                let private_keys: Vec<PrivateKey> =
-                    keys.into_iter().map(|(priv_key, _)| priv_key).collect();
+                let private_keys: Vec<PrivateKey> = (0..n)
+                    .map(get_keypair)
+                    .map(|(priv_key, _)| priv_key)
+                    .collect();
 
                 // Create a private polynomial from our private keys
                 let private_poly = Poly::<PrivateKey>::from(private_keys);
@@ -165,7 +164,7 @@ mod tests {
                 );
 
                 assert!(
-                    G1Scheme::verify(&threshold_pubkey, msg, &aggregated).is_ok(),
+                    G1Scheme::verify(threshold_pubkey, msg, &aggregated).is_ok(),
                     "Aggregated signature verification failed for message {}",
                     msg_idx
                 );
@@ -179,8 +178,6 @@ mod tests {
         use crate::poly::{Idx, Poly};
         use crate::schemes::bls12_377::G2Scheme;
         use crate::sig::{Scheme, Share, SignatureScheme, ThresholdScheme};
-        use bincode;
-        use hex;
         use rand::SeedableRng;
         use rand_chacha::ChaChaRng;
 
@@ -293,9 +290,10 @@ mod tests {
                 let n = 3;
 
                 // Create private keys using deterministic generation
-                let keys: Vec<(PrivateKey, PublicKey)> = (0..n).map(get_keypair).collect();
-                let private_keys: Vec<PrivateKey> =
-                    keys.into_iter().map(|(priv_key, _)| priv_key).collect();
+                let private_keys: Vec<PrivateKey> = (0..n)
+                    .map(get_keypair)
+                    .map(|(priv_key, _)| priv_key)
+                    .collect();
 
                 // Create a private polynomial from our private keys
                 let private_poly = Poly::<PrivateKey>::from(private_keys);
@@ -340,7 +338,7 @@ mod tests {
                 );
 
                 assert!(
-                    G2Scheme::verify(&threshold_pubkey, msg, &aggregated).is_ok(),
+                    G2Scheme::verify(threshold_pubkey, msg, &aggregated).is_ok(),
                     "Aggregated signature verification failed for message {}",
                     msg_idx
                 );
