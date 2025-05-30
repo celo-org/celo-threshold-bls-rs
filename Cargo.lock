@@ -226,7 +226,7 @@ dependencies = [
  "crypto-primitives",
  "csv",
  "env_logger",
- "hex",
+ "hex 0.3.2",
  "log",
  "lru",
  "once_cell",
@@ -481,7 +481,7 @@ checksum = "00affe7f6ab566df61b4be3ce8cf16bc2576bca0963ceb0955e45d514bf9a279"
 dependencies = [
  "bstr",
  "csv-core",
- "itoa",
+ "itoa 0.4.5",
  "ryu",
  "serde",
 ]
@@ -580,7 +580,7 @@ version = "0.2.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "844b389fbe323d3b35ed1b3b119e75b11dca536d291d31342acea5b4c8984558"
 dependencies = [
- "num-bigint",
+ "num-bigint 0.2.6",
  "num-integer",
  "num-traits",
  "proc-macro2 1.0.95",
@@ -695,6 +695,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "805026a5d0141ffc30abb3be3173848ad46a1b1664fe632428479619a3644d77"
 
 [[package]]
+name = "hex"
+version = "0.4.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7f24254aa9a54b5c858eaee2f5bccdb46aaf0e486a595ed5fd8f86ba55232a70"
+
+[[package]]
 name = "hkdf"
 version = "0.8.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -728,6 +734,12 @@ name = "itoa"
 version = "0.4.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b8b7a7c0c47db5545ed3fef7468ee7bb5b74691498139e4b3f6a20685dc6dd8e"
+
+[[package]]
+name = "itoa"
+version = "1.0.15"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4a5f13b858c8d314ee3e8f639011f7ccefe71f97f96e50151fb991f267928e2c"
 
 [[package]]
 name = "jni"
@@ -817,20 +829,29 @@ dependencies = [
 ]
 
 [[package]]
-name = "num-integer"
-version = "0.1.42"
+name = "num-bigint"
+version = "0.4.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3f6ea62e9d81a77cd3ee9a2a5b9b609447857f3d358704331e4ef39eb247fcba"
+checksum = "a5e44f723f1133c9deac646763579fdb3ac745e418f2a7af9cd0c431da1f20b9"
 dependencies = [
- "autocfg 1.0.0",
+ "num-integer",
+ "num-traits",
+]
+
+[[package]]
+name = "num-integer"
+version = "0.1.46"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7969661fd2958a5cb096e56c8e1ad0444ac2bbcd0061bd28660485a44879858f"
+dependencies = [
  "num-traits",
 ]
 
 [[package]]
 name = "num-traits"
-version = "0.2.11"
+version = "0.2.19"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c62be47e61d1842b9170f0fdeec8eba98e60e90e5446449a0545e5152acd7096"
+checksum = "071dfc062690e90b734c0b2273ce72ad0ffa95f0c74596bc250dcfd960262841"
 dependencies = [
  "autocfg 1.0.0",
 ]
@@ -1295,6 +1316,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "serde_json"
+version = "1.0.99"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "46266871c240a00b8f503b877622fe33430b3c7d963bdc0f2adc511e54a1eae3"
+dependencies = [
+ "itoa 1.0.15",
+ "ryu",
+ "serde",
+]
+
+[[package]]
 name = "sha2"
 version = "0.8.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1458,12 +1490,16 @@ dependencies = [
  "chacha20poly1305",
  "fff",
  "groupy",
+ "hex 0.4.3",
  "hkdf",
+ "num-bigint 0.4.6",
  "paired",
  "proptest",
  "rand 0.7.3",
+ "rand_chacha 0.2.2",
  "rand_core 0.5.1",
  "serde",
+ "serde_json",
  "sha2",
  "static_assertions",
  "thiserror",
