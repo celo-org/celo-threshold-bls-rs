@@ -1,135 +1,109 @@
 #[cfg(test)]
 mod tests {
-    #[cfg(test)]
     #[cfg(feature = "bls12_381")]
     mod bls12_381_vectors {
         use crate::curve::bls12381::{Scalar, G1};
-        use crate::group::Element;
         use crate::poly::{Idx, Poly};
         use crate::schemes::bls12_381::G1Scheme;
-        use crate::sig::{Share, SignatureScheme, ThresholdScheme};
-        use ff::PrimeField;
+        use crate::sig::{Scheme, Share, SignatureScheme, ThresholdScheme};
+        use bincode;
         use hex;
-        use paired::bls12_381::FrRepr;
+        use rand::SeedableRng;
+        use rand_chacha::ChaChaRng;
 
-        // Test vectors from https://github.com/ethereum/bls12-381-tests
+        type PrivateKey = Scalar;
+        type PublicKey = G1;
+
+        // Test vectors with fixed seed
+        const SEED: [u8; 32] = [42u8; 32];
         const MESSAGES: [&[u8; 32]; 3] = [&[0x00; 32], &[0x56; 32], &[0xab; 32]];
 
-        // Private keys as hex from https://github.com/ethereum/bls12-381-tests
-        const PRIVKEYS: [&str; 3] = [
-            "0x00000000000000000000000000000000263dbd792f5b1be47ed85f8938c0f29586af0d3ac7b977f21c278fe1462040e3",
-            "0x0000000000000000000000000000000047b8192d77bf871b62e87859d653922725724a5c031afeabc60bcef5ff665138",
-            "0x00000000000000000000000000000000328388aff0d4a5b7dc9205abd374e7e98f3cd9f3418edb4eafda5fb16473d216",
+        const EXPECTED_PRIVATE_KEYS: [&str; 3] = [
+            "013abcff335703fb2f065483dba2cb40526f21e871c10d5f4e8ed5ddd079e750",
+            "8ae9e96e9b11b58272914cb8d508ae9523ef57f70e786ee2f0f35ba484c82945",
+            "28e3388629b01282d49de4ac4f3451690195bb569ef73c7de722d9f04e4d405e",
         ];
 
-        // Converts a hex string to a Scalar (Fr)
-        fn hex_to_scalar(hex_str: &str) -> Scalar {
-            // Parse the hex string into 4 limbs (u64 values)
-            let mut limbs = [0u64; 4];
+        const EXPECTED_PUBLIC_KEYS: [&str; 3] = [
+            "b22bcac0cbc3fa2c720784b0bde1d8a678bc35d8bb3deecff85ae6a13416d95e82ed18e08ed0f864cd90cb0cb018a39a",
+            "b1ad7db5da4d357d7e680229f2a5e099ef10ee87489c0f685431c56d67a2b0890bacef1097047d77a326af3465be2b70",
+            "a8b33f1d332eb0d593bcaee2ce201b0c4a47823b0b6cc10ebbdbeeb9466ac87e937afdd9ce4a085198630d3518caf25d",
+        ];
 
-            // Ensure we have a 64-character hex string (32 bytes)
-            let hex_str = hex_str.trim_start_matches("0x");
-            let s = format!("{:0>64}", hex_str);
-
-            // Each limb is 16 hex characters (8 bytes)
-            // FrRepr is stored in little-endian order
-            for i in 0..4 {
-                let start = s.len() - 16 * (i + 1);
-                let end = s.len() - 16 * i;
-                let chunk: &str = &s[start..end];
-                limbs[i] = u64::from_str_radix(chunk, 16).unwrap();
-            }
-
-            // Create the Scalar using FrRepr
-            let repr = FrRepr(limbs);
-            Scalar::from_repr(repr).unwrap()
-        }
-
-        fn priv_to_pub(privkey: &Scalar) -> G1 {
-            let mut pk = G1::one();
-            pk.mul(privkey);
-            pk
-        }
-
-        // TODO it appears the signatures produced here do not match the test vectors provided in https://github.com/ethereum/bls12-381-tests
-        // This is likely due to formatting differences
-        // // Expected signatures for each private key and message combination from https://github.com/ethereum/bls12-381-tests
-        // const EXPECTED_SIGNATURES: [[&str; 3]; 3] = [
-        //     // First private key with each message
-        //     [
-        //         "b6ed936746e01f8ecf281f020953fbf1f01debd5657c4a383940b020b26507f6076334f91e2366c96e9ab279fb5158090352ea1c5b0c9274504f4f0e7053af24802e51e4568d164fe986834f41e55c8e850ce1f98458c0cfc9ab380b55285a55",
-        //         "882730e5d03f6b42c3abc26d3372625034e1d871b65a8a6b900a56dae22da98abbe1b68f85e49fe7652a55ec3d0591c20767677e33e5cbb1207315c41a9ac03be39c2e7668edc043d6cb1d9fd93033caa8a1c5b0e84bedaeb6c64972503a43eb",
-        //         "91347bccf740d859038fcdcaf233eeceb2a436bcaaee9b2aa3bfb70efe29dfb2677562ccbea1c8e061fb9971b0753c240622fab78489ce96768259fc01360346da5b9f579e5da0d941e4c6ba18a0e64906082375394f337fa1af2b7127b0d121"
-        //     ],
-        //     // Second private key with each message
-        //     [
-        //         "b23c46be3a001c63ca711f87a005c200cc550b9429d5f4eb38d74322144f1b63926da3388979e5321012fb1a0526bcd100b5ef5fe72628ce4cd5e904aeaa3279527843fae5ca9ca675f4f51ed8f83bbf7155da9ecc9663100a885d5dc6df96d9",
-        //         "af1390c3c47acdb37131a51216da683c509fce0e954328a59f93aebda7e4ff974ba208d9a4a2a2389f892a9d418d618418dd7f7a6bc7aa0da999a9d3a5b815bc085e14fd001f6a1948768a3f4afefc8b8240dda329f984cb345c6363272ba4fe",
-        //         "9674e2228034527f4c083206032b020310face156d4a4685e2fcaec2f6f3665aa635d90347b6ce124eb879266b1e801d185de36a0a289b85e9039662634f2eea1e02e670bc7ab849d006a70b2f93b84597558a05b879c8d445f387a5d5b653df"
-        //     ],
-        //     // Third private key with each message
-        //     [
-        //         "948a7cb99f76d616c2c564ce9bf4a519f1bea6b0a624a02276443c245854219fabb8d4ce061d255af5330b078d5380681751aa7053da2c98bae898edc218c75f07e24d8802a17cd1f6833b71e58f5eb5b94208b4d0bb3848cecb075ea21be115",
-        //         "a4efa926610b8bd1c8330c918b7a5e9bf374e53435ef8b7ec186abf62e1b1f65aeaaeb365677ac1d1172a1f5b44b4e6d022c252c58486c0a759fbdc7de15a756acc4d343064035667a594b4c2a6f0b0b421975977f297dba63ee2f63ffe47bb6",
-        //         "ae82747ddeefe4fd64cf9cedb9b04ae3e8a43420cd255e3c7cd06a8d88b7c7f8638543719981c5d16fa3527c468c25f0026704a6951bde891360c7e8d12ddee0559004ccdbe6046b55bae1b257ee97f7cdb955773d7cf29adf3ccbb9975e4eb9"
-        //     ]
-        // ];
         const EXPECTED_SIGNATURES: [[&str; 3]; 3] = [
             // First private key with each message
             [
-                "a343aa09cf1b91b05069a5b13a38256affe00e044670beab16cf730f17e6e0a47eae6773039fc21fe12ec895e10e1d5419352252201f846060007d4904220cd99c7ce7ae1ec8f3b6d79c399a65a6d7acb5fb45b1a807f825fea9617c30555b72",
-                "8a30e1ef9ea48a138d48b98dc1db8a17be8639adf920e8f6b5e9104d6207e64a555d51fbca98a047464d064282a1aa4206f507841eeb10b7ea573024e69be2b4c6c63465ec5576104d13c928ace3897313cfa45dbd092bee942dae70fe5f7a40",
-                "92649a268e5c7bbd11b7e7d652fa57d508ca99664559178d639c2c98a5e11e058ecae670bed1f2d078d9fe4b3967bc500f4b6d9059e424bcc1eb459761f5a2aea4996ef4a4d757df17e7635fdef6aee10910c7b8d4d67974bac8db1b64c2dccf",
+                "6000000000000000b5f821ce57ee9a9a1c79f8ff4197b2c6c63adbdd3a2d6e771cd5f6748347d33ae5fa290c67115e24c5e8d9a47f19788e065b3a65bb90c71eddf200276496a5cde7dab19cb10f7180dd505f54eebec6433441f35ebc79d1986fc285ba13893f4f",
+                "6000000000000000851cab1c75c2f5fa67dac6ebb65712a798e5ed293d890ef8b59dd1ebb2a315175c01dd718316ea98e51ef47d915424b31471a4119eb3f3007e48843e3544c192376d54f6cdf376699311c51aad547bf092285bad478c2268df4cd81d7d00cdef",
+                "6000000000000000b91f177e50083ebd0a5b711da530578d73c623c0be88469b02e96a620a597d7f980c0b19f1dbef16918e564fb8fe37050a7ce3b7b8c2b01718a9b98900db97f75d302bd7bdcba2d8979dba714230afca74d65d34ee24a8f96c3b787d2f0a531e",
             ],
             // Second private key with each message
             [
-                "b68dff115fc47996a7aa900129791ea0582eea40fcfd09288d8dbfb6349a5f6b77590d6dac118050ff3ddfd022a0c8030ade4c53fab08f74820671ea1bacc75c5ac850f8c31dc0c87eea7bb161386b7854667d8654ee658caeb84a9b8f65f5bf",
-                "b7990c377f0af50796abc0b0e6d220462b85e2c0df16642e5ca0651b752074f37375a4de1d00b0e75ef30cf329cd15910d3e292deebc144fa420ecab40de0940eff96e98e6e14b342e425ad2531b3d44d5782a1085706b8af904b3d4cfffda1d",
-                "b14894615d3845dbb12e5880f4e2915ba2e741684300641825168d5e5fcc2d6664d376ba362cb9bdcc92d06759ec88a4039585bb7b0be010381f17a0aa7711ee33a0c27ab3ec7e675581809c18dbdf76c78459ffed4c8c62fa8ba32d601fd596"
+                "6000000000000000b5607557b0ef065ecc35869cd263221bf40c964d835490d62e7576ea24940f1a0599754e91b1371bbf9dc9c631cc03010c739bf8e1a113a458e99304dcaa29ead1799cb095eb0d9c38a16077f825a31f64b22e15708791cc12baae57a73a96d7",
+                "6000000000000000aadc03db054c6a8931f1ea9d345464fa029b1caf32bff9b5c1cfbfb45884da77b6ec861817ab7c34c93c3b617e78527111f3450b6a1a6444fd698f78ea3a7e827aba2cf2d1aa984dbfdd649c9424351ac130888954f27667ef0361f50db06049",
+                "60000000000000008475a405e7e30f0350a5cdd1e0b4c36fdd17d5f315e1be2c06ed6b0695d5983af344cb388d0db2621a8832f5f171cb910058b99d2d84b0141b0f0edf19d996e9cb592c0a50600d59358623f5114efb766e93d77df02ce6836550e1a8ed06b0f1"
             ],
             // Third private key with each message
             [
-                "8b79b497eec567d4a69165673634da353336f6c78928542b3a4f23ddf6daff77ace3e3feac0e0f89fbe47f05a4deedda19f21e23f6d9a039c1eb0c9f223699a1e0a291f02fcd51c3dcac68130a2608a70e311d537ad0d15e1cc1dc786a0c6502",
-                "81a514ae18e180c75caa8bd017043298ca387beafd27427a68df6c131bd6778596ea8f97c18fc40b44a1017900368eed03e36f519d9c58b74c058f33209c2d3fce9c73931d71f186030eaeb4a5b12390899a5073a8a576e4e72f5e28af31e27c",
-                "93300377f6c8f599fd14469d89d7d5378fd42039b1dfde39ed5165b412d30341371223288b4a7ba50f835f419bcf92d7136136b9757223d1de2f84fa05e52aa0848fbb9ba4d0aea3f2a596fab4cf05e380ed053d193293dded9b8fd4781f0c78"
+                "6000000000000000b0f192df6e929b2d52f8c952baa6731e97e38a3232cdaf854abb958856eca7bd5d416343dc843232e59cb81a2993844f14841b07f274c78cd3e1cd60c716feebce7b1d1134048c7dd0d8305d896b9ebcd841fc395729a520478052ec4a53f11c",
+                "60000000000000008536c724d442e299a0b4ef97e3249d0b27749b30d33a5c5c7930a00279085d7498ed4e42fe56e399e096e8944f5d70d2171236df5397ada1cb69038517f2f360f174ff8271ff2e59039afb39c3f1c3ed6b4c7a05f1788b4c4958450439e30e15",
+                "600000000000000089c78160bb51cd0bd63e580ac1563944ffd33e416d4bae7a91e366ca5fe7601da74de5f43faf8d9e228faeb47587496a0c4c2cf75662aef4b3ec87b61a298a46f2bc89a57b8cd43aa8949f30ec9284367884a1afe1bc61cfa81068dc91a6bb50"
             ]
         ];
 
-        // These are the expected outputs from the BLS aggregate operation
-        const AGGREGATED_SIGNATURES: [&str; 3] = [
-            // Aggregate signature for message [0x00; 32]
-            "a343aa09cf1b91b05069a5b13a38256affe00e044670beab16cf730f17e6e0a47eae6773039fc21fe12ec895e10e1d5419352252201f846060007d4904220cd99c7ce7ae1ec8f3b6d79c399a65a6d7acb5fb45b1a807f825fea9617c30555b72",
-            // Aggregate signature for message [0x56; 32]
-            "8a30e1ef9ea48a138d48b98dc1db8a17be8639adf920e8f6b5e9104d6207e64a555d51fbca98a047464d064282a1aa4206f507841eeb10b7ea573024e69be2b4c6c63465ec5576104d13c928ace3897313cfa45dbd092bee942dae70fe5f7a40",
-            // Aggregate signature for message [0xab; 32]
-            "92649a268e5c7bbd11b7e7d652fa57d508ca99664559178d639c2c98a5e11e058ecae670bed1f2d078d9fe4b3967bc500f4b6d9059e424bcc1eb459761f5a2aea4996ef4a4d757df17e7635fdef6aee10910c7b8d4d67974bac8db1b64c2dccf"
+        const EXPECTED_AGGREGATED_SIGNATURES: [&str; 3] = [
+            "6000000000000000b5f821ce57ee9a9a1c79f8ff4197b2c6c63adbdd3a2d6e771cd5f6748347d33ae5fa290c67115e24c5e8d9a47f19788e065b3a65bb90c71eddf200276496a5cde7dab19cb10f7180dd505f54eebec6433441f35ebc79d1986fc285ba13893f4f",
+            "6000000000000000851cab1c75c2f5fa67dac6ebb65712a798e5ed293d890ef8b59dd1ebb2a315175c01dd718316ea98e51ef47d915424b31471a4119eb3f3007e48843e3544c192376d54f6cdf376699311c51aad547bf092285bad478c2268df4cd81d7d00cdef",
+            "6000000000000000b91f177e50083ebd0a5b711da530578d73c623c0be88469b02e96a620a597d7f980c0b19f1dbef16918e564fb8fe37050a7ce3b7b8c2b01718a9b98900db97f75d302bd7bdcba2d8979dba714230afca74d65d34ee24a8f96c3b787d2f0a531e"
         ];
 
+        // Create a deterministic RNG for reproducible key generation
+        fn get_deterministic_rng() -> ChaChaRng {
+            ChaChaRng::from_seed(SEED)
+        }
+
+        fn get_keypair(index: usize) -> (PrivateKey, PublicKey) {
+            let mut rng = get_deterministic_rng();
+            // Skip to the desired index
+            for _ in 0..index {
+                G1Scheme::keypair(&mut rng);
+            }
+            G1Scheme::keypair(&mut rng)
+        }
+
         #[test]
-        fn test_sign_and_verify() {
-            for (i, &priv_hex) in PRIVKEYS.iter().enumerate() {
-                let privkey = hex_to_scalar(priv_hex);
-                let pubkey = priv_to_pub(&privkey);
+        fn sign_and_verify() {
+            // Test basic signing and verification with deterministic outputs
+            for i in 0..3 {
+                let (privkey, pubkey) = get_keypair(i);
+
+                let priv_hex = hex::encode(bincode::serialize(&privkey).unwrap());
+                let pub_hex = hex::encode(bincode::serialize(&pubkey).unwrap());
+
+                assert_eq!(
+                    priv_hex, EXPECTED_PRIVATE_KEYS[i],
+                    "Private key {} mismatch",
+                    i
+                );
+                assert_eq!(
+                    pub_hex, EXPECTED_PUBLIC_KEYS[i],
+                    "Public key {} mismatch",
+                    i
+                );
 
                 for (j, &msg) in MESSAGES.iter().enumerate() {
-                    let sig = G1Scheme::sign(&privkey, msg).expect("sign");
-                    let sig_hex = hex::encode(&sig);
-
-                    // Verify signature against expected value
-                    // println!("sig_hex: {}", sig_hex);
-                    // println!(
-                    //     "EXPECTED_SIGNATURES[{}][{}]: {}",
-                    //     i, j, EXPECTED_SIGNATURES[i][j]
-                    // );
+                    // Sign the message
+                    let sig = G1Scheme::sign(&privkey, msg).expect("Error signing");
+                    let sig_hex = hex::encode(bincode::serialize(&sig).unwrap());
                     assert_eq!(
                         sig_hex, EXPECTED_SIGNATURES[i][j],
-                        "Signature for privkey[{}] and message[{}] doesn't match expected value",
+                        "Signature for key[{}] and message[{}] mismatch",
                         i, j
                     );
 
                     assert!(
                         G1Scheme::verify(&pubkey, msg, &sig).is_ok(),
-                        "Signature verification failed for privkey[{}] and message[{}]",
+                        "Signature verification failed for key[{}] and message[{}]",
                         i,
                         j
                     );
@@ -139,20 +113,17 @@ mod tests {
 
         #[test]
         fn test_signature_aggregation() {
-            println!("Testing BLS12-381 signature aggregation");
+            // Test threshold signatures with deterministic outputs
+            for (msg_idx, &msg) in MESSAGES.iter().enumerate() {
+                let n = 3;
 
-            for (msg_idx, &message) in MESSAGES.iter().enumerate() {
-                println!("Testing aggregation for message index {}", msg_idx);
-
-                // Create a polynomial of degree n-1 for an n-out-of-n threshold scheme
-                let n = PRIVKEYS.len();
+                // Create private keys using deterministic generation
+                let keys: Vec<(PrivateKey, PublicKey)> = (0..n).map(get_keypair).collect();
+                let private_keys: Vec<PrivateKey> =
+                    keys.into_iter().map(|(priv_key, _)| priv_key).collect();
 
                 // Create a private polynomial from our private keys
-                let coeffs = PRIVKEYS
-                    .iter()
-                    .map(|priv_hex| hex_to_scalar(priv_hex))
-                    .collect::<Vec<_>>();
-                let private_poly = Poly::<Scalar>::from(coeffs);
+                let private_poly = Poly::<PrivateKey>::from(private_keys);
 
                 // Generate the shares from the polynomial
                 let shares = (0..n)
@@ -163,179 +134,217 @@ mod tests {
                             private: eval.value,
                         }
                     })
-                    .collect::<Vec<_>>();
+                    .collect::<Vec<Share<PrivateKey>>>();
 
                 // Get the public polynomial
                 let public_poly = private_poly.commit();
                 let threshold_pubkey = public_poly.public_key();
 
-                println!("Generating {} partial signatures", shares.len());
-
-                // Generate partial signatures from each share
+                // Generate partial signatures
                 let partials = shares
                     .iter()
-                    .map(|s| G1Scheme::partial_sign(s, message).unwrap())
+                    .map(|s| G1Scheme::partial_sign(s, msg).unwrap())
                     .collect::<Vec<_>>();
 
                 // Verify each partial signature
                 for (i, partial) in partials.iter().enumerate() {
                     assert!(
-                        G1Scheme::partial_verify(&public_poly, message, partial).is_ok(),
+                        G1Scheme::partial_verify(&public_poly, msg, partial).is_ok(),
                         "Partial signature verification failed for share {}",
                         i
                     );
                 }
 
-                // Aggregate the partial signatures - using the full threshold
-                let aggregated =
-                    G1Scheme::aggregate(n, &partials).expect("Failed to aggregate signatures");
-
-                // Compare with expected aggregated signature
-                let aggregated_hex = hex::encode(&aggregated);
-                let expected_hex = AGGREGATED_SIGNATURES[msg_idx].trim_start_matches("0x");
-
-                // println!("Expected aggregated signature: {}", expected_hex);
-                // println!("Actual aggregated signature:   {}", aggregated_hex);
+                // Aggregate signatures
+                let aggregated = G1Scheme::aggregate(n, &partials).expect("Failed to aggregate");
+                let agg_hex = hex::encode(bincode::serialize(&aggregated).unwrap());
                 assert_eq!(
-                    expected_hex, aggregated_hex,
-                    "Aggregated signature for message index {} doesn't match expected value",
+                    agg_hex, EXPECTED_AGGREGATED_SIGNATURES[msg_idx],
+                    "Aggregated signature for message {} mismatch",
                     msg_idx
                 );
 
-                // Verify the aggregated signature with the threshold public key
                 assert!(
-                    G1Scheme::verify(&threshold_pubkey, message, &aggregated).is_ok(),
-                    "Aggregated signature verification failed"
+                    G1Scheme::verify(&threshold_pubkey, msg, &aggregated).is_ok(),
+                    "Aggregated signature verification failed for message {}",
+                    msg_idx
                 );
             }
         }
     }
 
-    // TODO Can't figure out how to make the bls12_377 scheme work with static private keys
-    // In order to test against static output values, we need to have static private keys
-    // In the bls12_377 scheme, the private keys are generated randomly
-    // and I haven't been able to figure out how to deterministically generate the same private keys
-    // or assign values to a Scalar like we do above
+    #[cfg(feature = "bls12_377")]
+    #[cfg(test)]
+    mod bls12_377_vectors {
+        use crate::poly::{Idx, Poly};
+        use crate::schemes::bls12_377::G2Scheme;
+        use crate::sig::{Scheme, Share, SignatureScheme, ThresholdScheme};
+        use bincode;
+        use hex;
+        use rand::SeedableRng;
+        use rand_chacha::ChaChaRng;
 
-    // #[cfg(feature = "bls12_377")]
-    // #[cfg(test)]
-    // mod bls12_377_vectors {
-    //     use crate::curve::bls12381::{Scalar, G1}; // We use the bls12_381 Scalar implementation so we can use the FrRepr type
-    //     use crate::group::{Element, Scalar};
-    //     use crate::poly::{Idx, Poly};
-    //     use crate::schemes::bls12_377::G1Scheme;
-    //     use crate::sig::{Share, SignatureScheme, ThresholdScheme};
-    //     use algebra::bls12_377::Fr;
-    //     use algebra::PrimeField;
-    //     use paired::bls12_381::FrRepr;
+        // Define concrete types to avoid ambiguity
+        type PrivateKey = <G2Scheme as Scheme>::Private;
+        type PublicKey = <G2Scheme as Scheme>::Public;
 
-    //     const MESSAGES: [&[u8; 32]; 3] = [&[0x00; 32], &[0x56; 32], &[0xab; 32]];
+        // Test vectors with fixed seed
+        const SEED: [u8; 32] = [42u8; 32];
+        const MESSAGES: [&[u8; 32]; 3] = [&[0x00; 32], &[0x56; 32], &[0xab; 32]];
 
-    //     // Converts a hex string to a Scalar (Fr)
-    //     fn hex_to_scalar(hex_str: &str) -> Scalar {
-    //         // Parse the hex string into 4 limbs (u64 values)
-    //         let mut limbs = [0u64; 4];
+        // Expected outputs for each operation with seed [42; 32]
+        const EXPECTED_PRIVATE_KEYS: [&str; 3] = [
+            "d3538152f5f1570c1f21a6246665637c11153594e4220eec8e8d72be00706303",
+            "7ca094ae6cbf48061b12121ef92160eafe996bc2d8a9a1336b00801120a87211",
+            "922be46d5fa7d1bd43152a3cab829dc32ed1076e4c2be136f4e8846895557b02",
+        ];
 
-    //         // Ensure we have a 64-character hex string (32 bytes)
-    //         let hex_str = hex_str.trim_start_matches("0x");
-    //         let s = format!("{:0>64}", hex_str);
+        const EXPECTED_PUBLIC_KEYS: [&str; 3] = [
+            "203e261e640d22e0daed558229493c95fb5016c1c8dc5a22dfedb22f14fcb2958466446beb9c309dffa4b4ba52894000f9cab42d8570af09233b9ba06c0fb1c266a866f0e6384edbf176fcb76619f01da297480be4d7b8551b8fa3b9a08e1100",
+            "82ad47f04edc28f22a3c47e2aaf642912d9b710c57c254ef78081a39f2eaeec97a95873789f15555503a1f885fea0e0190826f11ac8e09339391dcf499347db8cd48ae453b0882ea652177b6f73bb673b1381ed7cd91c8f6a0763f4dc9754901",
+            "1a95b30e8dee662342c87ca88914890fba6b376344fbf8669abb4ce5ea62ac1dbd2935320efe5c6ebe5ceee9534187002ae20deb4445768a023d8d499fb1f49608942e0047ec82993fe6447a2abace036352eb6878fae17d5c0b992c7ba74800",
+        ];
 
-    //         // Each limb is 16 hex characters (8 bytes)
-    //         // FrRepr is stored in little-endian order
-    //         for i in 0..4 {
-    //             let start = s.len() - 16 * (i + 1);
-    //             let end = s.len() - 16 * i;
-    //             let chunk: &str = &s[start..end];
-    //             limbs[i] = u64::from_str_radix(chunk, 16).unwrap();
-    //         }
-    //     }
+        const EXPECTED_SIGNATURES: [[&str; 3]; 3] = [
+            // First private key with each message
+            [
+                "3000000000000000e2dac33c610f0a247a82c98324188070164206c0151be6a98d8666e63a36c3804bfcb682f6764ad2307406292f2d2281",
+                "3000000000000000f07921d52176cc4f6528005c19eab9d230900b531780e9ddfd1d13f020cf4b559a96a6909c33bfb16bd0e3ca0cdf5d01",
+                "30000000000000007711c1febaa06af30f0c9bb19e942b642d21354c25ad392b1c4c3cf4eb0375809afa05bf7defaa17684202e036cfd480",
+            ],
+            // Second private key with each message
+            [
+                "30000000000000001b4827907e476d060382874380fbd600605662c7eb80de9d0fc55cfc26a3efea6f596f18bc13e91353b87f4ec4c2b980",
+                "30000000000000007cfb12face29af9d65638bd4430f5d95f10796eaaba9c91d594685780dda98f3870ed1d01a13356a308cdc24312f5a01",
+                "30000000000000006dd334350a2e502b2b2880c9d58c1c3281dc4343b36d57de0541f29c2f77d29c39c4475a2368a6a4dff9702e5ba29d81",
+            ],
+            // Third private key with each message
+            [
+                "30000000000000005eb1a349270e162e0e7c2fc027759d751e91765d27693591273a25737616516d431fddad37e94fe45714e5caca370b01",
+                "3000000000000000d4829581cdd53438721641e1a6893ef92e62dbbd3bca21cb5dd74b6c685c9aaf905b81c544fb3b07031a917602647101",
+                "3000000000000000bfff68378c234eeb81604dfe320c09cdacb0c7521cb0563d79789a1ba217397998be539204f4d6b0077511f0c14a0600",
+            ],
+        ];
 
-    //     const PRIVATE_KEYS: [&str; 3] = [
-    //         "0x00000000000000000000000000000000263dbd792f5b1be47ed85f8938c0f29586af0d3ac7b977f21c278fe1462040e3",
-    //         "0x0000000000000000000000000000000047b8192d77bf871b62e87859d653922725724a5c031afeabc60bcef5ff665138",
-    //         "0x00000000000000000000000000000000328388aff0d4a5b7dc9205abd374e7e98f3cd9f3418edb4eafda5fb16473d216",
-    //     ];
+        const EXPECTED_AGGREGATED_SIGNATURES: [&str; 3] = [
+            "3000000000000000e2dac33c610f0a247a82c98324188070164206c0151be6a98d8666e63a36c3804bfcb682f6764ad2307406292f2d2281",
+            "3000000000000000f07921d52176cc4f6528005c19eab9d230900b531780e9ddfd1d13f020cf4b559a96a6909c33bfb16bd0e3ca0cdf5d01",
+            "30000000000000007711c1febaa06af30f0c9bb19e942b642d21354c25ad392b1c4c3cf4eb0375809afa05bf7defaa17684202e036cfd480",
+        ];
 
-    //     fn get_public_key(private_key: &Scalar) -> G1 {
-    //         let mut pk = G1::one();
-    //         pk.mul(private_key);
-    //         pk
-    //     }
+        // Create a deterministic RNG for reproducible key generation
+        fn get_deterministic_rng() -> ChaChaRng {
+            ChaChaRng::from_seed(SEED)
+        }
 
-    //     #[test]
-    //     fn sign_and_verify() {
-    //         let private_keys = PRIVATE_KEYS
-    //             .iter()
-    //             .map(|s| hex_to_scalar(s))
-    //             .collect::<Vec<_>>();
-    //         // Test basic signing and verification
-    //         for (i, key) in private_keys.iter().enumerate() {
-    //             let pubkey = get_public_key(i);
+        fn get_keypair(index: usize) -> (PrivateKey, PublicKey) {
+            let mut rng = get_deterministic_rng();
+            // Skip to the desired index
+            for _ in 0..index {
+                G2Scheme::keypair(&mut rng);
+            }
+            G2Scheme::keypair(&mut rng)
+        }
 
-    //             for (j, &msg) in MESSAGES.iter().enumerate() {
-    //                 // Sign the message
-    //                 let sig = G1Scheme::sign(key, msg).expect("sign");
+        #[test]
+        fn sign_and_verify() {
+            // Test basic signing and verification with deterministic outputs
+            for i in 0..3 {
+                let (privkey, pubkey) = get_keypair(i);
 
-    //                 assert!(
-    //                     G1Scheme::verify(&pubkey, msg, &sig).is_ok(),
-    //                     "Signature verification failed for key[{}] and message[{}]",
-    //                     i,
-    //                     j
-    //                 );
-    //             }
-    //         }
-    //     }
+                let priv_hex = hex::encode(bincode::serialize(&privkey).unwrap());
+                let pub_hex = hex::encode(bincode::serialize(&pubkey).unwrap());
 
-    //     #[test]
-    //     fn test_signature_aggregation() {
-    //         // Test threshold signatures
-    //         for (msg_idx, &message) in MESSAGES.iter().enumerate() {
-    //             // Create a polynomial of degree n-1 for an n-out-of-n threshold scheme
-    //             let n = PRIVATE_KEYS.len();
+                assert_eq!(
+                    priv_hex, EXPECTED_PRIVATE_KEYS[i],
+                    "Private key {} mismatch",
+                    i
+                );
+                assert_eq!(
+                    pub_hex, EXPECTED_PUBLIC_KEYS[i],
+                    "Public key {} mismatch",
+                    i
+                );
 
-    //             // Create a private polynomial from our private keys
-    //             let private_poly = Poly::<Scalar>::from(PRIVATE_KEYS.clone());
+                for (j, &msg) in MESSAGES.iter().enumerate() {
+                    // Sign the message
+                    let sig = G2Scheme::sign(&privkey, msg).expect("Error signing");
+                    let sig_hex = hex::encode(bincode::serialize(&sig).unwrap());
+                    assert_eq!(
+                        sig_hex, EXPECTED_SIGNATURES[i][j],
+                        "Signature for key[{}] and message[{}] mismatch",
+                        i, j
+                    );
 
-    //             // Generate the shares from the polynomial
-    //             let shares = (0..n)
-    //                 .map(|i| {
-    //                     let eval = private_poly.eval(i as Idx);
-    //                     Share {
-    //                         index: eval.index,
-    //                         private: eval.value,
-    //                     }
-    //                 })
-    //                 .collect::<Vec<Share>>();
+                    assert!(
+                        G2Scheme::verify(&pubkey, msg, &sig).is_ok(),
+                        "Signature verification failed for key[{}] and message[{}]",
+                        i,
+                        j
+                    );
+                }
+            }
+        }
 
-    //             // Get the public polynomial
-    //             let public_poly = private_poly.commit();
-    //             let threshold_pubkey = public_poly.public_key();
+        #[test]
+        fn test_signature_aggregation() {
+            // Test threshold signatures with deterministic outputs
+            for (msg_idx, &msg) in MESSAGES.iter().enumerate() {
+                let n = 3;
 
-    //             // Generate partial signatures
-    //             let partials = shares
-    //                 .iter()
-    //                 .map(|s| G1Scheme::partial_sign(s, message).unwrap())
-    //                 .collect::<Vec<_>>();
+                // Create private keys using deterministic generation
+                let keys: Vec<(PrivateKey, PublicKey)> = (0..n).map(get_keypair).collect();
+                let private_keys: Vec<PrivateKey> =
+                    keys.into_iter().map(|(priv_key, _)| priv_key).collect();
 
-    //             // Verify each partial signature
-    //             for (i, partial) in partials.iter().enumerate() {
-    //                 assert!(
-    //                     G1Scheme::partial_verify(&public_poly, message, partial).is_ok(),
-    //                     "Partial signature verification failed for share {}",
-    //                     i
-    //                 );
-    //             }
+                // Create a private polynomial from our private keys
+                let private_poly = Poly::<PrivateKey>::from(private_keys);
 
-    //             // Aggregate signatures
-    //             let aggregated = G1Scheme::aggregate(n, &partials).expect("Failed to aggregate");
+                // Generate the shares from the polynomial
+                let shares = (0..n)
+                    .map(|i| {
+                        let eval = private_poly.eval(i as Idx);
+                        Share {
+                            index: eval.index,
+                            private: eval.value,
+                        }
+                    })
+                    .collect::<Vec<Share<PrivateKey>>>();
 
-    //             // Verify the aggregated signature
-    //             assert!(
-    //                 G1Scheme::verify(&threshold_pubkey, message, &aggregated).is_ok(),
-    //                 "Aggregated signature verification failed for message {}",
-    //                 msg_idx
-    //             );
-    //         }
-    //     }
-    // }
+                // Get the public polynomial
+                let public_poly = private_poly.commit();
+                let threshold_pubkey = public_poly.public_key();
+
+                // Generate partial signatures
+                let partials = shares
+                    .iter()
+                    .map(|s| G2Scheme::partial_sign(s, msg).unwrap())
+                    .collect::<Vec<_>>();
+
+                // Verify each partial signature
+                for (i, partial) in partials.iter().enumerate() {
+                    assert!(
+                        G2Scheme::partial_verify(&public_poly, msg, partial).is_ok(),
+                        "Partial signature verification failed for share {}",
+                        i
+                    );
+                }
+
+                // Aggregate signatures
+                let aggregated = G2Scheme::aggregate(n, &partials).expect("Failed to aggregate");
+                let agg_hex = hex::encode(bincode::serialize(&aggregated).unwrap());
+                assert_eq!(
+                    agg_hex, EXPECTED_AGGREGATED_SIGNATURES[msg_idx],
+                    "Aggregated signature for message {} mismatch",
+                    msg_idx
+                );
+
+                assert!(
+                    G2Scheme::verify(&threshold_pubkey, msg, &aggregated).is_ok(),
+                    "Aggregated signature verification failed for message {}",
+                    msg_idx
+                );
+            }
+        }
+    }
 }

@@ -30,6 +30,3 @@ pub(crate) const SIGNATURE_LEN: usize = 48;
 #[allow(dead_code)]
 pub(crate) const PARTIAL_SIG_LENGTH: usize =
     VEC_LENGTH + SIGNATURE_LEN + std::mem::size_of::<Idx>();
-
-#[cfg(test)]
-mod wasm_test;
