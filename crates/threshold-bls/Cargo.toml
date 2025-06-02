@@ -10,6 +10,7 @@ crate-type = ["lib"]
 [dependencies]
 rand_core = { version = "0.5.1", default-features = false }
 rand = "0.7"
+rand_chacha = "0.2.2"
 serde = {version = "1.0.106", features = ["derive"] }
 
 # for ECIES
@@ -37,3 +38,6 @@ bls12_381 = ["paired", "groupy", "ff"]
 [dev-dependencies]
 static_assertions = "1.1.0"
 proptest = "0.9.6"
+hex = "0.4.3"
+num-bigint = "0.4"
+serde_json = "1.0"

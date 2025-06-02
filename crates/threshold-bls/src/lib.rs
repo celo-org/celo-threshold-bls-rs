@@ -218,3 +218,6 @@ pub mod schemes {
         pub type G2Scheme = super::G2Scheme<PairingCurve>;
     }
 }
+
+#[cfg(test)]
+mod test_vectors;

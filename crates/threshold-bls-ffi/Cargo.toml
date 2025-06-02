@@ -33,7 +33,7 @@ jni = { version = "0.21.1", optional = true }
 
 [features]
 # Build WASM bindings for use in JS environments
-# wasm = ["wasm-bindgen", "getrandom/js", "blake2", "rand_core", "rand_chacha", "serde"] # breaking
+# wasm = ["wasm-bindgen", "getrandom/js", "blake2", "rand_core", "rand_chacha", "serde"]
 wasm = ["wasm-bindgen", "blake2", "rand_core", "rand_chacha", "serde"]
 # Include a panic hook for printing panic messages to the JS console.
 wasm-debug = ["wasm", "console_error_panic_hook"]
