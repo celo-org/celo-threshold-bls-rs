@@ -1,0 +1,52 @@
+name: Rust CI
+on:
+  push:
+    branches: [ develop ]
+  pull_request:
+env:
+  CARGO_TERM_COLOR: always
+jobs:
+  cargo-tests:
+    runs-on: ubuntu-latest
+    name: test
+    steps:
+      - name: Checkout sources
+        uses: actions/checkout@v4
+      - uses: ./.github/actions/setup
+        with:
+          components: rustfmt
+      - uses: taiki-e/install-action@nextest
+      - name: cargo test
+        run: cargo nextest run --workspace --all-features
+
+  cargo-lint:
+    runs-on: ubuntu-latest
+    name: lint
+    steps:
+      - name: Checkout sources
+        uses: actions/checkout@v4
+      - uses: ./.github/actions/setup
+        with:
+          channel: stable
+          components: rustfmt
+      - uses: ./.github/actions/setup
+        with:
+          channel: stable
+          components: clippy
+      - name: lint
+        run: cargo clippy --all-targets --all-features -- -D warnings
+      - name: fmt
+        run: cargo fmt --all -- --check
+
+  cargo-build:
+    runs-on: ubuntu-latest
+    name: build
+    continue-on-error: true
+    steps:
+      - name: Checkout sources
+        uses: actions/checkout@v4
+      - uses: ./.github/actions/setup
+        with:
+          channel: stable
+      - name: build
+        run: cargo build --all-targets --all-features
