@@ -71,9 +71,9 @@ jobs:
       - uses: actions/setup-node@v4
       - name: Run blind-threshold-bls-wasm tests
         run: |
-          git clone https://github.com/celo-org/blind-threshold-bls-wasm.git /tmp/blind-threshold-bls-wasm
-          rm /tmp/blind-threshold-bls-wasm/src/blind*
-          cp -r crates/threshold-bls-ffi/pkg/blind* /tmp/blind-threshold-bls-wasm/src/
-          cd /tmp/blind-threshold-bls-wasm
+          git clone https://github.com/celo-org/blind-threshold-bls-wasm.git $RUNNER_TEMP/blind-threshold-bls-wasm
+          rm $RUNNER_TEMP/blind-threshold-bls-wasm/src/blind*
+          cp -r crates/threshold-bls-ffi/pkg/blind* $RUNNER_TEMP/blind-threshold-bls-wasm/src/
+          cd $RUNNER_TEMP/blind-threshold-bls-wasm
           npm ci
           npm test
