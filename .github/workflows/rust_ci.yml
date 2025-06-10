@@ -41,7 +41,6 @@ jobs:
   cargo-build:
     runs-on: ubuntu-latest
     name: build
-    continue-on-error: true
     steps:
       - name: Checkout sources
         uses: actions/checkout@v4
@@ -50,3 +49,31 @@ jobs:
           channel: stable
       - name: build
         run: cargo build --all-targets --all-features
+
+  blind-threshold-bls-wasm-tests:
+    runs-on: ubuntu-latest
+    name: blind-threshold-bls-wasm-tests
+    steps:
+      - name: Checkout sources
+        uses: actions/checkout@v4
+      - uses: ./.github/actions/setup
+        with:
+          channel: stable
+      - run: curl https://rustwasm.github.io/wasm-pack/installer/init.sh -sSf | sh
+      - name: build
+        run: cd crates/threshold-bls-ffi && wasm-pack build --target nodejs -- --features=wasm
+      - name: Upload wasm pkg artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: wasm-pkg
+          path: crates/threshold-bls-ffi/pkg
+
+      - uses: actions/setup-node@v4
+      - name: Run blind-threshold-bls-wasm tests
+        run: |
+          git clone https://github.com/celo-org/blind-threshold-bls-wasm.git $RUNNER_TEMP/blind-threshold-bls-wasm
+          rm $RUNNER_TEMP/blind-threshold-bls-wasm/src/blind*
+          cp -r crates/threshold-bls-ffi/pkg/blind* $RUNNER_TEMP/blind-threshold-bls-wasm/src/
+          cd $RUNNER_TEMP/blind-threshold-bls-wasm
+          npm ci
+          npm test
