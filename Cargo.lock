@@ -563,9 +563,9 @@ dependencies = [
 
 [[package]]
 name = "fff"
-version = "0.2.2"
+version = "0.2.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "beb7ed70ec33e04bb03031de8dcbdd37a4fc65e1010358cb7e48bd2f1f0e2c3b"
+checksum = "2544d325b4870bd803d371a7df3c6845e84dcfcb6ebe7ffcae0eac6d5d676133"
 dependencies = [
  "byteorder",
  "cc",
@@ -1154,9 +1154,9 @@ dependencies = [
 
 [[package]]
 name = "raw-cpuid"
-version = "7.0.3"
+version = "7.0.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b4a349ca83373cfa5d6dbb66fd76e58b2cca08da71a5f6400de0a0a6a9bceeaf"
+checksum = "beb71f708fe39b2c5e98076204c3cc094ee5a4c12c4cdb119a2b72dc34164f41"
 dependencies = [
  "bitflags",
  "cc",
@@ -1340,9 +1340,9 @@ dependencies = [
 
 [[package]]
 name = "sha2ni"
-version = "0.8.4"
+version = "0.8.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ab4d7444ee4f4f03738fd75d092954ef1a3af5849813e77e60a370dd39919d2f"
+checksum = "1ce234f44a9c36fb84a168d4201b596d800e170aaa966a68857058cbe2d041a3"
 dependencies = [
  "block-buffer 0.7.3",
  "digest 0.8.1",
