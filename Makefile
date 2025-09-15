@@ -33,7 +33,7 @@ android:
 		$(IMAGE_NAME) \
 		sh -c "cd cross && export NDK_HOME=/opt/android-ndk && ./create-ndk-standalone.sh && \
 		make android"
-	
+
 wasm:
 	make build-docker-image
 	mkdir -p $(OUTPUT_DIR)/wasm
@@ -41,7 +41,7 @@ wasm:
 		-v $(OUTPUT_DIR)/wasm:/app/crates/threshold-bls-ffi/pkg \
 		-w /app/crates/threshold-bls-ffi \
 		$(IMAGE_NAME) \
-		wasm-pack build --target nodejs -- --features=wasm 
+		wasm-pack build --target nodejs -- --features=wasm
 
 jvm:
 	make build-docker-image
