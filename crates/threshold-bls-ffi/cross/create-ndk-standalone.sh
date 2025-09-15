@@ -18,11 +18,11 @@ cd NDK
 
 for ARCH in arm64 arm x86 x86_64; do
     echo "($ARCH)..."
-    "$MAKER" --arch $ARCH --api 21 --install-dir $ARCH
+    "$MAKER" --arch $ARCH --api 24 --install-dir $ARCH
 done
 
 echo 'Updating .cargo/config.toml...'
 
 cd ..
 mkdir -p .cargo
-sed 's|$PWD|'"${PWD}"'|g' cargo-config.toml.template > .cargo/config
+sed 's|$PWD|'"${PWD}"'|g' cargo-config.toml.template > .cargo/config.toml

@@ -2,7 +2,7 @@
 name = "threshold-bls"
 version = "0.1.0"
 authors = ["nikkolasg"]
-edition = "2018"
+edition = "2021"
 
 [lib]
 crate-type = ["lib"]
@@ -14,7 +14,7 @@ rand_chacha = "0.2.2"
 serde = {version = "1.0.106", features = ["derive"] }
 
 # for ECIES
-chacha20poly1305 = "0.3"
+chacha20poly1305 = "0.5"
 hkdf = "0.8"
 sha2 = "0.8"
 

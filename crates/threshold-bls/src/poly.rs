@@ -517,7 +517,7 @@ pub mod tests {
             .map(|i| poly.eval(i as Idx))
             .collect::<Vec<Eval<Sc>>>();
         let now = SystemTime::now();
-        Poly::<Sc>::recover(threshold as usize, shares).unwrap();
+        Poly::<Sc>::recover(threshold, shares).unwrap();
         match now.elapsed() {
             Ok(e) => println!("single recover: time elapsed {:?}", e),
             Err(e) => panic!("{}", e),
@@ -527,7 +527,7 @@ pub mod tests {
             .collect::<Vec<Eval<Sc>>>();
 
         let now = SystemTime::now();
-        Poly::<Sc>::full_recover(threshold as usize, shares).unwrap();
+        Poly::<Sc>::full_recover(threshold, shares).unwrap();
         match now.elapsed() {
             Ok(e) => println!("full_recover: time elapsed {:?}", e),
             Err(e) => panic!("{}", e),

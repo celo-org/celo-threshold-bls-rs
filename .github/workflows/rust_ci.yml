@@ -34,9 +34,9 @@ jobs:
           channel: stable
           components: clippy
       - name: lint
-        run: cargo clippy --all-targets --all-features -- -D warnings
+        run: make lint
       - name: fmt
-        run: cargo fmt --all -- --check
+        run: make fmt
 
   cargo-build:
     runs-on: ubuntu-latest
