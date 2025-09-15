@@ -1,5 +1,5 @@
 ARG RUST_VERSION=1.89.0
-FROM ubuntu:20.04
+FROM ubuntu:22.04
 
 ARG RUST_VERSION
 
@@ -15,7 +15,7 @@ RUN apt-get update && apt-get install -y \
     libssl-dev \
     ca-certificates \
     unzip \
-    python
+    python3
 
 # Install rustup with a default toolchain
 RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain ${RUST_VERSION}
