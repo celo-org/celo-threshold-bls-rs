@@ -26,9 +26,9 @@ ENV PATH="/root/.cargo/bin:${PATH}"
 RUN cargo install wasm-pack@0.13.1
 
 # Install Android NDK
-RUN curl -L https://dl.google.com/android/repository/android-ndk-r21-linux-x86_64.zip -o /tmp/ndk.zip && \
+RUN curl -L https://dl.google.com/android/repository/android-ndk-r24-linux.zip -o /tmp/ndk.zip && \
     unzip /tmp/ndk.zip -d /opt && \
-    mv /opt/android-ndk-r21 /opt/android-ndk && \
+    mv /opt/android-ndk-r24 /opt/android-ndk && \
     rm /tmp/ndk.zip
 
 WORKDIR /app

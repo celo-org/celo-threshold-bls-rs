@@ -35,7 +35,7 @@ jobs:
           name: Build Android
           command: make android
       - store_artifacts:
-          path: output/android
+          path: /output/android
 
   build-ios:
     macos:
