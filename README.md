@@ -65,7 +65,7 @@ make build-docker-image
 
 ### Rust version
 
-Rust 1.74.0 is used by default and tested for all builds. If desired, you can build with a different Rust version by setting the RUST_VERSION env var:
+Rust 1.82.0 is used by default and tested for all builds. If desired, you can build with a different Rust version by setting the RUST_VERSION env var:
 ``` 
 make RUST_VERSION=1.56.1
 ```
