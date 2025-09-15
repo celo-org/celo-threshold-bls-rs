@@ -563,9 +563,9 @@ dependencies = [
 
 [[package]]
 name = "fff"
-version = "0.2.2"
+version = "0.2.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "beb7ed70ec33e04bb03031de8dcbdd37a4fc65e1010358cb7e48bd2f1f0e2c3b"
+checksum = "2544d325b4870bd803d371a7df3c6845e84dcfcb6ebe7ffcae0eac6d5d676133"
 dependencies = [
  "byteorder",
  "cc",
