@@ -67,3 +67,9 @@ test-cached: create-cache-volumes build-docker-image
 		-v $(TARGET_CACHE_VOLUME):/app/target \
 		-v $(PWD):/app \
 		-w /app ${IMAGE_NAME} cargo test --features wasm -- --nocapture
+
+lint:
+	cargo clippy --all-targets --all-features -- -D warnings
+
+fmt:
+	cargo fmt --all -- --check
