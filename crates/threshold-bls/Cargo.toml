@@ -19,7 +19,7 @@ hkdf = "0.8"
 sha2 = "0.8"
 
 # bls12_381
-paired = { version = "0.18", features = ["serde"], optional = true }
+paired = { version = "0.20", features = ["serde"], optional = true }
 ff = { version = "0.2", package = "fff", optional = true }
 groupy = {version = "0.3", optional = true }
 
