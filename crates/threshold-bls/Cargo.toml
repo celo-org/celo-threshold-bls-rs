@@ -1,7 +1,7 @@
 [package]
 name = "threshold-bls"
 version = "0.1.0"
-authors = ["nikkolasg"]
+authors = ["nikkolasg", "Paul Lange <palango@gmx.de>"]
 edition = "2021"
 
 [lib]
@@ -22,7 +22,6 @@ sha2 = "0.8"
 paired = { version = "0.18", features = ["serde"], optional = true }
 ff = { version = "0.2", package = "fff", optional = true }
 groupy = {version = "0.3", optional = true }
-
 
 # bls12_377
 algebra = { git = "https://github.com/celo-org/arkworks-v0.1.1-patch", package = "algebra", branch = "patch-rust-compat", features = ["bls12_377"], optional = true }
