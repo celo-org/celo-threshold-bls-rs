@@ -1,7 +1,7 @@
 [package]
 name = "threshold-bls-ffi"
 version = "0.1.0"
-authors = ["Georgios Konstantopoulos <me@gakonst.com>"]
+authors = ["Georgios Konstantopoulos <me@gakonst.com>", "Paul Lange <palango@gmx.de>"]
 edition = "2021"
 
 [lib]
@@ -27,7 +27,7 @@ serde = { version = "1.0.106", default-features = false, optional = true }
 # code size when deploying.
 console_error_panic_hook = { version = "0.1.7", optional = true }
 
-cfg-if = "0.1"
+cfg-if = "1.0"
 
 jni = { version = "0.21.1", optional = true }
 

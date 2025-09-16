@@ -28,11 +28,7 @@ jobs:
       - uses: ./.github/actions/setup
         with:
           channel: stable
-          components: rustfmt
-      - uses: ./.github/actions/setup
-        with:
-          channel: stable
-          components: clippy
+          components: rustfmt,clippy
       - name: lint
         run: make lint
       - name: fmt
