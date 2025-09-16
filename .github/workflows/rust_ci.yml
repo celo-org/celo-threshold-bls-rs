@@ -11,7 +11,7 @@ jobs:
     name: test
     steps:
       - name: Checkout sources
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
       - uses: ./.github/actions/setup
         with:
           components: rustfmt
@@ -24,7 +24,7 @@ jobs:
     name: lint
     steps:
       - name: Checkout sources
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
       - uses: ./.github/actions/setup
         with:
           channel: stable
@@ -39,7 +39,7 @@ jobs:
     name: build
     steps:
       - name: Checkout sources
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
       - uses: ./.github/actions/setup
         with:
           channel: stable
@@ -51,7 +51,7 @@ jobs:
     name: blind-threshold-bls-wasm-tests
     steps:
       - name: Checkout sources
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
       - uses: ./.github/actions/setup
         with:
           channel: stable
