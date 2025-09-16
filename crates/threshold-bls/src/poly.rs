@@ -34,12 +34,6 @@ impl<C> Poly<C> {
         // ^ 4 coefficients correspond to a 3rd degree poly
         self.0.len() - 1
     }
-
-    #[cfg(test)]
-    /// Returns the number of coefficients
-    fn len(&self) -> usize {
-        self.0.len()
-    }
 }
 
 impl<C: Element> Poly<C> {
@@ -352,12 +346,11 @@ impl<C: fmt::Display> fmt::Display for Poly<C> {
     }
 }
 
-#[cfg(feature = "bls12_381")]
 #[cfg(test)]
 pub mod tests {
     use super::*;
-    use crate::curve::bls12381::Scalar as Sc;
-    use crate::curve::bls12381::G1;
+    use crate::curve::bls12377::Scalar as Sc;
+    use crate::curve::bls12377::G1;
     use rand::prelude::*;
 
     #[test]
@@ -418,8 +411,8 @@ pub mod tests {
             (&p2, &p1)
         };
 
-        for i in 0..larger.len() {
-            if i < smaller.len() {
+        for i in 0..larger.0.len() {
+            if i < smaller.0.len() {
                 let mut coeff_sum = p1.0[i];
                 coeff_sum.add(&p2.0[i]);
                 assert_eq!(res.0[i], coeff_sum);

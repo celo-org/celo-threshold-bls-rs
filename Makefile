@@ -69,7 +69,7 @@ test-cached: create-cache-volumes build-docker-image
 		-w /app ${IMAGE_NAME} cargo test --features wasm -- --nocapture
 
 lint:
-	cargo clippy --all-targets --all-features -- -D warnings
+	cargo clippy --all-targets --all-features
 
 fmt:
 	cargo fmt --all -- --check

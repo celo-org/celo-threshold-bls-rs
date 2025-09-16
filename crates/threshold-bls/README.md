@@ -1,7 +1,7 @@
 # BLS Threshold CryptoSignatures
 
-This library provides primitives for (blind) threshold cryptography. Currently supported
-curves are BLS12-377 and BLS12-381.
+This library provides primitives for (blind) threshold cryptography. Currently supports
+BLS12-377.
 
 **Work In Progress: DO NOT EXPECT ANY STABLE API NOW**
 
@@ -10,6 +10,7 @@ curves are BLS12-377 and BLS12-381.
 [`src/group.rs`](src/group.rs) contains the definitions of generic trait to work
 with scalars of prime fields and points on elliptic curves. The following
 `Element` trait allows to get a generic implementation of a polynomial with lagrange interpolation for both scalars and points.
+
 ```rust
 pub trait Element<RHS = Self>: Clone + fmt::Display + fmt::Debug + Eq {
     /// new MUST return the zero element of the group.
@@ -24,9 +25,6 @@ pub trait Element<RHS = Self>: Clone + fmt::Display + fmt::Debug + Eq {
 }
 ```
 
-There is an implementation of these traits using the curve BLS12-381 in
-[`src/bls12381.rs`](src/bls12381.rs).
-
 ## Polynomial functionality
 
 [`src/poly.rs`](src/poly.rs) contains the implementation of a polynomial
@@ -38,7 +36,7 @@ The following (from the [tests](src/poly.rs#L264)) shows how to interploate
 a set of private shares:
 
 ```rust
-use crate::bls12381::Scalar as Sc;
+use crate::bls12377::Scalar as Sc;
 fn interpolation() {
     let degree = 4;
     let threshold = degree + 1;
