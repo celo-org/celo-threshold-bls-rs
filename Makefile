@@ -1,4 +1,4 @@
-RUST_VERSION ?= 1.82.0
+RUST_VERSION ?= 1.89.0
 IMAGE_NAME = celo-bls-rust-$(subst .,_,$(RUST_VERSION))
 OUTPUT_DIR = $(PWD)/output
 CARGO_CACHE_VOLUME = celo-bls-cargo-cache
