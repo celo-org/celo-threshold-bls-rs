@@ -92,7 +92,7 @@ pub trait SignatureScheme: Scheme {
 ///  // clear message.
 ///  G2Scheme::<PC>::blind_verify(&public,&blinded_msg,&blinded_sig)
 ///        .expect("blinded signatures should be correct");
-
+///
 ///  // the owner of the message can then unblind the signature to reveal a
 ///  // regular signature that can be verified using the regular method of the
 ///  // SignatureScheme.
