@@ -64,7 +64,7 @@ jobs:
           name: wasm-pkg
           path: crates/threshold-bls-ffi/pkg
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v5
       - name: Run blind-threshold-bls-wasm tests
         run: |
           git clone https://github.com/celo-org/blind-threshold-bls-wasm.git $RUNNER_TEMP/blind-threshold-bls-wasm
