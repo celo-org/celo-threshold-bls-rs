@@ -39,7 +39,7 @@ jobs:
 
   build-ios:
     macos:
-      xcode: 15.1.0
+      xcode: 15.4
     steps:
       - checkout
       - run:
