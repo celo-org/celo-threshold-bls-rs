@@ -38,5 +38,5 @@ wasm = ["wasm-bindgen", "blake2", "rand_core", "rand_chacha", "serde"]
 # Include a panic hook for printing panic messages to the JS console.
 wasm-debug = ["wasm", "console_error_panic_hook"]
 
-jvm = ["jni"]
+jni = ["dep:jni"]
 ffi = ["rand_core", "rand_chacha", "serde"]

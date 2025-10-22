@@ -6,8 +6,8 @@ extern crate cfg_if;
 cfg_if::cfg_if! {
     if #[cfg(feature = "wasm")] {
         pub mod wasm;
-    } else if #[cfg(feature = "jvm")] {
-        pub mod jvm;
+    } else if #[cfg(feature = "jni")] {
+        pub mod jni_bridge;
     } else if #[cfg(feature = "ffi")] {
         pub mod ffi;
         pub(crate) type Signature = <SigScheme as Scheme>::Signature;

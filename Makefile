@@ -49,7 +49,7 @@ jvm:
 		-v $(OUTPUT_DIR)/jvm:/app/target \
 		-w /app/crates/threshold-bls-ffi \
 		$(IMAGE_NAME) \
-		cargo build --release --features=jvm
+		cargo build --release --features=jni
 
 test:
 	make build-docker-image
