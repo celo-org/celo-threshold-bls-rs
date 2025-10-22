@@ -29,6 +29,7 @@ android:
 	docker run --platform=linux/amd64 --rm \
 		-v $(OUTPUT_DIR)/android:/output/android \
 		-w /app/crates/threshold-bls-ffi \
+		-e FEATURES="$(FEATURES)" \
 		$(IMAGE_NAME) \
 		sh -c "cd cross && export NDK_HOME=/opt/android-ndk && ./create-ndk-standalone.sh && \
 		make android"
