@@ -59,7 +59,7 @@ jobs:
       - name: build
         run: cd crates/threshold-bls-ffi && wasm-pack build --target nodejs -- --features=wasm
       - name: Upload wasm pkg artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: wasm-pkg
           path: crates/threshold-bls-ffi/pkg
