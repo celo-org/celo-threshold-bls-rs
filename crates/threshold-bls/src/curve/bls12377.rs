@@ -1,14 +1,12 @@
 use crate::group::{self, Element, PairingCurve as PC, Point, PrimeOrder, Scalar as Sc};
 
 use ark_bls12_377 as bls377;
+use ark_ec::models::short_weierstrass_jacobian::{GroupAffine, GroupProjective};
+use ark_ec::models::SWModelParameters;
 use ark_ec::{AffineCurve, PairingEngine, ProjectiveCurve};
 use ark_ff::{Field, One, PrimeField, UniformRand, Zero};
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
-use bls_crypto::{
-    hash_to_curve::{try_and_increment::TryAndIncrement, HashToCurve},
-    hashers::DirectHasher,
-    BLSError, SIG_DOMAIN,
-};
+use bls_crypto::{hashers::DirectHasher, BLSError, SIG_DOMAIN};
 use rand_core::RngCore;
 use serde::{
     de::{Error as DeserializeError, SeqAccess, Visitor},
@@ -147,17 +145,79 @@ impl Element for G1 {
     }
 }
 
+/// Try-and-increment hash-to-curve that matches the original `algebra-core` crate's
+/// behavior (scipr-lab/zexe at commit 9d267f65).
+///
+/// We bypass `bls-crypto`'s `TryAndIncrement` entirely because its `compat` feature
+/// has two bugs:
+/// 1. It assumes the old library extracted the y-sign flag from bit 1 of the last
+///    byte. In reality, the old `algebra-core` used `from_random_bytes_with_flags`
+///    which extracts flags from bits 7-6 (the standard SWFlags convention).
+/// 2. The compat layer's bit 1 → bit 7 remapping introduces a wrong transformation.
+///
+/// We also can't use `ark-ec`'s `GroupAffine::from_random_bytes` directly because
+/// it rejects candidates where both flag bits (7 and 6) are set, while the old code
+/// accepted them as positive-y points.
+///
+/// This function replicates the old `algebra-core` behavior exactly:
+/// - Checks bit 7 (`& 0x80`) of the last hash byte for the y-sign (positive = largest y)
+/// - Parses x via `Field::from_random_bytes` (masks last byte to field bits)
+/// - Never rejects based on the infinity flag in random hash bytes
+fn try_and_increment_hash<P: SWModelParameters>(
+    domain: &[u8],
+    message: &[u8],
+    extra_data: &[u8],
+) -> Result<GroupProjective<P>, ZexeError>
+where
+    P::BaseField: Field,
+{
+    use bls_crypto::hashers::Hasher;
+
+    let num_bytes = GroupAffine::<P>::zero().serialized_size();
+    // Round up to the nearest multiple of 256 bits (in bytes).
+    // Mirrors bls_crypto::hash_to_curve::hash_length verbatim.
+    let hash_bytes = {
+        let bits = (num_bytes * 8) as f64 / 256.0;
+        (bits.ceil() * 256.0) as usize / 8
+    };
+
+    for c in 0u8..=254 {
+        let msg = [&[c][..], extra_data, message].concat();
+        let candidate_hash = DirectHasher
+            .hash(domain, &msg, hash_bytes)
+            .map_err(ZexeError::BLSError)?;
+
+        // Replicate old algebra-core's from_random_bytes_with_flags behavior:
+        // The flags byte is (last_byte & flags_mask) where flags_mask = 0xFE for
+        // BLS12-377 Fq (REPR_SHAVE_BITS=7). The positive-y flag is bit 7.
+        // Crucially, the old code never rejected candidates where both bits 7 and 6
+        // were set — it just treated bit 7 as the y-sign regardless.
+        let is_positive = candidate_hash[num_bytes - 1] & 0x80 != 0;
+
+        // Parse x-coordinate. from_random_bytes masks the last byte for the modulus
+        // (to & 0x01 for 377-bit Fq), matching the old behavior exactly.
+        if let Some(x) = P::BaseField::from_random_bytes(&candidate_hash[..num_bytes]) {
+            if let Some(p) = GroupAffine::<P>::get_point_from_x(x, is_positive) {
+                let scaled = p.scale_by_cofactor();
+                if !scaled.is_zero() {
+                    return Ok(scaled);
+                }
+            }
+        }
+    }
+
+    Err(ZexeError::BLSError(BLSError::HashToCurveError))
+}
+
 /// Implementation of Point using G1 from BLS12-377
 impl Point for G1 {
     type Error = ZexeError;
 
     fn map(&mut self, data: &[u8]) -> Result<(), ZexeError> {
-        let hasher = TryAndIncrement::new(&DirectHasher);
-
-        let hash = hasher.hash(SIG_DOMAIN, data, &[])?;
-
+        let hash = try_and_increment_hash::<
+            <bls377::Parameters as ark_ec::bls12::Bls12Parameters>::G1Parameters,
+        >(SIG_DOMAIN, data, &[])?;
         *self = Self(hash);
-
         Ok(())
     }
 }
@@ -198,11 +258,10 @@ impl Point for G2 {
     type Error = ZexeError;
 
     fn map(&mut self, data: &[u8]) -> Result<(), ZexeError> {
-        let hasher = TryAndIncrement::new(&DirectHasher);
-
-        let hash = hasher.hash(SIG_DOMAIN, data, &[])?;
+        let hash = try_and_increment_hash::<
+            <bls377::Parameters as ark_ec::bls12::Bls12Parameters>::G2Parameters,
+        >(SIG_DOMAIN, data, &[])?;
         *self = Self(hash);
-
         Ok(())
     }
 }
