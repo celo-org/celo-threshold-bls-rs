@@ -409,4 +409,31 @@ mod tests {
         let de: E = bincode::deserialize(&ser).unwrap();
         assert_eq!(de, sig);
     }
+
+    #[test]
+    fn hash_to_curve_g1() {
+        use crate::group::Point;
+
+        let cases: &[(&[u8], &str)] = &[
+            (
+                &[0x00; 32],
+                "74e26c20c5eb368ff74dd85e454a965406c56195d3b99898edbe328920604eaa18c564878dab9de6813e10e172191600",
+            ),
+            (
+                &[0x56; 32],
+                "674ef6c1ef7d872f93492743a1b0d3e63a18a7508bbdf3a96d181933fa4e278b5977865b7be21fc1bac9849d485def00",
+            ),
+            (
+                &[0xab; 32],
+                "1b0e65aeec6946f9bf19d7958a8c92f8ec497dd96f457d58d521f0738428df57e7bce81ee38873dc47667d742ac56380",
+            ),
+        ];
+
+        for (msg, expected_hex) in cases {
+            let mut point = G1::new();
+            point.map(msg).expect("hash to curve failed");
+            let serialized = bincode::serialize(&point).unwrap();
+            assert_eq!(hex::encode(&serialized), *expected_hex);
+        }
+    }
 }
