@@ -46,6 +46,19 @@ jobs:
       - name: build
         run: cargo build --all-targets --all-features
 
+  cargo-audit:
+    runs-on: ubuntu-latest
+    name: audit
+    steps:
+      - name: Checkout sources
+        uses: actions/checkout@v6
+      - uses: ./.github/actions/setup
+        with:
+          channel: stable
+      - uses: taiki-e/install-action@cargo-audit
+      - name: audit
+        run: cargo audit
+
   blind-threshold-bls-wasm-tests:
     runs-on: ubuntu-latest
     name: blind-threshold-bls-wasm-tests
