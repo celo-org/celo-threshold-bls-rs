@@ -203,7 +203,7 @@ where
 
         // first sort the shares as it can happens recovery happens for
         // non-correlated shares so the subset chosen becomes important
-        shares.sort_by(|a, b| a.index.cmp(&b.index));
+        shares.sort_by_key(|a| a.index);
 
         // convert the indexes of the shares into scalars
         let xs = shares
