@@ -68,7 +68,7 @@ fn blake2_hash(
     let num_hashes = output_size_in_bytes.div_ceil(32);
     let mut result = Vec::with_capacity(output_size_in_bytes);
     for i in 0..num_hashes {
-        let hash_length = if i == num_hashes - 1 && (output_size_in_bytes % 32 != 0) {
+        let hash_length = if i == num_hashes - 1 && !output_size_in_bytes.is_multiple_of(32) {
             output_size_in_bytes % 32
         } else {
             32
