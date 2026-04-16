@@ -1,9 +1,11 @@
 use crate::group::{self, Element, PairingCurve as PC, Point, PrimeOrder, Scalar as Sc};
 
 use ark_bls12_377 as bls377;
-use ark_ec::pairing::Pairing;
-use ark_ec::short_weierstrass::{Affine, Projective, SWCurveConfig};
-use ark_ec::{AffineRepr, CurveGroup, Group};
+use ark_ec::{
+    pairing::Pairing,
+    short_weierstrass::{Affine, Projective, SWCurveConfig},
+    AffineRepr, CurveGroup, Group,
+};
 use ark_ff::{Field, One, PrimeField, UniformRand, Zero};
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize, Compress};
 use rand_core::RngCore;
@@ -297,8 +299,8 @@ impl Element for G2 {
         Self(ZG2::generator())
     }
 
-    fn rand<R: RngCore>(mut rng: &mut R) -> Self {
-        Self(ZG2::rand(&mut rng))
+    fn rand<R: RngCore>(rng: &mut R) -> Self {
+        Self(ZG2::rand(rng))
     }
 
     fn add(&mut self, s2: &Self) {
