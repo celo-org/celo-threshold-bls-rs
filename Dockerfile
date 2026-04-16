@@ -6,8 +6,13 @@ ARG RUST_VERSION
 # Set non-interactive mode for apt-get
 ENV DEBIAN_FRONTEND=noninteractive
 
+# Use a CDN-backed mirror instead of archive.ubuntu.com for CI reliability
+RUN sed -i 's|http://archive.ubuntu.com|http://mirrors.edge.kernel.org|g' /etc/apt/sources.list && \
+    sed -i 's|http://security.ubuntu.com|http://mirrors.edge.kernel.org|g' /etc/apt/sources.list
+
 # Update package lists and install required dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends \
+    -o Acquire::Retries=3 \
     curl \
     build-essential \
     git \
