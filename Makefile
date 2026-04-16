@@ -12,7 +12,7 @@ clean:
 	rm -rf $(OUTPUT_DIR)
 
 build-docker-image:
-	docker build --platform=linux/amd64 --build-arg RUST_VERSION=$(RUST_VERSION) -t $(IMAGE_NAME) .
+	docker build --progress=plain --platform=linux/amd64 --build-arg RUST_VERSION=$(RUST_VERSION) -t $(IMAGE_NAME) .
 
 # ios builds cannot be run in docker, so we need to build it locally on Mac OS
 ios:
