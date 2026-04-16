@@ -66,7 +66,7 @@ This builds a universal static library for iOS (combining aarch64 and x86_64 arc
 make android
 ```
 
-This builds dynamic libraries for Android architectures (x86, x86_64, arm64-v8a, armeabi, and armeabi-v7a) and places them in `output/android`.
+This builds dynamic libraries for Android architectures (x86, x86_64, arm64-v8a, and armeabi-v7a) and places them in `output/android`.
 
 ### Docker Build
 
