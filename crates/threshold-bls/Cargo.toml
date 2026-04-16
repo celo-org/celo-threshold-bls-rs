@@ -23,7 +23,7 @@ ark-bls12-377 = { version = "0.3.0" }
 ark-serialize = { version = "0.3.0", features = [ "derive" ] }
 ark-ff = { version = "0.3.0", features = [ "std" ] }
 ark-ec = { version = "0.3.0", features = [ "std" ] }
-bls-crypto = { git = "https://github.com/celo-org/bls-crypto" }
+blake2s_simd = "1.0"
 thiserror = "1.0"
 bincode = "1.2"
 
@@ -31,9 +31,7 @@ bincode = "1.2"
 proptest = "1.0.0"
 static_assertions = "1.1.0"
 hex = "0.4.3"
-num-bigint = "0.4"
-serde_json = "1.0"
 
 # [features]
 # # Enable parallel computation. Cannot be used with WASM.
-# parallel = ["ark-ec/parallel", "ark-ff/parallel", "bls-crypto/parallel"]
+# parallel = ["ark-ec/parallel", "ark-ff/parallel"]
