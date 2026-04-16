@@ -28,11 +28,11 @@ android:
 	mkdir -p $(OUTPUT_DIR)/android
 	docker run --platform=linux/amd64 --rm \
 		-v $(OUTPUT_DIR)/android:/output/android \
-		-w /app/crates/threshold-bls-ffi \
+		-w /app/crates/threshold-bls-ffi/cross \
 		-e FEATURES="$(FEATURES)" \
+		-e NDK_HOME=/opt/android-ndk \
 		$(IMAGE_NAME) \
-		sh -c "cd cross && export NDK_HOME=/opt/android-ndk && ./create-ndk-standalone.sh && \
-		make android"
+		make android
 
 wasm:
 	make build-docker-image
