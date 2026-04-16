@@ -35,14 +35,13 @@ pub trait Scheme: Debug {
 
 /// SignatureScheme is the trait that defines the operations of a signature
 /// scheme, namely `sign` and `verify`. Below is an example of using the
-/// signature scheme based on BLS, using the BLS12-381 curves.
+/// signature scheme based on BLS, using the BLS12-377 curves.
 ///
 /// ```
-///  # #[cfg(feature = "bls12_381")]
 ///  # {
 ///  use rand::prelude::*;
 ///  use threshold_bls::{sig::{SignatureScheme, Scheme, G2Scheme}, group::{Element, Point}};
-///  use threshold_bls::curve::bls12381::PairingCurve as PC;
+///  use threshold_bls::curve::bls12377::PairingCurve as PC;
 ///
 ///  let msg = vec![1,9,6,9];
 ///  let (private,public) = G2Scheme::<PC>::keypair(&mut thread_rng());
@@ -71,14 +70,13 @@ pub trait SignatureScheme: Scheme {
 /// message.
 ///
 /// ```
-///  # #[cfg(feature = "bls12_381")]
 ///  # {
 ///  use rand::prelude::*;
 ///  use threshold_bls::{
 ///     sig::{BlindScheme,SignatureScheme, Scheme, G2Scheme},
 ///     group::{Element, Point}
 ///  };
-///  use threshold_bls::curve::bls12381::PairingCurve as PC;
+///  use threshold_bls::curve::bls12377::PairingCurve as PC;
 ///
 ///  let msg = vec![1,9,6,9];
 ///  let (private,public) = G2Scheme::<PC>::keypair(&mut thread_rng());

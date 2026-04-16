@@ -1,5 +1,5 @@
 ARG RUST_VERSION=1.89.0
-FROM ubuntu:20.04
+FROM ubuntu:24.04
 
 ARG RUST_VERSION
 
@@ -7,8 +7,9 @@ ARG RUST_VERSION
 ENV DEBIAN_FRONTEND=noninteractive
 
 # Use a CDN-backed mirror instead of archive.ubuntu.com for CI reliability
-RUN sed -i 's|http://archive.ubuntu.com|http://mirrors.edge.kernel.org|g' /etc/apt/sources.list && \
-    sed -i 's|http://security.ubuntu.com|http://mirrors.edge.kernel.org|g' /etc/apt/sources.list
+# Ubuntu 24.04 uses DEB822 format in /etc/apt/sources.list.d/ubuntu.sources
+RUN sed -i 's|http://archive.ubuntu.com|http://mirrors.edge.kernel.org|g' /etc/apt/sources.list.d/ubuntu.sources && \
+    sed -i 's|http://security.ubuntu.com|http://mirrors.edge.kernel.org|g' /etc/apt/sources.list.d/ubuntu.sources
 
 # Update package lists and install required dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends \
@@ -20,7 +21,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libssl-dev \
     ca-certificates \
     unzip \
-    python
+    python3 \
+    python-is-python3
 
 # Install rustup with a default toolchain
 RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain ${RUST_VERSION}
@@ -31,9 +33,9 @@ ENV PATH="/root/.cargo/bin:${PATH}"
 RUN cargo install wasm-pack@0.13.1
 
 # Install Android NDK
-RUN curl -L https://dl.google.com/android/repository/android-ndk-r24-linux.zip -o /tmp/ndk.zip && \
+RUN curl -L https://dl.google.com/android/repository/android-ndk-r27d-linux.zip -o /tmp/ndk.zip && \
     unzip /tmp/ndk.zip -d /opt && \
-    mv /opt/android-ndk-r24 /opt/android-ndk && \
+    mv /opt/android-ndk-r27d /opt/android-ndk && \
     rm /tmp/ndk.zip
 
 WORKDIR /app

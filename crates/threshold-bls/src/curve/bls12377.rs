@@ -1,16 +1,12 @@
-use crate::group::{self, Element, PairingCurve as PC, Point, Scalar as Sc};
-use algebra::{
-    bls12_377 as zexe,
-    curves::{AffineCurve, PairingEngine, ProjectiveCurve},
-    fields::Field,
-    prelude::{One, UniformRand, Zero},
-    CanonicalDeserialize, CanonicalSerialize, ConstantSerializedSize,
-};
-use bls_crypto::{
-    hash_to_curve::{try_and_increment::TryAndIncrement, HashToCurve},
-    hashers::DirectHasher,
-    BLSError, SIG_DOMAIN,
-};
+use crate::group::{self, Element, PairingCurve as PC, Point, PrimeOrder, Scalar as Sc};
+
+use ark_bls12_377 as bls377;
+use ark_ec::models::short_weierstrass_jacobian::{GroupAffine, GroupProjective};
+use ark_ec::models::SWModelParameters;
+use ark_ec::{AffineCurve, PairingEngine, ProjectiveCurve};
+use ark_ff::{Field, One, PrimeField, UniformRand, Zero};
+use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
+use bls_crypto::{hashers::DirectHasher, BLSError, SIG_DOMAIN};
 use rand_core::RngCore;
 use serde::{
     de::{Error as DeserializeError, SeqAccess, Visitor},
@@ -28,21 +24,21 @@ use thiserror::Error;
 #[derive(Debug, Error)]
 pub enum ZexeError {
     #[error("{0}")]
-    SerializationError(#[from] algebra::SerializationError),
+    SerializationError(#[from] ark_serialize::SerializationError),
     #[error("{0}")]
     BLSError(#[from] BLSError),
 }
 
 // TODO(gakonst): Make this work with any PairingEngine.
 
-#[derive(Debug, Clone, Eq, PartialEq, Deserialize, Serialize)]
+#[derive(Debug, Clone, Copy, Eq, PartialEq, Deserialize, Serialize)]
 pub struct Scalar(
     #[serde(deserialize_with = "deserialize_field")]
     #[serde(serialize_with = "serialize_field")]
-    <zexe::Bls12_377 as PairingEngine>::Fr,
+    <bls377::Bls12_377 as PairingEngine>::Fr,
 );
 
-type ZG1 = <zexe::Bls12_377 as PairingEngine>::G1Projective;
+type ZG1 = <bls377::Bls12_377 as PairingEngine>::G1Projective;
 
 #[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
 pub struct G1(
@@ -51,7 +47,7 @@ pub struct G1(
     ZG1,
 );
 
-type ZG2 = <zexe::Bls12_377 as PairingEngine>::G2Projective;
+type ZG2 = <bls377::Bls12_377 as PairingEngine>::G2Projective;
 
 #[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
 pub struct G2(
@@ -64,7 +60,7 @@ pub struct G2(
 pub struct GT(
     #[serde(deserialize_with = "deserialize_field")]
     #[serde(serialize_with = "serialize_field")]
-    <zexe::Bls12_377 as PairingEngine>::Fqk,
+    <bls377::Bls12_377 as PairingEngine>::Fqk,
 );
 
 impl Element for Scalar {
@@ -87,13 +83,13 @@ impl Element for Scalar {
     }
 
     fn rand<R: RngCore>(rng: &mut R) -> Self {
-        Self(zexe::Fr::rand(rng))
+        Self(bls377::Fr::rand(rng))
     }
 }
 
 impl Sc for Scalar {
     fn set_int(&mut self, i: u64) {
-        *self = Self(zexe::Fr::from(i))
+        *self = Self(bls377::Fr::from(i))
     }
 
     fn inverse(&self) -> Option<Self> {
@@ -106,6 +102,15 @@ impl Sc for Scalar {
 
     fn sub(&mut self, other: &Self) {
         self.0.sub_assign(other.0);
+    }
+
+    fn from_random_bytes(bytes: &[u8]) -> Option<Self> {
+        let fr = bls377::Fr::from_random_bytes(bytes)?;
+        Some(Self(fr))
+    }
+
+    fn serialized_size(&self) -> usize {
+        self.0.serialized_size()
     }
 }
 
@@ -136,8 +141,72 @@ impl Element for G1 {
     }
 
     fn mul(&mut self, mul: &Scalar) {
-        self.0.mul_assign(mul.0)
+        self.0.mul_assign(mul.0);
     }
+}
+
+/// Try-and-increment hash-to-curve that matches the original `algebra-core` crate's
+/// behavior (scipr-lab/zexe at commit 9d267f65).
+///
+/// We bypass `bls-crypto`'s `TryAndIncrement` entirely because its `compat` feature
+/// has two bugs:
+/// 1. It assumes the old library extracted the y-sign flag from bit 1 of the last
+///    byte. In reality, the old `algebra-core` used `from_random_bytes_with_flags`
+///    which extracts flags from bits 7-6 (the standard SWFlags convention).
+/// 2. The compat layer's bit 1 → bit 7 remapping introduces a wrong transformation.
+///
+/// We also can't use `ark-ec`'s `GroupAffine::from_random_bytes` directly because
+/// it rejects candidates where both flag bits (7 and 6) are set, while the old code
+/// accepted them as positive-y points.
+///
+/// This function replicates the old `algebra-core` behavior exactly:
+/// - Checks bit 7 (`& 0x80`) of the last hash byte for the y-sign (positive = largest y)
+/// - Parses x via `Field::from_random_bytes` (masks last byte to field bits)
+/// - Never rejects based on the infinity flag in random hash bytes
+fn try_and_increment_hash<P: SWModelParameters>(
+    domain: &[u8],
+    message: &[u8],
+    extra_data: &[u8],
+) -> Result<GroupProjective<P>, ZexeError>
+where
+    P::BaseField: Field,
+{
+    use bls_crypto::hashers::Hasher;
+
+    let num_bytes = GroupAffine::<P>::zero().serialized_size();
+    // Round up to the nearest multiple of 256 bits (in bytes).
+    // Mirrors bls_crypto::hash_to_curve::hash_length verbatim.
+    let hash_bytes = {
+        let bits = (num_bytes * 8) as f64 / 256.0;
+        (bits.ceil() * 256.0) as usize / 8
+    };
+
+    for c in 0u8..=254 {
+        let msg = [&[c][..], extra_data, message].concat();
+        let candidate_hash = DirectHasher
+            .hash(domain, &msg, hash_bytes)
+            .map_err(ZexeError::BLSError)?;
+
+        // Replicate old algebra-core's from_random_bytes_with_flags behavior:
+        // The flags byte is (last_byte & flags_mask) where flags_mask = 0xFE for
+        // BLS12-377 Fq (REPR_SHAVE_BITS=7). The positive-y flag is bit 7.
+        // Crucially, the old code never rejected candidates where both bits 7 and 6
+        // were set — it just treated bit 7 as the y-sign regardless.
+        let is_positive = candidate_hash[num_bytes - 1] & 0x80 != 0;
+
+        // Parse x-coordinate. from_random_bytes masks the last byte for the modulus
+        // (to & 0x01 for 377-bit Fq), matching the old behavior exactly.
+        if let Some(x) = P::BaseField::from_random_bytes(&candidate_hash[..num_bytes]) {
+            if let Some(p) = GroupAffine::<P>::get_point_from_x(x, is_positive) {
+                let scaled = p.scale_by_cofactor();
+                if !scaled.is_zero() {
+                    return Ok(scaled);
+                }
+            }
+        }
+    }
+
+    Err(ZexeError::BLSError(BLSError::HashToCurveError))
 }
 
 /// Implementation of Point using G1 from BLS12-377
@@ -145,12 +214,10 @@ impl Point for G1 {
     type Error = ZexeError;
 
     fn map(&mut self, data: &[u8]) -> Result<(), ZexeError> {
-        let hasher = TryAndIncrement::new(&DirectHasher);
-
-        let hash = hasher.hash(SIG_DOMAIN, data, &[])?;
-
+        let hash = try_and_increment_hash::<
+            <bls377::Parameters as ark_ec::bls12::Bls12Parameters>::G1Parameters,
+        >(SIG_DOMAIN, data, &[])?;
         *self = Self(hash);
-
         Ok(())
     }
 }
@@ -191,11 +258,10 @@ impl Point for G2 {
     type Error = ZexeError;
 
     fn map(&mut self, data: &[u8]) -> Result<(), ZexeError> {
-        let hasher = TryAndIncrement::new(&DirectHasher);
-
-        let hash = hasher.hash(SIG_DOMAIN, data, &[])?;
+        let hash = try_and_increment_hash::<
+            <bls377::Parameters as ark_ec::bls12::Bls12Parameters>::G2Parameters,
+        >(SIG_DOMAIN, data, &[])?;
         *self = Self(hash);
-
         Ok(())
     }
 }
@@ -206,23 +272,51 @@ impl fmt::Display for G2 {
     }
 }
 
+//TODO (michael) : This interface should be refactored, GT is multiplicative subgroup of extension field
+// so using elliptic curve additive notation for it doesn't make sense
 impl Element for GT {
-    type RHS = GT;
+    type RHS = Scalar;
 
     fn new() -> Self {
-        Self(Zero::zero())
+        // TODO(pl)
+        // Self(Zero::zero())
+        Self(One::one())
     }
     fn one() -> Self {
         Self(One::one())
     }
+    // fn add(&mut self, s2: &Self) {
+    //     self.0.add_assign(s2.0);
+    // }
+    // fn mul(&mut self, mul: &Scalar) {
+    //     self.0.mul_assign(mul.0)
+    // }
     fn add(&mut self, s2: &Self) {
-        self.0.add_assign(s2.0);
+        self.0.mul_assign(s2.0);
     }
-    fn mul(&mut self, mul: &GT) {
-        self.0.mul_assign(mul.0)
+    fn mul(&mut self, mul: &Scalar) {
+        let scalar = mul.0.into_repr();
+        let mut res = Self::one();
+        let mut temp = self.clone();
+        for b in ark_ff::BitIteratorLE::without_trailing_zeros(scalar) {
+            if b {
+                res.0.mul_assign(temp.0);
+            }
+            temp.0.square_in_place();
+        }
+        *self = res.clone();
     }
     fn rand<R: RngCore>(rng: &mut R) -> Self {
-        Self(zexe::Fq12::rand(rng))
+        Self(bls377::Fq12::rand(rng))
+    }
+}
+
+// TODO (michael): Write unit test for this
+impl PrimeOrder for GT {
+    fn in_correct_subgroup(&self) -> bool {
+        self.0
+            .pow(<bls377::Bls12_377 as PairingEngine>::Fr::characteristic())
+            .is_one()
     }
 }
 
@@ -245,7 +339,7 @@ impl PC for PairingCurve {
     type GT = GT;
 
     fn pair(a: &Self::G1, b: &Self::G2) -> Self::GT {
-        GT(<zexe::Bls12_377 as PairingEngine>::pairing(a.0, b.0))
+        GT(<bls377::Bls12_377 as PairingEngine>::pairing(a.0, b.0))
     }
 }
 
@@ -254,13 +348,13 @@ impl PC for PairingCurve {
 fn deserialize_field<'de, D, C>(deserializer: D) -> Result<C, D::Error>
 where
     D: Deserializer<'de>,
-    C: CanonicalDeserialize + ConstantSerializedSize,
+    C: Field,
 {
     struct FieldVisitor<C>(PhantomData<C>);
 
     impl<'de, C> Visitor<'de> for FieldVisitor<C>
     where
-        C: CanonicalDeserialize + ConstantSerializedSize,
+        C: Field,
     {
         type Value = C;
 
@@ -272,7 +366,7 @@ where
         where
             S: SeqAccess<'de>,
         {
-            let len = C::SERIALIZED_SIZE;
+            let len = C::zero().serialized_size();
             let bytes: Vec<u8> = (0..len)
                 .map(|_| {
                     seq.next_element()?
@@ -286,13 +380,13 @@ where
     }
 
     let visitor = FieldVisitor(PhantomData);
-    deserializer.deserialize_tuple(C::SERIALIZED_SIZE, visitor)
+    deserializer.deserialize_tuple(C::zero().serialized_size(), visitor)
 }
 
 fn serialize_field<S, C>(c: &C, s: S) -> Result<S::Ok, S::Error>
 where
     S: Serializer,
-    C: CanonicalSerialize,
+    C: Field,
 {
     let len = c.serialized_size();
     let mut bytes = Vec::with_capacity(len);
@@ -310,14 +404,13 @@ fn deserialize_group<'de, D, C>(deserializer: D) -> Result<C, D::Error>
 where
     D: Deserializer<'de>,
     C: ProjectiveCurve,
-    C::Affine: CanonicalDeserialize + ConstantSerializedSize,
+    C::Affine: CanonicalDeserialize + CanonicalSerialize,
 {
     struct GroupVisitor<C>(PhantomData<C>);
 
     impl<'de, C> Visitor<'de> for GroupVisitor<C>
     where
         C: ProjectiveCurve,
-        C::Affine: CanonicalDeserialize + ConstantSerializedSize,
     {
         type Value = C;
 
@@ -329,7 +422,7 @@ where
         where
             S: SeqAccess<'de>,
         {
-            let len = C::Affine::SERIALIZED_SIZE;
+            let len = C::Affine::zero().serialized_size();
             let bytes: Vec<u8> = (0..len)
                 .map(|_| {
                     seq.next_element()?
@@ -344,7 +437,7 @@ where
     }
 
     let visitor = GroupVisitor(PhantomData);
-    deserializer.deserialize_tuple(C::Affine::SERIALIZED_SIZE, visitor)
+    deserializer.deserialize_tuple(C::Affine::zero().serialized_size(), visitor)
 }
 
 fn serialize_group<S, C>(c: &C, s: S) -> Result<S::Ok, S::Error>
@@ -408,6 +501,25 @@ mod tests {
 
         let de: E = bincode::deserialize(&ser).unwrap();
         assert_eq!(de, sig);
+    }
+
+    #[test]
+    fn gt_exp() {
+        let rng = &mut rand::thread_rng();
+        let base = GT::rand(rng);
+
+        let mut sc = Scalar::one();
+        sc.add(&Scalar::one());
+        sc.add(&Scalar::one());
+
+        let mut exp = base.clone();
+        exp.mul(&sc);
+
+        let mut res = base.clone();
+        res.add(&base);
+        res.add(&base);
+
+        assert_eq!(exp, res);
     }
 
     #[test]
