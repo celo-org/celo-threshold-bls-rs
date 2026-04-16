@@ -30,7 +30,9 @@ RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --de
 # Add Cargo's bin directory to the PATH
 ENV PATH="/root/.cargo/bin:${PATH}"
 
-RUN cargo install wasm-pack@0.13.1
+ARG WASM_PACK_VERSION=0.14.0
+RUN curl -fsSL "https://github.com/wasm-bindgen/wasm-pack/releases/download/v${WASM_PACK_VERSION}/wasm-pack-v${WASM_PACK_VERSION}-x86_64-unknown-linux-musl.tar.gz" \
+    | tar -xz -C /usr/local/bin --strip-components=1 "wasm-pack-v${WASM_PACK_VERSION}-x86_64-unknown-linux-musl/wasm-pack"
 
 # Install Android NDK
 RUN curl -L https://dl.google.com/android/repository/android-ndk-r27d-linux.zip -o /tmp/ndk.zip && \
