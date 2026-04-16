@@ -9,7 +9,8 @@ members = [
 [profile.release]
 opt-level = 3
 lto = "thin"
-incremental = true
+codegen-units = 1
+incremental = false
 
 # build all our deps in release mode 
 [profile.dev.package."*"]
