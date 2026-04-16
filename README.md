@@ -52,6 +52,13 @@ make jvm
 
 This builds JVM-compatible libraries and places them in `output/jvm`.
 
+### Minimum mobile OS versions
+
+The mobile builds target:
+
+- **Android**: API level 24 (Android 7.0) — set via `ANDROID_API` in `crates/threshold-bls-ffi/cross/Makefile`
+- **iOS**: 15.2 — set via `IPHONEOS_DEPLOYMENT_TARGET` in the same Makefile
+
 ### iOS Build
 
 ```sh
