@@ -83,6 +83,7 @@ x86_64-linux-android:
 
 .PHONY: $(ARCHS_IOS)
 $(ARCHS_IOS): %:
+	IPHONEOS_DEPLOYMENT_TARGET=15.2 \
 	cargo build $(CARGO_PARAMS) --target $@ --release --lib
 
 $(LIB): $(ARCHS_IOS)
