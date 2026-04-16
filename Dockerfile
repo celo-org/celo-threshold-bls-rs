@@ -7,7 +7,7 @@ ARG RUST_VERSION
 ENV DEBIAN_FRONTEND=noninteractive
 
 # Update package lists and install required dependencies
-RUN apt-get update && apt-get install -y \
+RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
     build-essential \
     git \
@@ -34,4 +34,3 @@ RUN curl -L https://dl.google.com/android/repository/android-ndk-r24-linux.zip -
 WORKDIR /app
 
 COPY . .
-
