@@ -6,7 +6,8 @@ jobs:
       - image: cimg/base:stable
     steps:
       - checkout
-      - setup_remote_docker
+      - setup_remote_docker:
+          docker_layer_caching: true
       - run:
           name: Build WASM
           command: make wasm
@@ -18,7 +19,8 @@ jobs:
       - image: cimg/base:stable
     steps:
       - checkout
-      - setup_remote_docker
+      - setup_remote_docker:
+          docker_layer_caching: true
       - run:
           name: Build JVM
           command: make jvm
@@ -30,7 +32,8 @@ jobs:
       - image: cimg/base:stable
     steps:
       - checkout
-      - setup_remote_docker
+      - setup_remote_docker:
+          docker_layer_caching: true
       - run:
           name: Build Android
           command: make android
