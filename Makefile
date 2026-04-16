@@ -23,34 +23,43 @@ ios:
 	rm -rf crates/threshold-bls-ffi/cross/target
 	rm -rf target
 
+# Docker bind-mounts don't work with CircleCI's setup_remote_docker (the daemon
+# runs on a separate VM from the job container), so artifacts are extracted via
+# `docker cp` after the container exits.
+
 android:
 	make build-docker-image
 	mkdir -p $(OUTPUT_DIR)/android
-	docker run --platform=linux/amd64 --rm \
-		-v $(OUTPUT_DIR)/android:/output/android \
+	CID=$$(docker create --platform=linux/amd64 \
 		-w /app/crates/threshold-bls-ffi/cross \
 		-e FEATURES="$(FEATURES)" \
 		-e NDK_HOME=/opt/android-ndk \
-		$(IMAGE_NAME) \
-		make android
+		$(IMAGE_NAME) make android) && \
+		trap "docker rm -f $$CID >/dev/null" EXIT && \
+		docker start -a $$CID && \
+		docker cp $$CID:/output/android/. $(OUTPUT_DIR)/android/
 
 wasm:
 	make build-docker-image
 	mkdir -p $(OUTPUT_DIR)/wasm
-	docker run --platform=linux/amd64 --rm \
-		-v $(OUTPUT_DIR)/wasm:/app/crates/threshold-bls-ffi/pkg \
+	CID=$$(docker create --platform=linux/amd64 \
 		-w /app/crates/threshold-bls-ffi \
 		$(IMAGE_NAME) \
-		wasm-pack build --target nodejs -- --features=wasm
+		wasm-pack build --target nodejs -- --features=wasm) && \
+		trap "docker rm -f $$CID >/dev/null" EXIT && \
+		docker start -a $$CID && \
+		docker cp $$CID:/app/crates/threshold-bls-ffi/pkg/. $(OUTPUT_DIR)/wasm/
 
 jvm:
 	make build-docker-image
 	mkdir -p $(OUTPUT_DIR)/jvm
-	docker run --platform=linux/amd64 --rm \
-		-v $(OUTPUT_DIR)/jvm:/app/target \
+	CID=$$(docker create --platform=linux/amd64 \
 		-w /app/crates/threshold-bls-ffi \
 		$(IMAGE_NAME) \
-		cargo build --release --features=jni
+		cargo build --release --features=jni) && \
+		trap "docker rm -f $$CID >/dev/null" EXIT && \
+		docker start -a $$CID && \
+		docker cp $$CID:/app/target/release/libblind_threshold_bls.so $(OUTPUT_DIR)/jvm/
 
 test:
 	make build-docker-image
