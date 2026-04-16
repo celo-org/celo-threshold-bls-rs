@@ -10,9 +10,32 @@ use threshold_bls::{
     },
 };
 
-use bls_crypto::ffi::Buffer;
-
 use crate::*;
+
+/// FFI buffer for passing variable-length data across the C boundary.
+#[repr(C)]
+#[derive(Clone, Debug, PartialEq)]
+pub struct Buffer {
+    /// Pointer to the data
+    pub ptr: *const u8,
+    /// Length of the data in bytes
+    pub len: usize,
+}
+
+impl From<&[u8]> for Buffer {
+    fn from(src: &[u8]) -> Self {
+        Self {
+            ptr: src.as_ptr(),
+            len: src.len(),
+        }
+    }
+}
+
+impl<'a> From<&Buffer> for &'a [u8] {
+    fn from(src: &Buffer) -> &'a [u8] {
+        unsafe { std::slice::from_raw_parts(src.ptr, src.len) }
+    }
+}
 
 ///////////////////////////////////////////////////////////////////////////
 // User -> Library
@@ -635,7 +658,7 @@ pub unsafe extern "C" fn keygen(seed: *const Buffer, keypair: *mut *mut Keypair)
 /// The seed MUST be at least 32 bytes long
 #[no_mangle]
 pub unsafe extern "C" fn share_ptr(keys: *const Keys, index: usize) -> *const Share<PrivateKey> {
-    &(*keys).shares[index] as *const Share<PrivateKey>
+    &(&(*keys).shares)[index] as *const Share<PrivateKey>
 }
 
 /// Gets the number of shares corresponding to the provided `Keys` pointer

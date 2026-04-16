@@ -43,7 +43,7 @@ wasm = ["wasm-bindgen", "blake2", "serde"]
 wasm-debug = ["wasm", "console_error_panic_hook"]
 
 # # Enable parallel computation in arkworks code. Cannot be used with WASM.
-# parallel = ["bls-crypto/parallel", "threshold-bls/parallel"]
+# parallel = ["threshold-bls/parallel"]
 
 jvm = ["jni"]
 ffi = ["serde"]

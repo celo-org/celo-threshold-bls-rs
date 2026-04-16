@@ -6,7 +6,6 @@ use ark_ec::models::SWModelParameters;
 use ark_ec::{AffineCurve, PairingEngine, ProjectiveCurve};
 use ark_ff::{Field, One, PrimeField, UniformRand, Zero};
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
-use bls_crypto::{hashers::DirectHasher, BLSError, SIG_DOMAIN};
 use rand_core::RngCore;
 use serde::{
     de::{Error as DeserializeError, SeqAccess, Visitor},
@@ -21,12 +20,75 @@ use std::{
 
 use thiserror::Error;
 
+/// Domain separator for signing messages
+const SIG_DOMAIN: &[u8] = b"ULforxof";
+
 #[derive(Debug, Error)]
-pub enum ZexeError {
+pub enum BLSError {
     #[error("{0}")]
     SerializationError(#[from] ark_serialize::SerializationError),
-    #[error("{0}")]
-    BLSError(#[from] BLSError),
+    #[error("Could not hash to curve")]
+    HashToCurveError,
+    #[error("domain length is too large: {0}")]
+    DomainTooLarge(usize),
+}
+
+/// Encodes the XOF digest length into the node offset field used by Blake2s/Blake2x.
+fn xof_digest_length_to_node_offset(node_offset: u64, xof_digest_length: usize) -> u64 {
+    let bytes = (xof_digest_length as u16).to_le_bytes();
+    node_offset | ((bytes[0] as u64) << 32) | ((bytes[1] as u64) << 40)
+}
+
+/// Blake2s CRH followed by Blake2x XOF expansion.
+///
+/// This is equivalent to `bls-crypto`'s `DirectHasher::hash()`.
+fn blake2_hash(
+    domain: &[u8],
+    message: &[u8],
+    output_size_in_bytes: usize,
+) -> Result<Vec<u8>, BLSError> {
+    if domain.len() > 8 {
+        return Err(BLSError::DomainTooLarge(domain.len()));
+    }
+
+    // CRH step: compress the message with Blake2s
+    let hashed = blake2s_simd::Params::new()
+        .hash_length(32)
+        .node_offset(xof_digest_length_to_node_offset(0, output_size_in_bytes))
+        .personal(domain)
+        .to_state()
+        .update(message)
+        .finalize()
+        .as_ref()
+        .to_vec();
+
+    // XOF step: expand the compressed hash to the desired output length
+    let num_hashes = output_size_in_bytes.div_ceil(32);
+    let mut result = Vec::with_capacity(output_size_in_bytes);
+    for i in 0..num_hashes {
+        let hash_length = if i == num_hashes - 1 && (output_size_in_bytes % 32 != 0) {
+            output_size_in_bytes % 32
+        } else {
+            32
+        };
+        let hash_result = blake2s_simd::Params::new()
+            .hash_length(hash_length)
+            .max_leaf_length(32)
+            .inner_hash_length(32)
+            .fanout(0)
+            .max_depth(0)
+            .personal(domain)
+            .node_offset(xof_digest_length_to_node_offset(
+                i as u64,
+                output_size_in_bytes,
+            ))
+            .to_state()
+            .update(&hashed)
+            .finalize();
+        result.extend_from_slice(hash_result.as_ref());
+    }
+
+    Ok(result)
 }
 
 // TODO(gakonst): Make this work with any PairingEngine.
@@ -167,15 +229,12 @@ fn try_and_increment_hash<P: SWModelParameters>(
     domain: &[u8],
     message: &[u8],
     extra_data: &[u8],
-) -> Result<GroupProjective<P>, ZexeError>
+) -> Result<GroupProjective<P>, BLSError>
 where
     P::BaseField: Field,
 {
-    use bls_crypto::hashers::Hasher;
-
     let num_bytes = GroupAffine::<P>::zero().serialized_size();
     // Round up to the nearest multiple of 256 bits (in bytes).
-    // Mirrors bls_crypto::hash_to_curve::hash_length verbatim.
     let hash_bytes = {
         let bits = (num_bytes * 8) as f64 / 256.0;
         (bits.ceil() * 256.0) as usize / 8
@@ -183,9 +242,7 @@ where
 
     for c in 0u8..=254 {
         let msg = [&[c][..], extra_data, message].concat();
-        let candidate_hash = DirectHasher
-            .hash(domain, &msg, hash_bytes)
-            .map_err(ZexeError::BLSError)?;
+        let candidate_hash = blake2_hash(domain, &msg, hash_bytes)?;
 
         // Replicate old algebra-core's from_random_bytes_with_flags behavior:
         // The flags byte is (last_byte & flags_mask) where flags_mask = 0xFE for
@@ -206,14 +263,14 @@ where
         }
     }
 
-    Err(ZexeError::BLSError(BLSError::HashToCurveError))
+    Err(BLSError::HashToCurveError)
 }
 
 /// Implementation of Point using G1 from BLS12-377
 impl Point for G1 {
-    type Error = ZexeError;
+    type Error = BLSError;
 
-    fn map(&mut self, data: &[u8]) -> Result<(), ZexeError> {
+    fn map(&mut self, data: &[u8]) -> Result<(), BLSError> {
         let hash = try_and_increment_hash::<
             <bls377::Parameters as ark_ec::bls12::Bls12Parameters>::G1Parameters,
         >(SIG_DOMAIN, data, &[])?;
@@ -255,9 +312,9 @@ impl Element for G2 {
 
 /// Implementation of Point using G2 from BLS12-377
 impl Point for G2 {
-    type Error = ZexeError;
+    type Error = BLSError;
 
-    fn map(&mut self, data: &[u8]) -> Result<(), ZexeError> {
+    fn map(&mut self, data: &[u8]) -> Result<(), BLSError> {
         let hash = try_and_increment_hash::<
             <bls377::Parameters as ark_ec::bls12::Bls12Parameters>::G2Parameters,
         >(SIG_DOMAIN, data, &[])?;
@@ -520,6 +577,29 @@ mod tests {
         res.add(&base);
 
         assert_eq!(exp, res);
+    }
+
+    #[test]
+    fn blake2_hash_test_vectors() {
+        let test_vectors = [(
+            "7f8a56d8b5fb1f038ffbfce79f185f4aad9d603094edb85457d6c84d6bc02a82644ee42da51e9c3bb18395f450092d39721c32e7f05ec4c1f22a8685fcb89721738335b57e4ee88a3b32df3762503aa98e4a9bd916ed385d265021391745f08b27c37dc7bc6cb603cc27e19baf47bf00a2ab2c32250c98d79d5e1170dee4068d9389d146786c2a0d1e08ade5",
+            "87009aa74342449e10a3fd369e736fcb9ad1e7bd70ef007e6e2394b46c094074c86adf6c980be077fa6c4dc4af1ca0450a4f00cdd1a87e0c4f059f512832c2d92a1cde5de26d693ccd246a1530c0d6926185f9330d3524710b369f6d2976a44d",
+        ), (
+            "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f202122232425262728292a2b2c2d2e2f303132333435363738393a3b3c3d3e3f404142434445464748494a4b4c4d4e4f505152535455565758595a5b5c5d5e5f606162636465666768696a6b6c6d6e6f707172737475767778797a7b7c7d7e7f808182838485868788898a8b8c8d8e8f909192939495969798999a9b9c9d9e9fa0a1a2a3a4a5a6a7a8a9aaabacadaeafb0b1b2b3b4b5b6b7b8b9babbbcbdbebfc0c1c2c3c4c5c6c7c8c9cacbcccdcecfd0d1d2d3d4d5d6d7d8d9dadbdcdddedfe0e1e2e3e4e5e6e7e8e9eaebecedeeeff0f1f2f3f4f5f6f7f8f9fafbfcfdfeff",
+            "57d5",
+        ), (
+            "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f202122232425262728292a2b2c2d2e2f303132333435363738393a3b3c3d3e3f404142434445464748494a4b4c4d4e4f505152535455565758595a5b5c5d5e5f606162636465666768696a6b6c6d6e6f707172737475767778797a7b7c7d7e7f808182838485868788898a8b8c8d8e8f909192939495969798999a9b9c9d9e9fa0a1a2a3a4a5a6a7a8a9aaabacadaeafb0b1b2b3b4b5b6b7b8b9babbbcbdbebfc0c1c2c3c4c5c6c7c8c9cacbcccdcecfd0d1d2d3d4d5d6d7d8d9dadbdcdddedfe0e1e2e3e4e5e6e7e8e9eaebecedeeeff0f1f2f3f4f5f6f7f8f9fafbfcfdfeff",
+            "bfec8b58ee2e2e32008eb9d7d304914ea756ecb31879eb2318e066c182b0e77e6a518e366f345692e29f497515f799895983200f0d7dafa65c83a7506c03e8e5eee387cffdb27a0e6f5f3e9cb0ccbcfba827984586f608769f08f6b1a84872",
+        )];
+        for (input_hex, expected_hex) in &test_vectors {
+            let bytes = blake2_hash(
+                b"",
+                &hex::decode(input_hex).unwrap(),
+                expected_hex.len() / 2,
+            )
+            .unwrap();
+            assert_eq!(hex::encode(&bytes), *expected_hex);
+        }
     }
 
     #[test]
