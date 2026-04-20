@@ -1,4 +1,5 @@
 use crate::group::{Element, PairingCurve, Point};
+use crate::serialization;
 use crate::sig::{Scheme, SignatureScheme};
 use std::{fmt::Debug, marker::PhantomData};
 use thiserror::Error;
@@ -39,7 +40,7 @@ pub mod common {
                 h.map(msg).map_err(|_| BLSError::HashingError)?;
                 h
             } else {
-                bincode::deserialize_from(msg)?
+                serialization::deserialize_from(msg)?
             };
 
             h.mul(private);
@@ -54,14 +55,14 @@ pub mod common {
             sig_bytes: &[u8],
             should_hash: bool,
         ) -> Result<(), BLSError> {
-            let sig: Self::Signature = bincode::deserialize_from(sig_bytes)?;
+            let sig: Self::Signature = serialization::deserialize_from(sig_bytes)?;
 
             let h = if should_hash {
                 let mut h = Self::Signature::new();
                 h.map(msg).map_err(|_| BLSError::HashingError)?;
                 h
             } else {
-                bincode::deserialize_from(msg)?
+                serialization::deserialize_from(msg)?
             };
 
             let success = Self::final_exp(public, &sig, &h);

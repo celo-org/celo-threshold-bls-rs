@@ -6,6 +6,7 @@ use rand_core::{RngCore, SeedableRng};
 
 use threshold_bls::{
     poly::{Idx as Index, Poly},
+    serialization,
     sig::{
         BlindScheme, BlindThresholdScheme, Scheme, Share, SignatureScheme, ThresholdScheme, Token,
     },
@@ -55,8 +56,8 @@ pub fn blind(message: Vec<u8>, seed: &[u8]) -> BlindedMessage {
 ///
 /// - If unblinding fails.
 pub fn unblind(blinded_signature: &[u8], blinding_factor_buf: &[u8]) -> Result<Vec<u8>> {
-    let blinding_factor: Token<PrivateKey> =
-        bincode::deserialize(blinding_factor_buf).map_err(|err| {
+    let blinding_factor: Token<PrivateKey> = serialization::deserialize(blinding_factor_buf)
+        .map_err(|err| {
             JsValue::from_str(&format!("could not deserialize blinding factor {}", err))
         })?;
 
@@ -76,7 +77,7 @@ pub fn unblind(blinded_signature: &[u8], blinding_factor_buf: &[u8]) -> Result<V
 ///
 /// - If verification fails
 pub fn verify(public_key_buf: &[u8], message: &[u8], signature: &[u8]) -> Result<()> {
-    let public_key: PublicKey = bincode::deserialize(public_key_buf)
+    let public_key: PublicKey = serialization::deserialize(public_key_buf)
         .map_err(|err| JsValue::from_str(&format!("could not deserialize public key {}", err)))?;
 
     // checks the signature on the message hash
@@ -100,7 +101,7 @@ pub fn verify_blind_signature(
     message: &[u8],
     signature: &[u8],
 ) -> Result<()> {
-    let public_key: PublicKey = bincode::deserialize(public_key_buf)
+    let public_key: PublicKey = serialization::deserialize(public_key_buf)
         .map_err(|err| JsValue::from_str(&format!("could not deserialize public key {}", err)))?;
 
     // checks the signature on the message hash
@@ -119,7 +120,7 @@ pub fn verify_blind_signature(
 ///
 /// - If signing fails
 pub fn sign(private_key_buf: &[u8], message: &[u8]) -> Result<Vec<u8>> {
-    let private_key: PrivateKey = bincode::deserialize(private_key_buf)
+    let private_key: PrivateKey = serialization::deserialize(private_key_buf)
         .map_err(|err| JsValue::from_str(&format!("could not deserialize private key {}", err)))?;
 
     SigScheme::sign(&private_key, message)
@@ -133,7 +134,7 @@ pub fn sign(private_key_buf: &[u8], message: &[u8]) -> Result<Vec<u8>> {
 ///
 /// - If signing fails
 pub fn sign_blinded_message(private_key_buf: &[u8], message: &[u8]) -> Result<Vec<u8>> {
-    let private_key: PrivateKey = bincode::deserialize(private_key_buf)
+    let private_key: PrivateKey = serialization::deserialize(private_key_buf)
         .map_err(|err| JsValue::from_str(&format!("could not deserialize private key {}", err)))?;
 
     SigScheme::blind_sign(&private_key, message)
@@ -151,7 +152,7 @@ pub fn sign_blinded_message(private_key_buf: &[u8], message: &[u8]) -> Result<Ve
 /// NOTE: This method must NOT be called with a PrivateKey which is not generated via a
 /// secret sharing scheme.
 pub fn partial_sign(share_buf: &[u8], message: &[u8]) -> Result<Vec<u8>> {
-    let share: Share<PrivateKey> = bincode::deserialize(share_buf).map_err(|err| {
+    let share: Share<PrivateKey> = serialization::deserialize(share_buf).map_err(|err| {
         JsValue::from_str(&format!("could not deserialize private key share {}", err))
     })?;
 
@@ -170,7 +171,7 @@ pub fn partial_sign(share_buf: &[u8], message: &[u8]) -> Result<Vec<u8>> {
 /// NOTE: This method must NOT be called with a PrivateKey which is not generated via a
 /// secret sharing scheme.
 pub fn partial_sign_blinded_message(share_buf: &[u8], message: &[u8]) -> Result<Vec<u8>> {
-    let share: Share<PrivateKey> = bincode::deserialize(share_buf).map_err(|err| {
+    let share: Share<PrivateKey> = serialization::deserialize(share_buf).map_err(|err| {
         JsValue::from_str(&format!("could not deserialize private key share {}", err))
     })?;
 
@@ -190,7 +191,7 @@ pub fn partial_sign_blinded_message(share_buf: &[u8], message: &[u8]) -> Result<
 ///
 /// - If verification fails
 pub fn partial_verify(polynomial_buf: &[u8], blinded_message: &[u8], sig: &[u8]) -> Result<()> {
-    let polynomial: Poly<PublicKey> = bincode::deserialize(polynomial_buf)
+    let polynomial: Poly<PublicKey> = serialization::deserialize(polynomial_buf)
         .map_err(|err| JsValue::from_str(&format!("could not deserialize polynomial {}", err)))?;
 
     SigScheme::partial_verify(&polynomial, blinded_message, sig)
@@ -209,7 +210,7 @@ pub fn partial_verify_blind_signature(
     blinded_message: &[u8],
     sig: &[u8],
 ) -> Result<()> {
-    let polynomial: Poly<PublicKey> = bincode::deserialize(polynomial_buf)
+    let polynomial: Poly<PublicKey> = serialization::deserialize(polynomial_buf)
         .map_err(|err| JsValue::from_str(&format!("could not deserialize polynomial {}", err)))?;
 
     SigScheme::verify_blind_partial(&polynomial, blinded_message, sig)

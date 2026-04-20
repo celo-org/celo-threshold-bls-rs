@@ -523,6 +523,7 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::serialization;
     use serde::{de::DeserializeOwned, Serialize};
     use static_assertions::assert_impl_all;
 
@@ -543,7 +544,7 @@ mod tests {
         let ser = bincode::serialize(&sig).unwrap();
         assert_eq!(ser.len(), size);
 
-        let de: E = bincode::deserialize(&ser).unwrap();
+        let de: E = serialization::deserialize(&ser).unwrap();
         assert_eq!(de, sig);
     }
 
@@ -559,7 +560,7 @@ mod tests {
         let ser = bincode::serialize(&sig).unwrap();
         assert_eq!(ser.len(), size);
 
-        let de: E = bincode::deserialize(&ser).unwrap();
+        let de: E = serialization::deserialize(&ser).unwrap();
         assert_eq!(de, sig);
     }
 
