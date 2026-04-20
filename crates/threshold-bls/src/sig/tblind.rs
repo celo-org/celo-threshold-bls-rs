@@ -1,4 +1,5 @@
 use crate::poly::{Eval, Poly};
+use crate::serialization;
 use crate::sig::tbls::Share;
 use crate::sig::{BlindScheme, BlindThresholdScheme, Partial, ThresholdScheme};
 use thiserror::Error;
@@ -40,7 +41,7 @@ where
         partial: &[u8],
     ) -> Result<Partial, <Self as BlindThresholdScheme>::Error> {
         // deserialize the sig
-        let partial: Eval<Vec<u8>> = bincode::deserialize(partial)?;
+        let partial: Eval<Vec<u8>> = serialization::deserialize(partial)?;
 
         let partially_unblinded =
             Self::unblind_sig(t, &partial.value).map_err(BlindThresholdError::BlindError)?;
@@ -56,7 +57,7 @@ where
         blind_msg: &[u8],
         blind_partial: &[u8],
     ) -> Result<(), <Self as BlindThresholdScheme>::Error> {
-        let blinded_partial: Eval<Vec<u8>> = bincode::deserialize(blind_partial)?;
+        let blinded_partial: Eval<Vec<u8>> = serialization::deserialize(blind_partial)?;
         let public_i = public.eval(blinded_partial.index);
         Self::blind_verify(&public_i.value, blind_msg, &blinded_partial.value)
             .map_err(BlindThresholdError::BlindError)

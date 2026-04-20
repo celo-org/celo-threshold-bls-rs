@@ -168,6 +168,10 @@ pub mod group;
 /// polynomial.
 pub mod poly;
 
+/// Bounded bincode (de)serialization helpers that cap input size to prevent
+/// OOM from attacker-crafted length prefixes.
+pub mod serialization;
+
 /// BLS Signature implementations. Supports blind and threshold signatures.
 pub mod sig;
 

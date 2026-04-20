@@ -1,6 +1,7 @@
 //! Threshold Signatures implementation for any type which implements
 //! [`SignatureScheme`](../trait.SignatureScheme.html)
 use crate::poly::{Eval, Idx, Poly, PolyError};
+use crate::serialization;
 use crate::sig::{Partial, SignatureScheme, ThresholdScheme};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
@@ -56,7 +57,7 @@ impl<I: SignatureScheme> ThresholdScheme for I {
         msg: &[u8],
         partial: &[u8],
     ) -> Result<(), <Self as ThresholdScheme>::Error> {
-        let partial: Eval<Vec<u8>> = bincode::deserialize(partial)?;
+        let partial: Eval<Vec<u8>> = serialization::deserialize(partial)?;
 
         let public_i = public.eval(partial.index);
 
@@ -77,8 +78,8 @@ impl<I: SignatureScheme> ThresholdScheme for I {
         let valid_partials: Vec<Eval<Self::Signature>> = partials
             .iter()
             .map(|partial| {
-                let eval: Eval<Vec<u8>> = bincode::deserialize(partial)?;
-                let sig = bincode::deserialize(&eval.value)?;
+                let eval: Eval<Vec<u8>> = serialization::deserialize(partial)?;
+                let sig = serialization::deserialize(&eval.value)?;
                 Ok(Eval {
                     index: eval.index,
                     value: sig,

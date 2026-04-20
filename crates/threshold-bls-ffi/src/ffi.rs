@@ -5,6 +5,7 @@ use rand_core::{RngCore, SeedableRng};
 use serde::{de::DeserializeOwned, Serialize};
 use threshold_bls::{
     poly::{Idx as Index, Poly},
+    serialization,
     sig::{
         BlindScheme, BlindThresholdScheme, Scheme, Share, SignatureScheme, ThresholdScheme, Token,
     },
@@ -489,7 +490,7 @@ unsafe fn deserialize<T: DeserializeOwned>(
 ) -> bool {
     let buf = unsafe { std::slice::from_raw_parts(in_buf, len) };
 
-    let obj = if let Ok(res) = bincode::deserialize(&buf) {
+    let obj = if let Ok(res) = serialization::deserialize(&buf) {
         res
     } else {
         return false;
@@ -930,7 +931,7 @@ mod tests {
         let message = unsafe { std::slice::from_raw_parts(privkey_buf, PRIVKEY_LEN) };
         assert_eq!(marshalled, message);
 
-        let unmarshalled: PrivateKey = bincode::deserialize(&message).unwrap();
+        let unmarshalled: PrivateKey = serialization::deserialize(&message).unwrap();
         assert_eq!(&unmarshalled, private_key);
 
         let mut de = MaybeUninit::<*mut PrivateKey>::uninit();
@@ -964,7 +965,7 @@ mod tests {
         let message = unsafe { std::slice::from_raw_parts(pubkey_buf, PUBKEY_LEN) };
         assert_eq!(marshalled, message);
 
-        let unmarshalled: PublicKey = bincode::deserialize(&message).unwrap();
+        let unmarshalled: PublicKey = serialization::deserialize(&message).unwrap();
         assert_eq!(&unmarshalled, public_key);
 
         let mut de = MaybeUninit::<*mut PublicKey>::uninit();

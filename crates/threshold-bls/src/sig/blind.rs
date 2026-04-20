@@ -1,4 +1,5 @@
 use crate::group::{Element, Point, Scalar};
+use crate::serialization;
 use crate::sig::bls::{common::BLSScheme, BLSError};
 use crate::sig::{BlindScheme, Scheme};
 use rand::RngCore;
@@ -67,7 +68,7 @@ where
     }
 
     fn unblind_sig(t: &Self::Token, sigbuff: &[u8]) -> Result<Vec<u8>, Self::Error> {
-        let mut sig: I::Signature = bincode::deserialize(sigbuff)?;
+        let mut sig: I::Signature = serialization::deserialize(sigbuff)?;
 
         // r^-1 * ( r * H(m)^x) = H(m)^x
         let ri = t.0.inverse().ok_or(BlindError::InvalidToken)?;
@@ -83,9 +84,9 @@ where
         blinded_sig: &[u8],
     ) -> Result<(), Self::Error> {
         // message point
-        let blinded_msg: I::Signature = bincode::deserialize(blinded_msg)?;
+        let blinded_msg: I::Signature = serialization::deserialize(blinded_msg)?;
         // signature point
-        let blinded_sig: I::Signature = bincode::deserialize(blinded_sig)?;
+        let blinded_sig: I::Signature = serialization::deserialize(blinded_sig)?;
 
         if !I::final_exp(public, &blinded_sig, &blinded_msg) {
             return Err(BlindError::from(BLSError::InvalidSig));
@@ -95,7 +96,7 @@ where
 
     fn blind_sign(private: &I::Private, blinded_msg: &[u8]) -> Result<Vec<u8>, Self::Error> {
         // (r * H(m))^x
-        let mut hm: I::Signature = bincode::deserialize(blinded_msg)?;
+        let mut hm: I::Signature = serialization::deserialize(blinded_msg)?;
         hm.mul(private);
         Ok(bincode::serialize(&hm)?)
     }
