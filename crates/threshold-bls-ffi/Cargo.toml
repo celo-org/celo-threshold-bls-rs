@@ -42,8 +42,5 @@ wasm = ["wasm-bindgen", "blake2", "serde"]
 # Include a panic hook for printing panic messages to the JS console.
 wasm-debug = ["wasm", "console_error_panic_hook"]
 
-# # Enable parallel computation in arkworks code. Cannot be used with WASM.
-# parallel = ["threshold-bls/parallel"]
-
 jvm = ["jni"]
 ffi = ["serde"]
