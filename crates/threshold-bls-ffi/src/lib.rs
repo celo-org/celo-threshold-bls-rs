@@ -1,19 +1,20 @@
 // add this so that we can be more explicit about unsafe calls inside unsafe functions
 #![allow(unused_unsafe)]
 
-extern crate cfg_if;
-
-cfg_if::cfg_if! {
-    if #[cfg(feature = "wasm")] {
+core::cfg_select! {
+    feature = "wasm" => {
         pub mod wasm;
-    } else if #[cfg(feature = "jni")] {
+    }
+    feature = "jni" => {
         pub mod jni_bridge;
-    } else if #[cfg(feature = "ffi")] {
+    }
+    feature = "ffi" => {
         pub mod ffi;
         pub(crate) type Signature = <SigScheme as Scheme>::Signature;
         pub(crate) const PUBKEY_LEN: usize = 96;
         pub(crate) const PRIVKEY_LEN: usize = 32;
     }
+    _ => {}
 }
 
 use threshold_bls::{poly::Idx, schemes::bls12_377::G2Scheme as SigScheme, sig::Scheme};
