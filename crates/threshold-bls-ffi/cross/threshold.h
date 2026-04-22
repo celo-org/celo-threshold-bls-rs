@@ -8,8 +8,6 @@
  */
 typedef struct Keypair Keypair;
 
-typedef struct Keys Keys;
-
 /**
  * A polynomial that is using a scalar for the variable x and a generic
  * element for the coefficients. The coefficients must be able to multiply
@@ -101,11 +99,6 @@ void free_vector(uint8_t *bytes, size_t len);
 void keygen(const Buffer *seed, Keypair *keypair);
 
 /**
- * Gets the number of shares corresponding to the provided `Keys` pointer
- */
-uintptr_t num_shares(const Keys *keys);
-
-/**
  * Signs the message with the provided **share** of the private key and returns the **partial**
  * signature.
  */
@@ -118,11 +111,6 @@ bool partial_sign(const Share_PrivateKey *share, const Buffer *message, Buffer *
 bool partial_verify(const Poly_PrivateKey__PublicKey *polynomial,
                     const Buffer *blinded_message,
                     const Buffer *sig);
-
-/**
- * Gets a pointer to the polynomial corresponding to the provided `Keys` pointer
- */
-const Poly_PrivateKey__PublicKey *polynomial_ptr(const Keys *keys);
 
 /**
  * Gets a pointer to the private key corresponding to the provided `KeyPair` pointer
@@ -141,11 +129,6 @@ void serialize_pubkey(const PublicKey *pubkey, uint8_t **pubkey_buf);
 void serialize_sig(const Signature *sig, uint8_t **sig_buf);
 
 /**
- * Gets the `index`'th share corresponding to the provided `Keys` pointer
- */
-const Share_PrivateKey *share_ptr(const Keys *keys, uintptr_t index);
-
-/**
  * Signs the message with the provided private key and returns the signature
  *
  * # Throws
@@ -153,11 +136,6 @@ const Share_PrivateKey *share_ptr(const Keys *keys, uintptr_t index);
  * - If signing fails
  */
 bool sign(const PrivateKey *private_key, const Buffer *message, Buffer *signature);
-
-/**
- * Gets a pointer to the threshold public key corresponding to the provided `Keys` pointer
- */
-const PublicKey *threshold_public_key_ptr(const Keys *keys);
 
 /**
  * Given a blinded signature and a blinding_factor used for blinding, it returns the signature
