@@ -29,8 +29,6 @@ wasm-bindgen = { version = "0.2.62", optional = true }
 # code size when deploying.
 console_error_panic_hook = { version = "0.1.7", optional = true }
 
-cfg-if = "1.0"
-
 jni = { version = "0.21.1", optional = true }
 
 [features]
