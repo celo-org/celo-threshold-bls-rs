@@ -528,16 +528,6 @@ pub unsafe extern "C" fn destroy_token(token: *mut Token<PrivateKey>) {
 }
 
 #[no_mangle]
-/// Frees the memory allocated for the threshold keys helper
-///
-/// # Safety
-///
-/// The pointer must point to a valid instance of the data type
-pub unsafe extern "C" fn destroy_keys(keys: *mut Keys) {
-    Box::from_raw(keys);
-}
-
-#[no_mangle]
 /// Frees the memory allocated for the keypair helper
 ///
 /// # Safety
@@ -594,18 +584,13 @@ pub unsafe extern "C" fn destroy_sig(signature: *mut Signature) {
 // of the public API
 ///////////////////////////////////////////////////////////////////////////
 
-/// Generates a t-of-n polynomial and private key shares
+/// Generates a t-of-n polynomial and private key shares.
 ///
-/// The return value should be destroyed with `destroy_keys`.
-///
-/// # Safety
-///
-/// WARNING: This is a helper function for local testing of the library. Do not use
-/// in production, unless you trust the person that generated the keys.
-///
-/// The seed MUST be at least 32 bytes long
-#[no_mangle]
-pub unsafe extern "C" fn threshold_keygen(n: usize, t: usize, seed: &[u8], keys: *mut *mut Keys) {
+/// WARNING: Trustful central keygen — intended only for local testing. Production
+/// deployments should use a DKG protocol so no single party ever holds the master
+/// secret.
+#[cfg(test)]
+fn threshold_keygen(n: usize, t: usize, seed: &[u8]) -> Keys {
     let mut rng = get_rng(seed);
     let private = Poly::<PrivateKey>::new_from(t - 1, &mut rng);
     let shares = (0..n)
@@ -618,17 +603,11 @@ pub unsafe extern "C" fn threshold_keygen(n: usize, t: usize, seed: &[u8], keys:
     let polynomial: Poly<PublicKey> = private.commit();
     let threshold_public_key = polynomial.public_key().clone();
 
-    let keys_local = Keys {
+    Keys {
         shares,
         polynomial,
         threshold_public_key,
-        t,
-        n,
-    };
-
-    unsafe {
-        *keys = Box::into_raw(Box::new(keys_local));
-    };
+    }
 }
 
 /// Generates a single private key from the provided seed.
@@ -645,48 +624,6 @@ pub unsafe extern "C" fn keygen(seed: *const Buffer, keypair: *mut *mut Keypair)
     let (private, public) = SigScheme::keypair(&mut rng);
     let keypair_local = Keypair { private, public };
     unsafe { *keypair = Box::into_raw(Box::new(keypair_local)) };
-}
-
-/// Gets the `index`'th share corresponding to the provided `Keys` pointer
-///
-/// The return value should be destroyed with `destroy_keys`.
-///
-/// # Safety
-///
-/// WARNING: This is a helper function for local testing of the library. Do not use
-/// in production, unless you trust the person that generated the keys.
-///
-/// The seed MUST be at least 32 bytes long
-#[no_mangle]
-pub unsafe extern "C" fn share_ptr(keys: *const Keys, index: usize) -> *const Share<PrivateKey> {
-    &(&(*keys).shares)[index] as *const Share<PrivateKey>
-}
-
-/// Gets the number of shares corresponding to the provided `Keys` pointer
-///
-/// # Safety
-/// The provided pointer will be dereferenced, so there must be valid data beneath it
-#[no_mangle]
-pub unsafe extern "C" fn num_shares(keys: *const Keys) -> usize {
-    (*keys).shares.len()
-}
-
-/// Gets a pointer to the polynomial corresponding to the provided `Keys` pointer
-///
-/// # Safety
-/// The provided pointer will be dereferenced, so there must be valid data beneath it
-#[no_mangle]
-pub unsafe extern "C" fn polynomial_ptr(keys: *const Keys) -> *const Poly<PublicKey> {
-    &(*keys).polynomial as *const Poly<PublicKey>
-}
-
-/// Gets a pointer to the threshold public key corresponding to the provided `Keys` pointer
-///
-/// # Safety
-/// The provided pointer will be dereferenced, so there must be valid data beneath it
-#[no_mangle]
-pub unsafe extern "C" fn threshold_public_key_ptr(keys: *const Keys) -> *const PublicKey {
-    &(*keys).threshold_public_key as *const PublicKey
 }
 
 /// Gets a pointer to the public key corresponding to the provided `KeyPair` pointer
@@ -707,14 +644,14 @@ pub unsafe extern "C" fn private_key_ptr(keypair: *const Keypair) -> *const Priv
     &(*keypair).private as *const PrivateKey
 }
 
-/// T-of-n threshold key parameters
+/// T-of-n threshold key parameters. Test-only helper produced by the central
+/// `threshold_keygen` — not exposed across the FFI boundary.
+#[cfg(test)]
 #[derive(Debug, Clone)]
-pub struct Keys {
+struct Keys {
     shares: Vec<Share<PrivateKey>>,
     polynomial: Poly<PublicKey>,
     threshold_public_key: PublicKey,
-    pub t: usize,
-    pub n: usize,
 }
 
 #[derive(Clone)]
@@ -772,9 +709,7 @@ mod tests {
         };
 
         let (n, t) = (5, 3);
-        let mut keys = MaybeUninit::<*mut Keys>::uninit();
-        unsafe { threshold_keygen(n, t, &seed[..], keys.as_mut_ptr()) };
-        let keys = unsafe { &*keys.assume_init() };
+        let keys = threshold_keygen(n, t, &seed[..]);
 
         let (message_to_sign, blinding_factor) = if should_blind {
             let mut blinded_message = MaybeUninit::<Buffer>::uninit();
@@ -801,7 +736,7 @@ mod tests {
             let mut partial_sig = MaybeUninit::<Buffer>::uninit();
             let ret = unsafe {
                 partial_sign_fn(
-                    share_ptr(keys, i),
+                    &keys.shares[i] as *const _,
                     &message_to_sign,
                     partial_sig.as_mut_ptr(),
                 )
@@ -813,7 +748,7 @@ mod tests {
         }
 
         // 3. verify the partial signatures & concatenate them
-        let public_key = unsafe { polynomial_ptr(keys) };
+        let public_key = &keys.polynomial as *const _;
         let mut concatenated = Vec::new();
         for sig in &sigs {
             let sig_slice = <&[u8]>::from(sig);
@@ -842,7 +777,7 @@ mod tests {
         // 6. verify the threshold signature against the public key
         let ret = unsafe {
             verify(
-                threshold_public_key_ptr(keys),
+                &keys.threshold_public_key as *const _,
                 &Buffer::from(&msg[..]),
                 &asig,
             )
