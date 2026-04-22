@@ -31,7 +31,3 @@ bincode = "1.2"
 proptest = "1.0.0"
 static_assertions = "1.1.0"
 hex = "0.4.3"
-
-# [features]
-# # Enable parallel computation. Cannot be used with WASM.
-# parallel = ["ark-ec/parallel", "ark-ff/parallel"]
