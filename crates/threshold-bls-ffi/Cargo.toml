@@ -29,7 +29,7 @@ wasm-bindgen = { version = "0.2.62", optional = true }
 # code size when deploying.
 console_error_panic_hook = { version = "0.1.7", optional = true }
 
-jni = { version = "0.21.1", optional = true }
+jni = { version = "0.22.4", optional = true }
 
 [features]
 # Build WASM bindings for use in JS environments
