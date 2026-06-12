@@ -10,6 +10,9 @@ NDK_HOST_TAG ?= linux-x86_64
 NDK_BIN = $(NDK_HOME)/toolchains/llvm/prebuilt/$(NDK_HOST_TAG)/bin
 ANDROID_DEST = /output/android
 IOS_DEST = ./target/ios
+# The mobile consumers link against the C ABI (threshold.h), which requires
+# the "ffi" feature; without it the produced libraries export no symbols.
+FEATURES ?= ffi
 CARGO_PARAMS = --no-default-features $(if $(FEATURES),--features $(FEATURES))
 
 TARGET_DIR = ../../../target
