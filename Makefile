@@ -1,4 +1,8 @@
 RUST_VERSION ?= 1.95.0
+# Cargo features for the Android/iOS cross builds. The mobile consumers link
+# against the C ABI (threshold.h), which requires "ffi"; without it the
+# produced libraries export no symbols.
+FEATURES ?= ffi
 IMAGE_NAME = celo-bls-rust-$(subst .,_,$(RUST_VERSION))
 OUTPUT_DIR = $(PWD)/output
 CARGO_CACHE_VOLUME = celo-bls-cargo-cache
