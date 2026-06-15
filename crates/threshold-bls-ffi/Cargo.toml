@@ -20,7 +20,7 @@ serde = { version = "1", default-features = false, optional = true }
 
 # Required for WASM interface
 blake2 = { version = "0.10", default-features = false, optional = true }
-getrandom = { version = "0.2", default-features = false, features = ["js"] }
+getrandom = { version = "0.4", default-features = false, features = ["js"] }
 wasm-bindgen = { version = "0.2.62", optional = true }
 
 # The `console_error_panic_hook` crate provides better debugging of panics by
