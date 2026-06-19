@@ -92,8 +92,8 @@ pub fn encrypt<C: Curve, R: RngCore>(to: &C::Point, msg: &[u8], rng: &mut R) -> 
 
     EciesCipher {
         aead,
-        nonce,
         ephemeral,
+        nonce,
     }
 }
 
