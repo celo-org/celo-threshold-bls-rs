@@ -59,6 +59,25 @@ jobs:
       - name: audit
         run: cargo audit
 
+  # cross/threshold.h is generated from ffi.rs. This regenerates it, compiles it
+  # as C11, C99, C++, Objective-C and Objective-C++, and fails if the committed
+  # copy is stale.
+  header:
+    runs-on: ubuntu-latest
+    name: header
+    steps:
+      - name: Checkout sources
+        uses: actions/checkout@v7
+      - uses: ./.github/actions/setup
+        with:
+          channel: stable
+      # The shared setup action installs Just and Rust only, and
+      # `just generate-header` refuses to run without the pinned cbindgen.
+      - name: install cbindgen
+        run: just install-cbindgen
+      - name: check header
+        run: just check-header
+
   wasm-pkg-tests:
     runs-on: ubuntu-latest
     name: wasm-pkg-tests
