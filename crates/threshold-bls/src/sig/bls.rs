@@ -13,12 +13,12 @@ pub enum BLSError {
     InvalidSig,
 
     /// InvalidPublicKey is raised when the public key is the identity element,
-    /// which would verify every message.
+    /// which would accept an identity signature on any message.
     #[error("public key is the identity element")]
     InvalidPublicKey,
 
     /// InvalidMessagePoint is raised when the message point is the identity
-    /// element, which would be verified by every public key.
+    /// element, which would let an identity signature verify under any key.
     #[error("message point is the identity element")]
     InvalidMessagePoint,
 
@@ -80,16 +80,16 @@ pub mod common {
 
         /// Rejects degenerate operands and then checks the pairing equation.
         ///
-        /// The pairing equation holds for every message once either the public
-        /// key or the message point is the identity, since both sides of
-        /// `e(sig, g2) == e(hm, pub)` collapse to 1. Rejecting the identity
-        /// public key is the IETF BLS spec's `KeyValidate`; the message point
-        /// needs the same treatment because the blind scheme takes it from the
-        /// wire rather than from `hash_to_curve`.
+        /// An identity public key makes one side of `e(sig, g2) == e(hm, pub)`
+        /// equal to 1 for every message, so it accepts the identity signature
+        /// on anything. An identity message point does the same, and the blind
+        /// scheme takes that point from the wire rather than from
+        /// `hash_to_curve`, so it needs the same treatment. Rejecting the
+        /// identity public key is the IETF BLS spec's `KeyValidate`.
         ///
-        /// The signature is deliberately not checked: an identity signature
-        /// cannot satisfy the equation against a non-identity public key, and
-        /// aggregation may legitimately produce one.
+        /// The signature itself is deliberately not checked: on its own it
+        /// only fails the equation, and aggregation may legitimately produce
+        /// it.
         fn check_pairing(
             public: &Self::Public,
             sig: &Self::Signature,
@@ -281,10 +281,10 @@ mod tests {
         ));
     }
 
-    /// The pairing equation is what makes the identity dangerous: with either
-    /// operand the identity, both sides are 1 and it holds for every message.
-    /// `check_pairing` is the only thing standing between that and a forgery,
-    /// so pin the degeneracy — the tests above are vacuous without it.
+    /// Pins the degeneracy the guard exists for: an identity public key, or an
+    /// identity message point, satisfies the raw equation against an identity
+    /// signature for any message. Were that to stop holding, the rejection
+    /// tests above would keep passing while proving nothing.
     fn pairing_is_degenerate_on_identity<S>()
     where
         S: common::BLSScheme,
