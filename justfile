@@ -205,3 +205,34 @@ generate-header:
     fi
     cd {{ justfile_directory() }}/crates/threshold-bls-ffi
     cbindgen --output cross/threshold.h
+
+# Regenerate the header, compile it in every dialect a consumer might use, and
+# fail if the committed copy is stale. Compiling matters as much as the diff: a
+# malformed header committed alongside the source that produced it would pass a
+# diff-only check.
+check-header: generate-header
+    #!/usr/bin/env bash
+    set -euo pipefail
+    inc={{ justfile_directory() }}/crates/threshold-bls-ffi/cross
+    tmp=$(mktemp -d)
+    trap 'rm -rf "$tmp"' EXIT
+    printf '#include "threshold.h"\nint main(void){return 0;}\n' > "$tmp/t.c"
+
+    # clang rather than cc: the default cc on the CI runners is gcc, whose
+    # Objective-C frontend is not installed. The -x flags are required too,
+    # or every invocation would compile the same .c file as C.
+    #
+    # C99 is here because it rejects a duplicate typedef, which C11 allows —
+    # that is how a second `Keypair` leaking in from wasm.rs would show up.
+    clang   -x c            -std=c11   -pedantic -Wall -Wextra -Werror -fsyntax-only -I "$inc" "$tmp/t.c"
+    clang   -x c            -std=c99   -pedantic -Wall -Wextra -Werror -fsyntax-only -I "$inc" "$tmp/t.c"
+    clang++ -x c++          -std=c++17 -pedantic -Wall -Wextra -Werror -fsyntax-only -I "$inc" "$tmp/t.c"
+    clang   -x objective-c             -Wall -Wextra -Werror -fsyntax-only -I "$inc" "$tmp/t.c"
+    clang++ -x objective-c++           -Wall -Wextra -Werror -fsyntax-only -I "$inc" "$tmp/t.c"
+
+    # `git diff` reports nothing for a path git does not track, so a header that
+    # was deleted or gitignored would be regenerated here and pass silently.
+    # Consumers take this file straight from the repository; assert it is tracked
+    # before trusting the diff.
+    git ls-files --error-unmatch -- "$inc/threshold.h" > /dev/null
+    git diff --exit-code -- "$inc/threshold.h"
