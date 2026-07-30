@@ -16,7 +16,6 @@ pkg/
 #Cargo.lock
 
 NDK
-.cargo
 react-native
 
 solidity/cache

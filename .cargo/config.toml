@@ -1,0 +1,8 @@
+# On wasm, `-C strip` removes all custom sections, including `target_features`.
+# wasm-opt (run by wasm-pack) reads that section to know which post-MVP
+# features (e.g. bulk memory) the module uses; without it, validation fails.
+# Stripping gains nothing there anyway: wasm-opt already drops debug info and
+# names from the published pkg. This override cancels the release profile's
+# `strip = "symbols"` for wasm only.
+[target.wasm32-unknown-unknown]
+rustflags = ["-C", "strip=none"]
