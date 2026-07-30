@@ -30,9 +30,9 @@ jobs:
           channel: stable
           components: rustfmt,clippy
       - name: lint
-        run: make lint
+        run: just lint
       - name: fmt
-        run: make fmt
+        run: just fmt
 
   cargo-build:
     runs-on: ubuntu-latest
