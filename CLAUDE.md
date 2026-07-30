@@ -113,5 +113,29 @@ ever compiled: the `ffi.rs` tests were skipped, clippy never saw `ffi.rs` or
 `jni_bridge.rs`, and cbindgen could not expand the macro. Audit reports and CI
 runs predating the change cover the wasm surface only.
 
-`cross/threshold.h` is still hand-maintained and has drifted from `ffi.rs`.
-cbindgen can now see the module, but nothing generates the header yet.
+## The generated C header
+
+`cross/threshold.h` is produced by cbindgen from `ffi.rs` — do not edit it.
+Run `just generate-header` after any change to the C surface and commit the
+result; `just install-cbindgen` provides the pinned version it insists on.
+
+CI enforces this twice over. `just check-header` regenerates, compiles the
+header as C11, C99, C++, Objective-C and Objective-C++, and fails on drift.
+`just check-abi` compiles `cross/smoke_test.c` against it, links the cdylib and
+runs it, then diffs the exported symbols against
+`cross/exported-symbols.txt`. The second is what catches a header that
+disagrees with the library; Rust tests call Rust functions with Rust types and
+structurally cannot.
+
+Three things constrain how the header can be generated, all of them learned the
+hard way:
+
+- `[parse] parse_deps = true` panics on the arkworks generics
+  (`G1Curve has 0 params but is being instantiated with 1 values`).
+- cbindgen renders a `repr(transparent)` struct as a typedef of the type it
+  wraps, so `BlindingFactor`, `KeyShare` and `PublicPoly` would come out as
+  `typedef Token<PrivateKey> BlindingFactor;`. They are declared by hand in
+  `after_includes` and excluded, as are the `PrivateKey`/`PublicKey`/`Signature`
+  aliases, which resolve to names cbindgen cannot declare.
+- cbindgen does not evaluate features, so it sees `wasm.rs` too. That is why the
+  struct behind the `Keypair` JS class is named `WasmKeypair`.
