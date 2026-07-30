@@ -72,7 +72,7 @@ jvm: build-docker-image
     cid=$(docker create --platform=linux/amd64 \
         -w /app/crates/threshold-bls-ffi \
         {{ image_name }} \
-        cargo build --release --features=jni)
+        cargo build --release --features=jvm)
     trap 'docker rm -f "$cid" >/dev/null' EXIT
     docker start -a "$cid"
     docker cp "$cid":/app/target/release/{{ lib_name }}.so {{ output_dir }}/jvm/
