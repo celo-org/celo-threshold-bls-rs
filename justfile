@@ -154,8 +154,8 @@ build-android-target target clang_prefix:
         cargo build --package threshold-bls-ffi --no-default-features {{ cargo_features }} \
             --target {{ target }} --release --lib
 
-# Some dependencies misbehave natively on ARM64 Macs, so the amd64 container is
-# the reliable way to run the tests there.
+# The tests also run natively; this recipe exists to run them against the same
+# linux/amd64 image the released libraries are built in.
 
 # Run the tests in Docker
 test: build-docker-image
