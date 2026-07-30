@@ -12,6 +12,10 @@ RUST_VERSION := env("RUST_VERSION", "1.95.0")
 # produced libraries export no symbols.
 FEATURES := env("FEATURES", "ffi")
 
+# Pinned because generated output varies between cbindgen releases, and the
+# header is checked in.
+cbindgen_version := "0.29.4"
+
 image_name := "celo-bls-rust-" + replace(RUST_VERSION, ".", "_")
 output_dir := justfile_directory() / "output"
 target_dir := justfile_directory() / "target"
@@ -178,3 +182,26 @@ lint:
 
 fmt:
     cargo fmt --all -- --check
+
+# Install the pinned cbindgen. Needed once before `generate-header`.
+install-cbindgen:
+    cargo install cbindgen --version {{ cbindgen_version }} --locked
+
+# Regenerate cross/threshold.h from ffi.rs. Run after any change to the C ABI
+# and commit the result; `check-header` fails if it is stale.
+generate-header:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    # `command -v` first: under `set -e` a missing binary would abort the recipe
+    # before the version check could explain why.
+    command -v cbindgen >/dev/null || {
+        echo "cbindgen not found; run: just install-cbindgen" >&2
+        exit 1
+    }
+    have=$(cbindgen --version | awk '{print $2}')
+    if [ "$have" != "{{ cbindgen_version }}" ]; then
+        echo "need cbindgen {{ cbindgen_version }}, found $have; run: just install-cbindgen" >&2
+        exit 1
+    fi
+    cd {{ justfile_directory() }}/crates/threshold-bls-ffi
+    cbindgen --output cross/threshold.h
