@@ -37,5 +37,6 @@ wasm = ["wasm-bindgen", "blake2", "serde"]
 # Include a panic hook for printing panic messages to the JS console.
 wasm-debug = ["wasm", "console_error_panic_hook"]
 
-jvm = ["jni"]
+# Build JNI bindings for use from the JVM
+jvm = ["dep:jni"]
 ffi = ["serde"]

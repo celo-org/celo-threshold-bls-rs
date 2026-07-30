@@ -88,12 +88,12 @@ feature. They serve different consumers and are not interchangeable.
   points users at the unmerged `web-compatible` branch of
   `blind-threshold-bls-wasm` (commit `3d1013af`, October 2022), which predates
   every fix since.
-- **`jni` (`src/jni_bridge.rs`)** — a single `verify` function with no known
+- **`jvm` (`src/jni_bridge.rs`)** — a single `verify` function with no known
   consumer. Android reaches the C ABI through JNA, not through this bridge.
 
 ## Feature gating in `lib.rs`
 
-`core::cfg_select!` picks the **first** matching arm in the order wasm, jni,
+`core::cfg_select!` picks the **first** matching arm in the order wasm, jvm,
 ffi, so `--all-features` only ever compiles the wasm module. Three consequences
 worth knowing before you trust a green run:
 

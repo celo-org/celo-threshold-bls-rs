@@ -5,7 +5,7 @@ core::cfg_select! {
     feature = "wasm" => {
         pub mod wasm;
     }
-    feature = "jni" => {
+    feature = "jvm" => {
         pub mod jni_bridge;
     }
     feature = "ffi" => {
