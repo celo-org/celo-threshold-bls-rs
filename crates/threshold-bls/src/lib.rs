@@ -157,9 +157,6 @@
 /// Curve implementations for the traits defined in the [`group`](group/index.html) module.
 pub mod curve;
 
-/// Elliptic Curve Integrated Encryption Scheme using SHA256 as the Key Derivation
-pub mod ecies;
-
 /// Definitions of generic traits with scalars of prime fields and points on elliptic curves.
 pub mod group;
 
