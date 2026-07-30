@@ -312,10 +312,15 @@ impl BlindedMessage {
     }
 }
 
-#[wasm_bindgen]
+// Named `WasmKeypair` rather than `Keypair` because `ffi.rs` exports a struct
+// by that name too. cbindgen does not evaluate features, so it parses both
+// modules and would emit the typedef twice — legal in C11, an error in C99.
+// `js_name` keeps the JS class called `Keypair`, which the published
+// declarations promise.
+#[wasm_bindgen(js_name = Keypair)]
 #[derive(Clone)]
 /// A BLS12-377 Keypair
-pub struct Keypair {
+pub struct WasmKeypair {
     /// The private key
     private: PrivateKey,
     /// The public key
@@ -324,8 +329,8 @@ pub struct Keypair {
 
 // Need to implement custom getters if we want to return more than one value
 // and expose it https://rustwasm.github.io/wasm-bindgen/reference/attributes/on-rust-exports/getter-and-setter.html
-#[wasm_bindgen]
-impl Keypair {
+#[wasm_bindgen(js_class = Keypair)]
+impl WasmKeypair {
     #[wasm_bindgen(getter, js_name = privateKey)]
     pub fn private_key(&self) -> Vec<u8> {
         bincode::serialize(&self.private).expect("could not serialize private key")
@@ -343,10 +348,10 @@ impl Keypair {
 ///
 /// The seed MUST be at least 32 bytes long
 #[wasm_bindgen]
-pub fn keygen(seed: Vec<u8>) -> Keypair {
+pub fn keygen(seed: Vec<u8>) -> WasmKeypair {
     let mut rng = get_rng(&seed);
     let (private, public) = SigScheme::keypair(&mut rng);
-    Keypair { private, public }
+    WasmKeypair { private, public }
 }
 
 #[wasm_bindgen]
