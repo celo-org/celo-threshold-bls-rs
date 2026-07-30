@@ -4,7 +4,7 @@ use rand_core::{RngCore, SeedableRng};
 
 use serde::{de::DeserializeOwned, Serialize};
 use threshold_bls::{
-    poly::{Idx as Index, Poly},
+    poly::Poly,
     serialization,
     sig::{
         BlindScheme, BlindThresholdScheme, Scheme, Share, SignatureScheme, ThresholdScheme, Token,
@@ -12,6 +12,10 @@ use threshold_bls::{
 };
 
 use crate::*;
+
+// Only the test-only `threshold_keygen` deals in share indices.
+#[cfg(test)]
+use threshold_bls::poly::Idx as Index;
 
 /// FFI buffer for passing variable-length data across the C boundary.
 #[repr(C)]
@@ -58,7 +62,7 @@ impl<'a> From<&Buffer> for &'a [u8] {
 /// # Safety
 /// - If the same seed is used twice, the blinded result WILL be the same
 /// - **This function will dereference the provided pointers. If any invalid pointers are passed
-///     then the software will crash**.
+///   then the software will crash**.
 /// - If NULL pointers are passed, the function will return false
 ///
 /// Returns true if successful, otherwise false.
@@ -83,7 +87,7 @@ pub unsafe extern "C" fn blind(
 
     // blind the message with this randomness
     let message = <&[u8]>::from(unsafe { &*message });
-    let (blinding_factor, blinded_message_bytes) = SigScheme::blind_msg(&message, &mut rng);
+    let (blinding_factor, blinded_message_bytes) = SigScheme::blind_msg(message, &mut rng);
 
     unsafe { *blinded_message_out = Buffer::from(&blinded_message_bytes[..]) };
     std::mem::forget(blinded_message_bytes);
@@ -101,7 +105,7 @@ pub unsafe extern "C" fn blind(
 ///
 /// # Safety
 /// - **This function will dereference the provided pointers. If any invalid pointers are passed
-///     then the software will crash**.
+///   then the software will crash**.
 /// - If NULL pointers are passed, the function will return false
 ///
 /// Returns true if successful, otherwise false.
@@ -138,7 +142,7 @@ pub unsafe extern "C" fn unblind(
 ///
 /// # Safety
 /// - **This function will dereference the provided pointers. If any invalid pointers are passed
-///     then the software will crash**.
+///   then the software will crash**.
 /// - If NULL pointers are passed, the function will return false
 ///
 /// Returns true if successful, otherwise false.
@@ -157,7 +161,7 @@ pub unsafe extern "C" fn verify(
 
     // checks the signature on the message hash
     let signature = <&[u8]>::from(unsafe { &*signature });
-    SigScheme::verify(public_key, &message, signature).is_ok()
+    SigScheme::verify(public_key, message, signature).is_ok()
 }
 
 ///////////////////////////////////////////////////////////////////////////
@@ -168,7 +172,7 @@ pub unsafe extern "C" fn verify(
 ///
 /// # Safety
 /// - **This function will dereference the provided pointers. If any invalid pointers are passed
-///     then the software will crash**.
+///   then the software will crash**.
 /// - If NULL pointers are passed, the function will return false
 ///
 /// Returns true if successful, otherwise false.
@@ -185,7 +189,7 @@ pub unsafe extern "C" fn sign(
     let private_key = unsafe { &*private_key };
     let message = <&[u8]>::from(unsafe { &*message });
 
-    let sig = match SigScheme::sign(&private_key, &message) {
+    let sig = match SigScheme::sign(private_key, message) {
         Ok(s) => s,
         Err(_) => return false,
     };
@@ -200,7 +204,7 @@ pub unsafe extern "C" fn sign(
 ///
 /// # Safety
 /// - **This function will dereference the provided pointers. If any invalid pointers are passed
-///     then the software will crash**.
+///   then the software will crash**.
 /// - If NULL pointers are passed, the function will return false
 ///
 /// Returns true if successful, otherwise false.
@@ -217,7 +221,7 @@ pub unsafe extern "C" fn sign_blinded_message(
     let private_key = unsafe { &*private_key };
     let message = <&[u8]>::from(unsafe { &*message });
 
-    let sig = match SigScheme::blind_sign(&private_key, &message) {
+    let sig = match SigScheme::blind_sign(private_key, message) {
         Ok(s) => s,
         Err(_) => return false,
     };
@@ -233,7 +237,7 @@ pub unsafe extern "C" fn sign_blinded_message(
 ///
 /// # Safety
 /// - **This function will dereference the provided pointers. If any invalid pointers are passed
-///     then the software will crash**.
+///   then the software will crash**.
 /// - If NULL pointers are passed, the function will return false
 ///
 /// Returns true if successful, otherwise false.
@@ -265,7 +269,7 @@ pub unsafe extern "C" fn partial_sign(
 ///
 /// # Safety
 /// - **This function will dereference the provided pointers. If any invalid pointers are passed
-///     then the software will crash**.
+///   then the software will crash**.
 /// - If NULL pointers are passed, the function will return false
 ///
 /// Returns true if successful, otherwise false.
@@ -301,7 +305,7 @@ pub unsafe extern "C" fn partial_sign_blinded_message(
 ///
 /// # Safety
 /// - **This function will dereference the provided pointers. If any invalid pointers are passed
-///     then the software will crash**.
+///   then the software will crash**.
 /// - If NULL pointers are passed, the function will return false
 ///
 /// Returns true if successful, otherwise false.
@@ -321,7 +325,7 @@ pub unsafe extern "C" fn partial_verify(
     let blinded_message = <&[u8]>::from(unsafe { &*blinded_message });
     let signature = <&[u8]>::from(unsafe { &*signature });
 
-    SigScheme::partial_verify(&polynomial, blinded_message, signature).is_ok()
+    SigScheme::partial_verify(polynomial, blinded_message, signature).is_ok()
 }
 
 /// Verifies a partial *blinded* signature against the public key corresponding to the secret shared
@@ -329,7 +333,7 @@ pub unsafe extern "C" fn partial_verify(
 ///
 /// # Safety
 /// - **This function will dereference the provided pointers. If any invalid pointers are passed
-///     then the software will crash**.
+///   then the software will crash**.
 /// - If NULL pointers are passed, the function will return false
 ///
 /// Returns true if successful, otherwise false.
@@ -349,14 +353,14 @@ pub unsafe extern "C" fn partial_verify_blind_signature(
     let blinded_message = <&[u8]>::from(unsafe { &*blinded_message });
     let signature = <&[u8]>::from(unsafe { &*signature });
 
-    SigScheme::verify_blind_partial(&polynomial, blinded_message, signature).is_ok()
+    SigScheme::verify_blind_partial(polynomial, blinded_message, signature).is_ok()
 }
 
 /// Combines a flattened vector of partial signatures to a single threshold signature
 ///
 /// # Safety
 /// - **This function will dereference the provided pointers. If any invalid pointers are passed
-///     then the software will crash**.
+///   then the software will crash**.
 /// - If NULL pointers are passed, the function will return false
 /// - This function does not check if the signatures are valid!
 ///
@@ -398,7 +402,7 @@ pub unsafe extern "C" fn combine(
 ///
 /// # Safety
 /// - **This function will dereference the provided pointers. If any invalid pointers are passed
-///     then the software will crash**.
+///   then the software will crash**.
 /// - If NULL pointers are passed, the function will return false
 ///
 /// Returns true if successful, otherwise false.
@@ -414,7 +418,7 @@ pub unsafe extern "C" fn deserialize_pubkey(
 ///
 /// # Safety
 /// - **This function will dereference the provided pointers. If any invalid pointers are passed
-///     then the software will crash**.
+///   then the software will crash**.
 /// - If NULL pointers are passed, the function will return false
 ///
 /// Returns true if successful, otherwise false.
@@ -430,7 +434,7 @@ pub unsafe extern "C" fn deserialize_privkey(
 ///
 /// # Safety
 /// - **This function will dereference the provided pointers. If any invalid pointers are passed
-///     then the software will crash**.
+///   then the software will crash**.
 /// - If NULL pointers are passed, the function will return false
 ///
 /// Returns true if successful, otherwise false.
@@ -443,7 +447,7 @@ pub unsafe extern "C" fn deserialize_sig(sig_buf: *const u8, sig: *mut *mut Sign
 ///
 /// # Safety
 /// - **This function will dereference the provided pointers. If any invalid pointers are passed
-///     then the software will crash**.
+///   then the software will crash**.
 /// - If NULL pointers are passed, the function will return false
 ///
 /// Returns true if successful, otherwise false.
@@ -459,7 +463,7 @@ pub unsafe extern "C" fn serialize_pubkey(
 ///
 /// # Safety
 /// - **This function will dereference the provided pointers. If any invalid pointers are passed
-///     then the software will crash**.
+///   then the software will crash**.
 /// - If NULL pointers are passed, the function will return false
 ///
 /// Returns true if successful, otherwise false.
@@ -475,7 +479,7 @@ pub unsafe extern "C" fn serialize_privkey(
 ///
 /// # Safety
 /// - **This function will dereference the provided pointers. If any invalid pointers are passed
-///     then the software will crash**.
+///   then the software will crash**.
 /// - If NULL pointers are passed, the function will return false
 ///
 /// Returns true if successful, otherwise false.
@@ -490,7 +494,7 @@ unsafe fn deserialize<T: DeserializeOwned>(
 ) -> bool {
     let buf = unsafe { std::slice::from_raw_parts(in_buf, len) };
 
-    let obj = if let Ok(res) = serialization::deserialize(&buf) {
+    let obj = if let Ok(res) = serialization::deserialize(buf) {
         res
     } else {
         return false;
@@ -524,7 +528,7 @@ unsafe fn serialize<T: Serialize>(in_obj: *const T, out_bytes: *mut *mut u8) -> 
 ///
 /// The pointer must point to a valid instance of the data type
 pub unsafe extern "C" fn destroy_token(token: *mut Token<PrivateKey>) {
-    Box::from_raw(token);
+    drop(unsafe { Box::from_raw(token) });
 }
 
 #[no_mangle]
@@ -534,7 +538,7 @@ pub unsafe extern "C" fn destroy_token(token: *mut Token<PrivateKey>) {
 ///
 /// The pointer must point to a valid instance of the data type
 pub unsafe extern "C" fn destroy_keypair(keypair: *mut Keypair) {
-    Box::from_raw(keypair);
+    drop(unsafe { Box::from_raw(keypair) });
 }
 
 #[no_mangle]
@@ -544,7 +548,7 @@ pub unsafe extern "C" fn destroy_keypair(keypair: *mut Keypair) {
 ///
 /// The pointer must point to a valid instance of the data type
 pub unsafe extern "C" fn destroy_privkey(private_key: *mut PrivateKey) {
-    Box::from_raw(private_key);
+    drop(unsafe { Box::from_raw(private_key) });
 }
 
 #[no_mangle]
@@ -554,7 +558,7 @@ pub unsafe extern "C" fn destroy_privkey(private_key: *mut PrivateKey) {
 ///
 /// The pointer must point to a valid instance of the data type
 pub unsafe extern "C" fn free_vector(bytes: *mut u8, len: usize) {
-    drop(unsafe { Vec::from_raw_parts(bytes, len as usize, len as usize) });
+    drop(unsafe { Vec::from_raw_parts(bytes, len, len) });
 }
 
 #[no_mangle]
@@ -564,7 +568,7 @@ pub unsafe extern "C" fn free_vector(bytes: *mut u8, len: usize) {
 ///
 /// The pointer must point to a valid instance of the data type
 pub unsafe extern "C" fn destroy_pubkey(public_key: *mut PublicKey) {
-    Box::from_raw(public_key);
+    drop(unsafe { Box::from_raw(public_key) });
 }
 
 #[no_mangle]
@@ -574,7 +578,7 @@ pub unsafe extern "C" fn destroy_pubkey(public_key: *mut PublicKey) {
 ///
 /// The pointer must point to a valid instance of the data type
 pub unsafe extern "C" fn destroy_sig(signature: *mut Signature) {
-    Box::from_raw(signature);
+    drop(unsafe { Box::from_raw(signature) });
 }
 
 ///////////////////////////////////////////////////////////////////////////
@@ -620,7 +624,7 @@ fn threshold_keygen(n: usize, t: usize, seed: &[u8]) -> Keys {
 #[no_mangle]
 pub unsafe extern "C" fn keygen(seed: *const Buffer, keypair: *mut *mut Keypair) {
     let seed = <&[u8]>::from(unsafe { &*seed });
-    let mut rng = get_rng(&seed);
+    let mut rng = get_rng(seed);
     let (private, public) = SigScheme::keypair(&mut rng);
     let keypair_local = Keypair { private, public };
     unsafe { *keypair = Box::into_raw(Box::new(keypair_local)) };
@@ -866,7 +870,7 @@ mod tests {
         let message = unsafe { std::slice::from_raw_parts(privkey_buf, PRIVKEY_LEN) };
         assert_eq!(marshalled, message);
 
-        let unmarshalled: PrivateKey = serialization::deserialize(&message).unwrap();
+        let unmarshalled: PrivateKey = serialization::deserialize(message).unwrap();
         assert_eq!(&unmarshalled, private_key);
 
         let mut de = MaybeUninit::<*mut PrivateKey>::uninit();
@@ -900,7 +904,7 @@ mod tests {
         let message = unsafe { std::slice::from_raw_parts(pubkey_buf, PUBKEY_LEN) };
         assert_eq!(marshalled, message);
 
-        let unmarshalled: PublicKey = serialization::deserialize(&message).unwrap();
+        let unmarshalled: PublicKey = serialization::deserialize(message).unwrap();
         assert_eq!(&unmarshalled, public_key);
 
         let mut de = MaybeUninit::<*mut PublicKey>::uninit();

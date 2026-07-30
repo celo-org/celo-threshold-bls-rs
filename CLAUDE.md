@@ -24,9 +24,9 @@ cargo test -p threshold-bls poly::      # single test / module filter
 - `just test` (and `just test-cached`, which adds cargo/target cache volumes)
   runs `cargo test --features wasm` inside the linux/amd64 Docker build image —
   the same environment the released libraries are built in. Requires Docker.
-- The C surface needs explicit flags:
-  `cargo test -p threshold-bls-ffi --no-default-features --features ffi`
-  (see "Feature gating" below for why `--all-features` silently skips it).
+- To exercise one surface on its own, pair the feature with
+  `--no-default-features`, e.g.
+  `cargo test -p threshold-bls-ffi --no-default-features --features ffi`.
 - Release artifacts are built by justfile recipes (`just wasm|jvm|android|ios`,
   outputs under `output/`). All but `ios` require Docker (linux/amd64 image);
   `ios` requires a macOS host with Xcode. The toolchain is pinned to Rust 1.95
@@ -93,16 +93,15 @@ feature. They serve different consumers and are not interchangeable.
 
 ## Feature gating in `lib.rs`
 
-`core::cfg_select!` picks the **first** matching arm in the order wasm, jvm,
-ffi, so `--all-features` only ever compiles the wasm module. Three consequences
-worth knowing before you trust a green run:
+Each surface hangs off its own `#[cfg(feature = "...")]`, so the three are
+independent: `--all-features` compiles wasm, jvm and ffi together, and builds,
+tests and lints all of them in one run.
 
-- `cargo nextest run --workspace --all-features` runs the 2 tests in `wasm.rs`
-  and silently skips the 4 in `ffi.rs`.
-- `cargo clippy --all-features` never lints `ffi.rs` or `jni_bridge.rs`.
-- cbindgen cannot expand the macro, so pointed at this crate it emits a header
-  with zero functions. `cross/threshold.h` is therefore hand-maintained and has
-  drifted from `ffi.rs`.
+This replaced a `core::cfg_select!` whose first matching arm won, in the order
+wasm, jvm, ffi. Since every CI job passes `--all-features`, only `wasm.rs` was
+ever compiled: the `ffi.rs` tests were skipped, clippy never saw `ffi.rs` or
+`jni_bridge.rs`, and cbindgen could not expand the macro. Audit reports and CI
+runs predating the change cover the wasm surface only.
 
-Build or test the C surface explicitly with
-`--no-default-features --features ffi`.
+`cross/threshold.h` is still hand-maintained and has drifted from `ffi.rs`.
+cbindgen can now see the module, but nothing generates the header yet.
