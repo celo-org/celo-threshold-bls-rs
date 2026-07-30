@@ -584,11 +584,14 @@ pub unsafe extern "C" fn destroy_privkey(private_key: *mut PrivateKey) {
 #[no_mangle]
 /// Frees the memory allocated for a vector
 ///
+/// Takes a const pointer so that a caller can pass `Buffer::ptr` straight back
+/// without casting away the qualifier to free its own buffer.
+///
 /// # Safety
 ///
 /// The pointer must point to a valid instance of the data type
-pub unsafe extern "C" fn free_vector(bytes: *mut u8, len: usize) {
-    drop(unsafe { Vec::from_raw_parts(bytes, len, len) });
+pub unsafe extern "C" fn free_vector(bytes: *const u8, len: usize) {
+    drop(unsafe { Vec::from_raw_parts(bytes as *mut u8, len, len) });
 }
 
 #[no_mangle]
