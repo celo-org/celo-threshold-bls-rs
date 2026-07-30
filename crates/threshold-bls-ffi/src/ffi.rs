@@ -56,7 +56,7 @@ impl<'a> From<&Buffer> for &'a [u8] {
 /// The `blinding_factor_out` should be saved for unblinding any
 /// signatures on `blinded_message_out`. It lives in-memory.
 ///
-/// You should use `free_vec` to free `blinded_message_out` and `destroy_token` to destroy
+/// You should use `free_vector` to free `blinded_message_out` and `destroy_token` to destroy
 /// `blinding_factor_out`.
 ///
 /// # Safety
@@ -487,11 +487,17 @@ pub unsafe extern "C" fn serialize_sig(sig: *const Signature, sig_buf: *mut *mut
     serialize(sig, sig_buf)
 }
 
+// The null checks live here rather than in the six exported wrappers so that no
+// call site can omit them; every wrapper documents that NULL returns false.
 unsafe fn deserialize<T: DeserializeOwned>(
     in_buf: *const u8,
     len: usize,
     out: *mut *mut T,
 ) -> bool {
+    if in_buf.is_null() || out.is_null() {
+        return false;
+    }
+
     let buf = unsafe { std::slice::from_raw_parts(in_buf, len) };
 
     let obj = if let Ok(res) = serialization::deserialize(buf) {
@@ -506,6 +512,10 @@ unsafe fn deserialize<T: DeserializeOwned>(
 }
 
 unsafe fn serialize<T: Serialize>(in_obj: *const T, out_bytes: *mut *mut u8) -> bool {
+    if in_obj.is_null() || out_bytes.is_null() {
+        return false;
+    }
+
     let obj = unsafe { &*in_obj };
     let mut marshalled = if let Ok(res) = bincode::serialize(obj) {
         res
@@ -935,6 +945,52 @@ mod tests {
             let ret =
                 unsafe { verify(pubkey, &Buffer::from(msg), &Buffer::from(&identity_sig[..])) };
             assert!(!ret, "identity public key verified {msg:?}");
+        }
+    }
+
+    // The six serialize/deserialize functions document that a NULL argument
+    // returns false. Before the guards landed in the shared helpers they
+    // dereferenced it instead, so `deserialize_pubkey(NULL, &out)` read 96
+    // bytes from address zero.
+    #[test]
+    fn serialization_rejects_null() {
+        let mut pubkey_out = MaybeUninit::<*mut PublicKey>::uninit();
+        let mut privkey_out = MaybeUninit::<*mut PrivateKey>::uninit();
+        let mut sig_out = MaybeUninit::<*mut Signature>::uninit();
+        let mut bytes_out = MaybeUninit::<*mut u8>::uninit();
+
+        unsafe {
+            assert!(!deserialize_pubkey(
+                std::ptr::null(),
+                pubkey_out.as_mut_ptr()
+            ));
+            assert!(!deserialize_privkey(
+                std::ptr::null(),
+                privkey_out.as_mut_ptr()
+            ));
+            assert!(!deserialize_sig(std::ptr::null(), sig_out.as_mut_ptr()));
+
+            assert!(!serialize_pubkey(std::ptr::null(), bytes_out.as_mut_ptr()));
+            assert!(!serialize_privkey(std::ptr::null(), bytes_out.as_mut_ptr()));
+            assert!(!serialize_sig(std::ptr::null(), bytes_out.as_mut_ptr()));
+        }
+    }
+
+    #[test]
+    fn serialization_rejects_null_output() {
+        let seed = b"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+        let mut keypair = MaybeUninit::<*mut Keypair>::uninit();
+        unsafe { keygen(&Buffer::from(&seed[..]), keypair.as_mut_ptr()) };
+        let keypair = unsafe { &*keypair.assume_init() };
+        let pubkey = unsafe { public_key_ptr(keypair) };
+        let marshalled = bincode::serialize(unsafe { &*pubkey }).unwrap();
+
+        unsafe {
+            assert!(!serialize_pubkey(pubkey, std::ptr::null_mut()));
+            assert!(!deserialize_pubkey(
+                marshalled.as_ptr(),
+                std::ptr::null_mut()
+            ));
         }
     }
 }
