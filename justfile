@@ -236,3 +236,39 @@ check-header: generate-header
     # before trusting the diff.
     git ls-files --error-unmatch -- "$inc/threshold.h" > /dev/null
     git diff --exit-code -- "$inc/threshold.h"
+
+# Compile the C smoke test against the generated header, link it to the real
+# library, run it, and check the exported symbols against the manifest.
+#
+# Rust tests call Rust functions with Rust types, so they cannot catch a
+# header/library mismatch — which is how the keygen declaration stayed wrong
+# for five years. This can.
+check-abi:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    cross={{ justfile_directory() }}/crates/threshold-bls-ffi/cross
+    cargo build --package threshold-bls-ffi --no-default-features --features ffi --release
+
+    tmp=$(mktemp -d)
+    trap 'rm -rf "$tmp"' EXIT
+
+    # The cdylib rather than the staticlib: linking a Rust staticlib from C
+    # means supplying Rust's native system libraries by hand.
+    clang -std=c11 -Wall -Wextra -Werror \
+        -I "$cross" "$cross/smoke_test.c" \
+        -L {{ target_dir }}/release -lblind_threshold_bls \
+        -o "$tmp/smoke_test"
+    LD_LIBRARY_PATH={{ target_dir }}/release \
+        DYLD_LIBRARY_PATH={{ target_dir }}/release \
+        "$tmp/smoke_test"
+
+    # An exact comparison, not a subset: an accidental new export should fail
+    # rather than be absorbed into the manifest.
+    if [ -f {{ target_dir }}/release/{{ lib_name }}.so ]; then
+        nm -gD --defined-only {{ target_dir }}/release/{{ lib_name }}.so \
+            | awk '$2 == "T" { print $3 }' | sort > "$tmp/symbols"
+    else
+        nm -gU {{ target_dir }}/release/{{ lib_name }}.dylib \
+            | awk '$2 == "T" { print $3 }' | sed 's/^_//' | sort > "$tmp/symbols"
+    fi
+    diff "$cross/exported-symbols.txt" "$tmp/symbols"
