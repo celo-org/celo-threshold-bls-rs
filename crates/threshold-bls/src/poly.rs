@@ -108,7 +108,8 @@ where
         // +1 because we must never evaluate the polynomial at its first point
         // otherwise it reveals the "secret" value !
         // TODO: maybe move that a layer above, to not mix ss scheme with poly.
-        xi.set_int((i + 1).into());
+        // Widened to u64 so the largest index cannot wrap back onto x = 0.
+        xi.set_int(u64::from(i) + 1);
 
         let res = self.0.iter().rev().fold(C::zero(), |mut sum, coeff| {
             sum.mul(&xi);
@@ -211,7 +212,9 @@ where
             .take(t)
             .fold(BTreeMap::new(), |mut m, sh| {
                 let mut xi = C::RHS::new();
-                xi.set_int((sh.index + 1).into());
+                // Widened to u64 so the largest index cannot wrap back onto
+                // x = 0, where it would annihilate every other Lagrange term.
+                xi.set_int(u64::from(sh.index) + 1);
                 m.insert(sh.index, (xi, sh.value));
                 m
             });
@@ -359,6 +362,50 @@ pub mod tests {
         let p = Poly::<Sc>::new(s);
         assert_eq!(p.0.len(), s + 1);
         assert_eq!(p.degree(), s);
+    }
+
+    /// Evaluating at the largest index must not collapse onto the constant
+    /// term. `eval` shifts the index by one to avoid handing out the secret at
+    /// x = 0, and that shift must hold across the whole index range.
+    #[test]
+    fn eval_at_max_index_does_not_reveal_the_constant_term() {
+        let private = Poly::<Sc>::new(3);
+        let at_max = private.eval(Idx::MAX);
+        assert_ne!(
+            &at_max.value,
+            private.public_key(),
+            "eval(Idx::MAX) returned the constant term"
+        );
+    }
+
+    /// A share at the largest index must not be able to displace the honest
+    /// shares. If its x collapses to zero, every other Lagrange numerator picks
+    /// up that zero factor and the attacker's value is recovered verbatim.
+    #[test]
+    fn recover_is_not_hijacked_by_max_index_share() {
+        let t = 3;
+        let private = Poly::<Sc>::new(t - 1);
+        let secret = *private.public_key();
+
+        let mut shares: Vec<Eval<Sc>> = (0..t as Idx).map(|i| private.eval(i)).collect();
+
+        // The attacker replaces one honest share with an arbitrary value
+        // labelled with the largest index.
+        let attacker_value = Sc::rand(&mut thread_rng());
+        shares[t - 1] = Eval {
+            index: Idx::MAX,
+            value: attacker_value,
+        };
+
+        let recovered = Poly::<Sc>::recover(t, shares).expect("recovery should not error");
+        assert_ne!(
+            recovered, attacker_value,
+            "a single share at Idx::MAX overrode every honest share"
+        );
+        assert_ne!(
+            recovered, secret,
+            "recovery from a tampered share should not yield the secret"
+        );
     }
 
     #[test]
