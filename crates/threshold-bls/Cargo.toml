@@ -2,7 +2,13 @@
 name = "threshold-bls"
 version = "0.2.0"
 authors = ["nikkolasg", "Paul Lange <palango@gmx.de>"]
-edition = "2021"
+description = "Threshold BLS signatures over BLS12-377, with blind signing"
+keywords = ["bls", "threshold", "signature", "blind-signature", "crypto"]
+categories = ["cryptography"]
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
 
 [lib]
 crate-type = ["lib"]
