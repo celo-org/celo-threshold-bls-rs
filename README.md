@@ -8,38 +8,49 @@ This crate provides libraries and command line interfaces for producing threshol
 
 ## Building with Docker
 
-The project includes a Makefile that supports building for multiple platforms using Docker. All built libraries are placed in the `output` directory, organized by platform.
+The project includes a [justfile](https://just.systems) that supports building for multiple platforms using Docker. All built libraries are placed in the `output` directory, organized by platform. Run `just` to list the available recipes.
+
+Install `just` with your package manager (`brew install just`, `cargo install just`) or with the
+[install script](https://just.systems/man/en/pre-built-binaries.html):
+
+```sh
+curl --proto '=https' --tlsv1.2 -sSf https://just.systems/install.sh | bash -s -- --to ~/bin
+```
 
 ### Clean Build
 
 To clean the output directory before building:
 
 ```sh
-make clean
+just clean
 ```
 
 ### Build All Platforms
 
 ```sh
-make all
+just all
 ```
 
 This builds the libraries for all supported platforms.
 
 ### Running Tests
 
-To run tests:
+The tests run natively, including on Apple Silicon:
 
 ```sh
-make test
+cargo test --workspace --all-features
 ```
 
-This runs the tests in a Docker container which is especially important for Apple Silicon (M1/M2/M3) Macs, as some dependencies have compatibility issues when running natively on ARM64 architecture. The Docker container provides an x86_64 / amd64 environment where all tests run successfully.
+To run them in the linux/amd64 build image instead, which is what CI builds against:
+
+```sh
+just test
+```
 
 ### WASM Build
 
 ```sh
-make wasm
+just wasm
 ```
 
 This builds WebAssembly bindings that can be used with Node.js and places them in `output/wasm`.
@@ -47,7 +58,7 @@ This builds WebAssembly bindings that can be used with Node.js and places them i
 ### JVM Build
 
 ```sh
-make jvm
+just jvm
 ```
 
 This builds JVM-compatible libraries and places them in `output/jvm`.
@@ -56,13 +67,13 @@ This builds JVM-compatible libraries and places them in `output/jvm`.
 
 The mobile builds target:
 
-- **Android**: API level 24 (Android 7.0) — set via `ANDROID_API` in `crates/threshold-bls-ffi/cross/Makefile`
-- **iOS**: 15.2 — set via `IPHONEOS_DEPLOYMENT_TARGET` in the same Makefile
+- **Android**: API level 24 (Android 7.0) — set via `android_api` in the `justfile`
+- **iOS**: 15.2 — set via `ios_deployment_target` in the same file
 
 ### iOS Build
 
 ```sh
-make ios
+just ios
 ```
 
 This builds a universal static library for iOS (combining aarch64 and x86_64 architectures) and places it in `output/ios`. Note that iOS builds must be run on a macOS host as they cannot be built in Docker.
@@ -70,7 +81,7 @@ This builds a universal static library for iOS (combining aarch64 and x86_64 arc
 ### Android Build
 
 ```sh
-make android
+just android
 ```
 
 This builds dynamic libraries for Android architectures (x86, x86_64, arm64-v8a, and armeabi-v7a) and places them in `output/android`.
@@ -80,7 +91,7 @@ This builds dynamic libraries for Android architectures (x86, x86_64, arm64-v8a,
 The docker image used for building the libraries can be built separately if needed:
 
 ```sh
-make build-docker-image
+just build-docker-image
 ```
 
 ### Rust version
@@ -88,7 +99,7 @@ make build-docker-image
 Rust 1.95.0 is used by default and tested for all builds. If desired, you can build with a different Rust version by setting the `RUST_VERSION` env var:
 
 ```sh
-make RUST_VERSION=1.95.0
+just RUST_VERSION=1.95.0 all
 ```
 
 ## Directory Structure
