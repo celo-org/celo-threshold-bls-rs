@@ -77,6 +77,10 @@ jobs:
         run: just install-cbindgen
       - name: check header
         run: just check-header
+      # Compiles the C smoke test against that header, links it to the real
+      # library and runs it. Rust tests cannot catch a header/library mismatch.
+      - name: check ABI
+        run: just check-abi
 
   wasm-pkg-tests:
     runs-on: ubuntu-latest
