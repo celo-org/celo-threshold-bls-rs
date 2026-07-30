@@ -11,6 +11,10 @@ opt-level = 3
 lto = "thin"
 codegen-units = 1
 incremental = false
+# Drops debug info and the symbol table from shipped binaries (~32% smaller
+# Android .so, see issue #169). Panic messages still work; only Rust-side
+# stack traces in crash reports are lost.
+strip = "symbols"
 
 # build all our deps in release mode 
 [profile.dev.package."*"]
