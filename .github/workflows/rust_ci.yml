@@ -94,6 +94,17 @@ jobs:
       - run: curl https://rustwasm.github.io/wasm-pack/installer/init.sh -sSf | sh
       - name: build
         run: cd crates/threshold-bls-ffi && wasm-pack build --target nodejs -- --features=wasm
+      # The Rust struct behind this class is named WasmKeypair, so that ffi.rs
+      # can keep its own Keypair without cbindgen emitting the typedef twice.
+      # js_name/js_class hold the exported name in place; assert that here
+      # rather than relying on the downstream suite, which tracks a moving
+      # branch and could go red or green for unrelated reasons.
+      - name: Check the exported declarations are unchanged
+        run: |
+          decls=crates/threshold-bls-ffi/pkg/blind_threshold_bls.d.ts
+          grep -q '^export class Keypair {' "$decls"
+          grep -q 'export function keygen(seed: Uint8Array): Keypair;' "$decls"
+          ! grep -q 'WasmKeypair' "$decls"
       - name: Upload wasm pkg artifact
         uses: actions/upload-artifact@v7
         with:
