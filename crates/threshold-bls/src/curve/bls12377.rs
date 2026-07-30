@@ -1,4 +1,4 @@
-use crate::group::{self, Element, PairingCurve as PC, Point, PrimeOrder, Scalar as Sc};
+use crate::group::{self, Element, PairingCurve as PC, Point, Scalar as Sc};
 
 use ark_bls12_377 as bls377;
 use ark_ec::{
@@ -367,15 +367,6 @@ impl Element for GT {
     }
     fn rand<R: RngCore>(rng: &mut R) -> Self {
         Self(bls377::Fq12::rand(rng))
-    }
-}
-
-// TODO (michael): Write unit test for this
-impl PrimeOrder for GT {
-    fn in_correct_subgroup(&self) -> bool {
-        self.0
-            .pow(<bls377::Bls12_377 as Pairing>::ScalarField::characteristic())
-            .is_one()
     }
 }
 

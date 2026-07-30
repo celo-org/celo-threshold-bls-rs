@@ -36,13 +36,6 @@ pub trait Element:
     }
 }
 
-/// Checks inclusion in prime order subgroup. Only needed when underlying trait
-/// does not enforce this already
-pub trait PrimeOrder: Element {
-    /// Checks the provided element is in the correct prime-order subgroup
-    fn in_correct_subgroup(&self) -> bool;
-}
-
 /// Scalar can be multiplied by only a Scalar, no other elements.
 pub trait Scalar: Element {
     fn set_int(&mut self, i: u64);
