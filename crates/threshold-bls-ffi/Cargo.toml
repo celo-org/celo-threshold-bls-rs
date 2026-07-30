@@ -2,7 +2,14 @@
 name = "threshold-bls-ffi"
 version = "0.2.0"
 authors = ["Georgios Konstantopoulos <me@gakonst.com>", "Paul Lange <palango@gmx.de>"]
-edition = "2021"
+description = "C, WASM and JNI bindings for threshold BLS signatures over BLS12-377"
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+# Consumers link the prebuilt artifacts (npm package, JNA, static libs), not a
+# crates.io release, so the path dependency below needs no version.
+publish = false
 
 [lib]
 crate-type = ["lib", "cdylib", "staticlib"]
