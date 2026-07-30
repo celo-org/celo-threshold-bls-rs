@@ -42,6 +42,26 @@ impl<'a> From<&Buffer> for &'a [u8] {
     }
 }
 
+// The C surface names these instead of `Token<PrivateKey>`, `Share<PrivateKey>`
+// and `Poly<PublicKey>`. cbindgen cannot render a generic from another crate —
+// it emits the Rust syntax verbatim, which is not C — and resolving them needs
+// `parse_deps`, which panics on the arkworks generics underneath.
+//
+// `repr(transparent)` makes "a pointer to the wrapper is a pointer to the inner
+// value" a guarantee rather than an artefact of the current layout algorithm.
+
+/// Opaque handle to a blinding factor produced by `blind`.
+#[repr(transparent)]
+pub struct BlindingFactor(Token<PrivateKey>);
+
+/// Opaque handle to one participant's share of a threshold private key.
+#[repr(transparent)]
+pub struct KeyShare(Share<PrivateKey>);
+
+/// Opaque handle to the public commitment polynomial of a threshold key.
+#[repr(transparent)]
+pub struct PublicPoly(Poly<PublicKey>);
+
 ///////////////////////////////////////////////////////////////////////////
 // User -> Library
 ///////////////////////////////////////////////////////////////////////////
@@ -71,7 +91,7 @@ pub unsafe extern "C" fn blind(
     message: *const Buffer,
     seed: *const Buffer,
     blinded_message_out: *mut Buffer,
-    blinding_factor_out: *mut *mut Token<PrivateKey>,
+    blinding_factor_out: *mut *mut BlindingFactor,
 ) -> bool {
     if message.is_null()
         || seed.is_null()
@@ -91,7 +111,7 @@ pub unsafe extern "C" fn blind(
 
     unsafe { *blinded_message_out = Buffer::from(&blinded_message_bytes[..]) };
     std::mem::forget(blinded_message_bytes);
-    unsafe { *blinding_factor_out = Box::into_raw(Box::new(blinding_factor)) };
+    unsafe { *blinding_factor_out = Box::into_raw(Box::new(BlindingFactor(blinding_factor))) };
 
     true
 }
@@ -112,7 +132,7 @@ pub unsafe extern "C" fn blind(
 #[no_mangle]
 pub unsafe extern "C" fn unblind(
     blinded_signature: *const Buffer,
-    blinding_factor: *const Token<PrivateKey>,
+    blinding_factor: *const BlindingFactor,
     unblinded_signature: *mut Buffer,
 ) -> bool {
     if blinded_signature.is_null() || blinding_factor.is_null() || unblinded_signature.is_null() {
@@ -120,7 +140,7 @@ pub unsafe extern "C" fn unblind(
     }
 
     let blinded_signature = <&[u8]>::from(unsafe { &*blinded_signature });
-    let blinding_factor = unsafe { &*blinding_factor };
+    let blinding_factor = &unsafe { &*blinding_factor }.0;
 
     let sig = match SigScheme::unblind_sig(blinding_factor, blinded_signature) {
         Ok(s) => s,
@@ -243,7 +263,7 @@ pub unsafe extern "C" fn sign_blinded_message(
 /// Returns true if successful, otherwise false.
 #[no_mangle]
 pub unsafe extern "C" fn partial_sign(
-    share: *const Share<PrivateKey>,
+    share: *const KeyShare,
     message: *const Buffer,
     signature: *mut Buffer,
 ) -> bool {
@@ -251,7 +271,7 @@ pub unsafe extern "C" fn partial_sign(
         return false;
     }
 
-    let share = unsafe { &*share };
+    let share = &unsafe { &*share }.0;
     let message = unsafe { &*message };
     let sig = match SigScheme::partial_sign(share, <&[u8]>::from(message)) {
         Ok(s) => s,
@@ -275,7 +295,7 @@ pub unsafe extern "C" fn partial_sign(
 /// Returns true if successful, otherwise false.
 #[no_mangle]
 pub unsafe extern "C" fn partial_sign_blinded_message(
-    share: *const Share<PrivateKey>,
+    share: *const KeyShare,
     blinded_message: *const Buffer,
     signature: *mut Buffer,
 ) -> bool {
@@ -283,7 +303,7 @@ pub unsafe extern "C" fn partial_sign_blinded_message(
         return false;
     }
 
-    let share = unsafe { &*share };
+    let share = &unsafe { &*share }.0;
     let message = unsafe { &*blinded_message };
     let sig = match SigScheme::sign_blind_partial(share, <&[u8]>::from(message)) {
         Ok(s) => s,
@@ -313,7 +333,7 @@ pub unsafe extern "C" fn partial_sign_blinded_message(
 pub unsafe extern "C" fn partial_verify(
     // TODO: The polynomial does not have a constant length type. Is it safe to not
     // pass any length parameter?
-    polynomial: *const Poly<PublicKey>,
+    polynomial: *const PublicPoly,
     blinded_message: *const Buffer,
     signature: *const Buffer,
 ) -> bool {
@@ -321,7 +341,7 @@ pub unsafe extern "C" fn partial_verify(
         return false;
     }
 
-    let polynomial = unsafe { &*polynomial };
+    let polynomial = &unsafe { &*polynomial }.0;
     let blinded_message = <&[u8]>::from(unsafe { &*blinded_message });
     let signature = <&[u8]>::from(unsafe { &*signature });
 
@@ -341,7 +361,7 @@ pub unsafe extern "C" fn partial_verify(
 pub unsafe extern "C" fn partial_verify_blind_signature(
     // TODO: The polynomial does not have a constant length type. Is it safe to not
     // pass any length parameter?
-    polynomial: *const Poly<PublicKey>,
+    polynomial: *const PublicPoly,
     blinded_message: *const Buffer,
     signature: *const Buffer,
 ) -> bool {
@@ -349,7 +369,7 @@ pub unsafe extern "C" fn partial_verify_blind_signature(
         return false;
     }
 
-    let polynomial = unsafe { &*polynomial };
+    let polynomial = &unsafe { &*polynomial }.0;
     let blinded_message = <&[u8]>::from(unsafe { &*blinded_message });
     let signature = <&[u8]>::from(unsafe { &*signature });
 
@@ -537,7 +557,7 @@ unsafe fn serialize<T: Serialize>(in_obj: *const T, out_bytes: *mut *mut u8) -> 
 /// # Safety
 ///
 /// The pointer must point to a valid instance of the data type
-pub unsafe extern "C" fn destroy_token(token: *mut Token<PrivateKey>) {
+pub unsafe extern "C" fn destroy_token(token: *mut BlindingFactor) {
     drop(unsafe { Box::from_raw(token) });
 }
 
@@ -669,7 +689,10 @@ struct Keys {
 }
 
 #[derive(Clone)]
-#[repr(C)]
+// Deliberately not `repr(C)`: the fields are arkworks-backed types that are not
+// themselves `repr(C)`, and no C code is entitled to their offsets. C only ever
+// holds a `Keypair *` and reaches the keys through `public_key_ptr` /
+// `private_key_ptr`, which do Rust field projection inside this crate.
 /// A BLS12-377 Keypair
 pub struct Keypair {
     /// The private key
@@ -710,7 +733,7 @@ mod tests {
         let seed = b"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
         let msg = vec![1u8, 2, 3, 4, 6];
         let user_seed = &b"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"[..];
-        let empty_token = Token::new();
+        let empty_token = BlindingFactor(Token::new());
         let partial_sign_fn = if should_blind {
             partial_sign_blinded_message
         } else {
@@ -727,7 +750,7 @@ mod tests {
 
         let (message_to_sign, blinding_factor) = if should_blind {
             let mut blinded_message = MaybeUninit::<Buffer>::uninit();
-            let mut blinding_factor = MaybeUninit::<*mut Token<PrivateKey>>::uninit();
+            let mut blinding_factor = MaybeUninit::<*mut BlindingFactor>::uninit();
             unsafe {
                 blind(
                     &Buffer::from(msg.as_ref()),
@@ -745,12 +768,16 @@ mod tests {
         };
 
         // 2. partially sign the blinded message
+        //
+        // `Keys` holds the plain threshold-bls types, so the handles the C
+        // surface takes are built here rather than stored.
+        let shares: Vec<KeyShare> = keys.shares.iter().cloned().map(KeyShare).collect();
         let mut sigs = Vec::new();
-        for i in 0..t {
+        for share in shares.iter().take(t) {
             let mut partial_sig = MaybeUninit::<Buffer>::uninit();
             let ret = unsafe {
                 partial_sign_fn(
-                    &keys.shares[i] as *const _,
+                    share as *const _,
                     &message_to_sign,
                     partial_sig.as_mut_ptr(),
                 )
@@ -762,7 +789,8 @@ mod tests {
         }
 
         // 3. verify the partial signatures & concatenate them
-        let public_key = &keys.polynomial as *const _;
+        let public_poly = PublicPoly(keys.polynomial.clone());
+        let public_key = &public_poly as *const _;
         let mut concatenated = Vec::new();
         for sig in &sigs {
             let sig_slice = <&[u8]>::from(sig);
@@ -809,7 +837,7 @@ mod tests {
         let seed = b"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
         let msg = vec![1u8, 2, 3, 4, 6];
         let user_seed = &b"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"[..];
-        let empty_token = Token::new();
+        let empty_token = BlindingFactor(Token::new());
 
         let sign_fn = if should_blind {
             sign_blinded_message
@@ -823,7 +851,7 @@ mod tests {
 
         let (message_to_sign, blinding_factor) = if should_blind {
             let mut blinded_message = MaybeUninit::<Buffer>::uninit();
-            let mut blinding_factor = MaybeUninit::<*mut Token<PrivateKey>>::uninit();
+            let mut blinding_factor = MaybeUninit::<*mut BlindingFactor>::uninit();
             unsafe {
                 blind(
                     &Buffer::from(msg.as_ref()),
