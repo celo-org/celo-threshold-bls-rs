@@ -914,4 +914,27 @@ mod tests {
 
         assert_eq!(public_key, unsafe { &*de });
     }
+
+    /// The identity is a well-formed encoding, so it still deserializes — the
+    /// C ABI's existing guards only cover malformed input. Verification is what
+    /// has to reject it.
+    #[test]
+    fn identity_public_key_verifies_nothing() {
+        use threshold_bls::group::Element;
+
+        let identity = bincode::serialize(&PublicKey::new()).unwrap();
+        assert_eq!(identity.len(), PUBKEY_LEN);
+
+        let mut pubkey = MaybeUninit::<*mut PublicKey>::uninit();
+        let ret = unsafe { deserialize_pubkey(&identity[0] as *const u8, pubkey.as_mut_ptr()) };
+        assert!(ret, "the identity encoding is well-formed");
+        let pubkey = unsafe { pubkey.assume_init() };
+
+        let identity_sig = bincode::serialize(&Signature::new()).unwrap();
+        for msg in [&b"attack at dawn"[..], b"totally different", b""] {
+            let ret =
+                unsafe { verify(pubkey, &Buffer::from(msg), &Buffer::from(&identity_sig[..])) };
+            assert!(!ret, "identity public key verified {msg:?}");
+        }
+    }
 }

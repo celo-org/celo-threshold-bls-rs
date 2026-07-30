@@ -98,8 +98,9 @@ mod tests {
     use super::*;
     use crate::{
         curve::bls12377::PairingCurve as PCurve,
+        group::Element,
         sig::{
-            bls::{G1Scheme, G2Scheme},
+            bls::{BLSError, G1Scheme, G2Scheme},
             Scheme, SignatureScheme,
         },
     };
@@ -152,5 +153,36 @@ mod tests {
     fn threshold_g2() {
         type S = G2Scheme<PCurve>;
         test_threshold_scheme::<S>(shares::<S>);
+    }
+
+    #[test]
+    fn empty_polynomial_verifies_nothing_g1() {
+        empty_polynomial_verifies_nothing::<G1Scheme<PCurve>>();
+    }
+
+    #[test]
+    fn empty_polynomial_verifies_nothing_g2() {
+        empty_polynomial_verifies_nothing::<G2Scheme<PCurve>>();
+    }
+
+    /// A public polynomial with no coefficients is a bare length prefix on the
+    /// wire, and evaluates to the identity at every index. Rejecting the
+    /// identity public key is what stops it standing in for a real key.
+    fn empty_polynomial_verifies_nothing<T>()
+    where
+        T: SignatureScheme<Error = BLSError> + ThresholdScheme<Error = ThresholdError<T>>,
+    {
+        let empty: Poly<T::Public> = serialization::deserialize(&[0u8; 8]).unwrap();
+
+        let partial = bincode::serialize(&Eval {
+            index: 7,
+            value: bincode::serialize(&<T as Scheme>::Signature::new()).unwrap(),
+        })
+        .unwrap();
+
+        assert!(matches!(
+            T::partial_verify(&empty, b"any message at all", &partial),
+            Err(ThresholdError::SignatureError(BLSError::InvalidPublicKey))
+        ));
     }
 }
