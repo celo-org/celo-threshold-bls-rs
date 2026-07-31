@@ -77,7 +77,9 @@ jobs:
           name: wasm-pkg
           path: crates/threshold-bls-ffi/pkg
 
-      - uses: actions/setup-node@v6
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
       - name: Run wasm package tests
         run: |
           mkdir -p bindings/js/src
