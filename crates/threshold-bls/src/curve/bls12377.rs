@@ -33,6 +33,8 @@ pub enum BLSError {
     HashToCurveError,
     #[error("domain length is too large: {0}")]
     DomainTooLarge(usize),
+    #[error("hash output size is too large: {0}")]
+    OutputSizeTooLarge(usize),
 }
 
 /// Encodes the XOF digest length into the node offset field used by Blake2s/Blake2x.
@@ -51,6 +53,11 @@ fn blake2_hash(
 ) -> Result<Vec<u8>, BLSError> {
     if domain.len() > 8 {
         return Err(BLSError::DomainTooLarge(domain.len()));
+    }
+    // The XOF digest length is encoded into a 16-bit node offset field;
+    // larger outputs would silently truncate in xof_digest_length_to_node_offset.
+    if output_size_in_bytes > u16::MAX as usize {
+        return Err(BLSError::OutputSizeTooLarge(output_size_in_bytes));
     }
 
     // CRH step: compress the message with Blake2s
@@ -227,6 +234,11 @@ impl Element for G1 {
 /// - Checks bit 7 (`& 0x80`) of the last hash byte for the y-sign (positive = largest y)
 /// - Parses x via `Field::from_random_bytes` (masks last byte to field bits)
 /// - Never rejects based on the infinity flag in random hash bytes
+///
+/// Subgroup soundness: `mul_by_cofactor_to_group` maps an on-curve point into
+/// the prime-order subgroup only because `gcd(cofactor, r) = 1`, which holds
+/// for both groups of BLS12-377. Any curve added here must satisfy the same
+/// precondition.
 fn try_and_increment_hash<P: SWCurveConfig>(
     domain: &[u8],
     message: &[u8],
@@ -259,6 +271,9 @@ where
             if let Some(p) = Affine::<P>::get_point_from_x_unchecked(x, is_positive) {
                 let scaled = p.mul_by_cofactor_to_group();
                 if !scaled.is_zero() {
+                    debug_assert!(scaled
+                        .into_affine()
+                        .is_in_correct_subgroup_assuming_on_curve());
                     return Ok(scaled);
                 }
             }
@@ -595,6 +610,14 @@ mod tests {
             .unwrap();
             assert_eq!(hex::encode(&bytes), *expected_hex);
         }
+    }
+
+    #[test]
+    fn blake2_hash_rejects_oversized_output() {
+        assert!(matches!(
+            blake2_hash(b"", b"some message", u16::MAX as usize + 1),
+            Err(BLSError::OutputSizeTooLarge(_))
+        ));
     }
 
     #[test]
