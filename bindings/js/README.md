@@ -101,7 +101,6 @@ const blindedMessage = blinded.message
 const t = 3;
 const n = 4;
 const keys = threshold.thresholdKeygen(n, t, crypto.randomBytes(32))
-const shares = keys.shares
 const polynomial = keys.polynomial
 
 // each of these shares proceed to sign the blinded sig

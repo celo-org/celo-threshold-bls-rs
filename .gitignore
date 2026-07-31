@@ -3,7 +3,7 @@
 /target/
 pkg/
 
-# Populated from wasm-pack output at build time
+# Populated by wasm-pack and npm at build time
 /bindings/js/src/
 /bindings/js/node_modules/
 
