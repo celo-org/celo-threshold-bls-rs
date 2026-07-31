@@ -68,11 +68,13 @@ where
 mod tests {
     use super::*;
     use crate::curve::bls12377::PairingCurve as PCurve;
+    use crate::group::Element;
     use crate::poly::{Idx, Poly};
     use crate::sig::{
-        bls::{G1Scheme, G2Scheme},
+        blind::BlindError,
+        bls::{BLSError, G1Scheme, G2Scheme},
         tbls::Share,
-        SignatureScheme,
+        BlindScheme, SignatureScheme,
     };
     use rand::thread_rng;
 
@@ -144,5 +146,43 @@ mod tests {
         // verify the final signature
         B::verify(public.public_key(), &msg, &final_sig2).unwrap();
         assert_eq!(final_sig1, final_sig2);
+    }
+
+    #[test]
+    fn tblind_identity_g1() {
+        identity_operands_rejected::<G1Scheme<PCurve>>();
+    }
+
+    #[test]
+    fn tblind_identity_g2() {
+        identity_operands_rejected::<G2Scheme<PCurve>>();
+    }
+
+    /// `verify_blind_partial` takes the blinded message, the partial signature
+    /// and the index from the wire. An identity blinded message would otherwise
+    /// pass against an honest public polynomial at any index.
+    fn identity_operands_rejected<B>()
+    where
+        B: BlindThresholdScheme<Error = BlindThresholdError<BlindError>>
+            + BlindScheme<Error = BlindError>
+            + ThresholdScheme,
+    {
+        let (_, public) = shares::<B>(5, 4);
+        let identity = bincode::serialize(&B::Signature::new()).unwrap();
+        let partial = bincode::serialize(&Eval {
+            index: 1,
+            value: identity.clone(),
+        })
+        .unwrap();
+
+        assert!(
+            matches!(
+                B::verify_blind_partial(&public, &identity, &partial),
+                Err(BlindThresholdError::BlindError(BlindError::SignatureError(
+                    BLSError::InvalidMessagePoint
+                )))
+            ),
+            "identity blinded message forged a partial under an honest polynomial"
+        );
     }
 }

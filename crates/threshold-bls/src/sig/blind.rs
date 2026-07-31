@@ -88,10 +88,7 @@ where
         // signature point
         let blinded_sig: I::Signature = serialization::deserialize(blinded_sig)?;
 
-        if !I::final_exp(public, &blinded_sig, &blinded_msg) {
-            return Err(BlindError::from(BLSError::InvalidSig));
-        }
-        Ok(())
+        I::check_pairing(public, &blinded_sig, &blinded_msg).map_err(BlindError::from)
     }
 
     fn blind_sign(private: &I::Private, blinded_msg: &[u8]) -> Result<Vec<u8>, Self::Error> {
@@ -135,5 +132,41 @@ mod tests {
 
         let clear_sig = B::unblind_sig(&token, &blinded_sig).expect("unblind should go well");
         B::verify(&public, &msg, &clear_sig).unwrap();
+    }
+
+    #[test]
+    fn blind_identity_g1() {
+        identity_operands_rejected::<G1Scheme<PCurve>>();
+    }
+
+    #[test]
+    fn blind_identity_g2() {
+        identity_operands_rejected::<G2Scheme<PCurve>>();
+    }
+
+    /// Unlike plain BLS, `blind_verify` takes the message point from the wire
+    /// rather than from `hash_to_curve`. An identity there pairs to 1 on both
+    /// sides, so it would otherwise verify under *any* public key, including
+    /// honest ones.
+    fn identity_operands_rejected<B>()
+    where
+        B: BlindScheme<Error = BlindError>,
+    {
+        let (_, public) = B::keypair(&mut thread_rng());
+        let identity = bincode::serialize(&B::Signature::new()).unwrap();
+        let (_, blinded_msg) = B::blind_msg(&[1, 9, 6, 9], &mut thread_rng());
+
+        assert!(
+            matches!(
+                B::blind_verify(&public, &identity, &identity),
+                Err(BlindError::SignatureError(BLSError::InvalidMessagePoint))
+            ),
+            "identity blinded message forged a signature under an honest key"
+        );
+
+        assert!(matches!(
+            B::blind_verify(&B::Public::new(), &blinded_msg, &identity),
+            Err(BlindError::SignatureError(BLSError::InvalidPublicKey))
+        ));
     }
 }

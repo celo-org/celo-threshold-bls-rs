@@ -12,6 +12,16 @@ pub enum BLSError {
     #[error("invalid signature")]
     InvalidSig,
 
+    /// InvalidPublicKey is raised when the public key is the identity element,
+    /// which would accept an identity signature on any message.
+    #[error("public key is the identity element")]
+    InvalidPublicKey,
+
+    /// InvalidMessagePoint is raised when the message point is the identity
+    /// element, which would let an identity signature verify under any key.
+    #[error("message point is the identity element")]
+    InvalidMessagePoint,
+
     #[error("could not hash to curve")]
     HashingError,
 
@@ -65,8 +75,35 @@ pub mod common {
                 serialization::deserialize_from(msg)?
             };
 
-            let success = Self::final_exp(public, &sig, &h);
-            if !success {
+            Self::check_pairing(public, &sig, &h)
+        }
+
+        /// Rejects degenerate operands and then checks the pairing equation.
+        ///
+        /// An identity public key makes one side of `e(sig, g2) == e(hm, pub)`
+        /// equal to 1 for every message, so it accepts the identity signature
+        /// on anything. An identity message point does the same, and the blind
+        /// scheme takes that point from the wire rather than from
+        /// `hash_to_curve`, so it needs the same treatment. Rejecting the
+        /// identity public key is the IETF BLS spec's `KeyValidate`.
+        ///
+        /// The signature itself is deliberately not checked: on its own it
+        /// only fails the equation, and aggregation may legitimately produce
+        /// it.
+        fn check_pairing(
+            public: &Self::Public,
+            sig: &Self::Signature,
+            hm: &Self::Signature,
+        ) -> Result<(), BLSError> {
+            if public == &Self::Public::new() {
+                return Err(BLSError::InvalidPublicKey);
+            }
+
+            if hm == &Self::Signature::new() {
+                return Err(BLSError::InvalidMessagePoint);
+            }
+
+            if !Self::final_exp(public, sig, hm) {
                 return Err(BLSError::InvalidSig);
             }
 
@@ -184,5 +221,100 @@ mod tests {
         let msg = vec![1, 9, 6, 9];
         let sig = G1Scheme::<PCurve>::sign(&private, &msg).unwrap();
         G1Scheme::<PCurve>::verify(&public, &msg, &sig).expect("that should not happen");
+    }
+
+    /// The identity public key satisfies `e(sig, g2) == e(H(m), pub)` for every
+    /// message, so an identity signature under it would otherwise verify
+    /// anything. The encoding itself stays legal — only verification rejects it.
+    fn identity_key_verifies_nothing<S>(pubkey_len: usize)
+    where
+        S: SignatureScheme<Error = BLSError>,
+    {
+        let identity_sig = bincode::serialize(&S::Signature::new()).unwrap();
+
+        let encoded = bincode::serialize(&S::Public::new()).unwrap();
+        assert_eq!(encoded.len(), pubkey_len);
+        assert_eq!(
+            encoded.last(),
+            Some(&0x40),
+            "the identity encodes as the point-at-infinity flag"
+        );
+
+        let identity: S::Public = serialization::deserialize(&encoded).unwrap();
+        assert_eq!(
+            identity,
+            S::Public::new(),
+            "the identity must stay deserializable"
+        );
+
+        for msg in [&b"attack at dawn"[..], b"totally different", b""] {
+            assert!(
+                matches!(
+                    S::verify(&identity, msg, &identity_sig),
+                    Err(BLSError::InvalidPublicKey)
+                ),
+                "identity public key verified {msg:?}"
+            );
+        }
+    }
+
+    /// An identity signature is a bad signature rather than a rejected one: the
+    /// IETF spec subgroup-checks signatures but never rejects the identity,
+    /// since aggregation can legitimately produce it.
+    fn identity_signature_is_merely_invalid<S>()
+    where
+        S: SignatureScheme<Error = BLSError>,
+    {
+        let (private, public) = S::keypair(&mut thread_rng());
+        let msg = b"attack at dawn";
+
+        let identity_sig = bincode::serialize(&S::Signature::new()).unwrap();
+        assert!(matches!(
+            S::verify(&public, msg, &identity_sig),
+            Err(BLSError::InvalidSig)
+        ));
+
+        let sig = S::sign(&private, msg).unwrap();
+        assert!(matches!(
+            S::verify(&S::Public::new(), msg, &sig),
+            Err(BLSError::InvalidPublicKey)
+        ));
+    }
+
+    /// Pins the degeneracy the guard exists for: an identity public key, or an
+    /// identity message point, satisfies the raw equation against an identity
+    /// signature for any message. Were that to stop holding, the rejection
+    /// tests above would keep passing while proving nothing.
+    fn pairing_is_degenerate_on_identity<S>()
+    where
+        S: common::BLSScheme,
+    {
+        let mut hm = S::Signature::new();
+        hm.map(b"attack at dawn").expect("could not hash to curve");
+
+        assert!(
+            S::final_exp(&S::Public::new(), &S::Signature::new(), &hm),
+            "identity public key should satisfy the raw pairing equation"
+        );
+
+        let (_, public) = S::keypair(&mut thread_rng());
+        assert!(
+            S::final_exp(&public, &S::Signature::new(), &S::Signature::new()),
+            "identity message point should satisfy the raw pairing equation"
+        );
+    }
+
+    #[test]
+    fn identity_g1() {
+        pairing_is_degenerate_on_identity::<G1Scheme<PCurve>>();
+        identity_key_verifies_nothing::<G1Scheme<PCurve>>(48);
+        identity_signature_is_merely_invalid::<G1Scheme<PCurve>>();
+    }
+
+    #[test]
+    fn identity_g2() {
+        pairing_is_degenerate_on_identity::<G2Scheme<PCurve>>();
+        identity_key_verifies_nothing::<G2Scheme<PCurve>>(96);
+        identity_signature_is_merely_invalid::<G2Scheme<PCurve>>();
     }
 }
