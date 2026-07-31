@@ -1,0 +1,8 @@
+version: 2
+updates:
+  # The npm package's jest/babel toolchain in bindings/js. Rust crates are
+  # deliberately not listed here: Renovate already manages them.
+  - package-ecosystem: npm
+    directory: /bindings/js
+    schedule:
+      interval: weekly
