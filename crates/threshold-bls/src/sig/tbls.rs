@@ -34,6 +34,11 @@ pub enum ThresholdError<I: SignatureScheme> {
     /// were fewer than the threshold
     #[error("not enough partial signatures: {0}/{1}")]
     NotEnoughPartialSignatures(usize, usize),
+
+    /// ZeroThreshold is raised if aggregation is attempted with a threshold of
+    /// zero, which would produce a signature from no partials at all
+    #[error("threshold must be at least one")]
+    ZeroThreshold,
 }
 
 impl<I: SignatureScheme> ThresholdScheme for I {
@@ -68,6 +73,10 @@ impl<I: SignatureScheme> ThresholdScheme for I {
         threshold: usize,
         partials: &[Partial],
     ) -> Result<Vec<u8>, <Self as ThresholdScheme>::Error> {
+        if threshold == 0 {
+            return Err(ThresholdError::ZeroThreshold);
+        }
+
         if threshold > partials.len() {
             return Err(ThresholdError::NotEnoughPartialSignatures(
                 partials.len(),
@@ -153,6 +162,91 @@ mod tests {
     fn threshold_g2() {
         type S = G2Scheme<PCurve>;
         test_threshold_scheme::<S>(shares::<S>);
+    }
+
+    #[test]
+    fn aggregate_rejects_a_zero_threshold_g1() {
+        aggregate_rejects_a_zero_threshold::<G1Scheme<PCurve>>();
+    }
+
+    #[test]
+    fn aggregate_rejects_a_zero_threshold_g2() {
+        aggregate_rejects_a_zero_threshold::<G2Scheme<PCurve>>();
+    }
+
+    /// Aggregating over zero partials folds to the identity signature — a
+    /// valid-looking signature from no inputs at all — so a threshold of
+    /// zero is rejected outright.
+    fn aggregate_rejects_a_zero_threshold<T>()
+    where
+        T: ThresholdScheme<Error = ThresholdError<T>> + SignatureScheme,
+    {
+        assert!(matches!(
+            T::aggregate(0, &[]),
+            Err(ThresholdError::ZeroThreshold)
+        ));
+    }
+
+    #[test]
+    fn aggregate_ignores_duplicate_partials_g1() {
+        aggregate_ignores_duplicate_partials::<G1Scheme<PCurve>>();
+    }
+
+    #[test]
+    fn aggregate_ignores_duplicate_partials_g2() {
+        aggregate_ignores_duplicate_partials::<G2Scheme<PCurve>>();
+    }
+
+    /// A partial submitted twice (e.g. by a retrying signer) is one evaluation
+    /// point, not two: aggregation succeeds as long as enough distinct
+    /// partials remain.
+    fn aggregate_ignores_duplicate_partials<T: ThresholdScheme + SignatureScheme>() {
+        let threshold = 4;
+        let (shares, public) = shares::<T>(5, threshold);
+        let msg = vec![1, 9, 6, 9];
+
+        let mut partials: Vec<_> = shares
+            .iter()
+            .map(|s| T::partial_sign(s, &msg).unwrap())
+            .collect();
+        partials.insert(0, partials[0].clone());
+        partials.truncate(5);
+
+        let final_sig = T::aggregate(threshold, &partials).unwrap();
+        T::verify(public.public_key(), &msg, &final_sig).unwrap();
+    }
+
+    #[test]
+    fn aggregate_rejects_duplicates_masking_a_shortfall_g1() {
+        aggregate_rejects_duplicates_masking_a_shortfall::<G1Scheme<PCurve>>();
+    }
+
+    #[test]
+    fn aggregate_rejects_duplicates_masking_a_shortfall_g2() {
+        aggregate_rejects_duplicates_masking_a_shortfall::<G2Scheme<PCurve>>();
+    }
+
+    /// Duplicated partials must not count towards the threshold: fewer than
+    /// threshold distinct evaluation points cannot recover the signature, and
+    /// interpolating over them anyway would return a wrong one.
+    fn aggregate_rejects_duplicates_masking_a_shortfall<T>()
+    where
+        T: ThresholdScheme<Error = ThresholdError<T>> + SignatureScheme,
+    {
+        let threshold = 4;
+        let (shares, _) = shares::<T>(5, threshold);
+        let msg = vec![1, 9, 6, 9];
+
+        let mut partials: Vec<_> = shares[..threshold - 1]
+            .iter()
+            .map(|s| T::partial_sign(s, &msg).unwrap())
+            .collect();
+        partials.insert(0, partials[0].clone());
+
+        assert!(matches!(
+            T::aggregate(threshold, &partials),
+            Err(ThresholdError::PolyError(PolyError::InvalidRecovery(3, 4)))
+        ));
     }
 
     #[test]

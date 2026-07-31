@@ -95,6 +95,8 @@ pub enum PolyError {
     InvalidRecovery(usize, usize),
     #[error("Could not invert scalar")]
     NoInverse,
+    #[error("Cannot recover with a threshold of zero")]
+    ZeroThreshold,
 }
 
 impl<C> Poly<C>
@@ -198,13 +200,23 @@ where
         t: usize,
         mut shares: Vec<Eval<C>>,
     ) -> Result<BTreeMap<Idx, (C::RHS, C)>, PolyError> {
-        if shares.len() < t {
-            return Err(PolyError::InvalidRecovery(shares.len(), t));
+        // Interpolating over zero points would "recover" the group identity.
+        if t == 0 {
+            return Err(PolyError::ZeroThreshold);
         }
 
         // first sort the shares as it can happens recovery happens for
         // non-correlated shares so the subset chosen becomes important
         shares.sort_by_key(|a| a.index);
+
+        // Duplicate indices are the same evaluation point: keep the first
+        // occurrence, then count. Deduping after choosing the subset would
+        // interpolate over fewer than t points.
+        shares.dedup_by_key(|a| a.index);
+
+        if shares.len() < t {
+            return Err(PolyError::InvalidRecovery(shares.len(), t));
+        }
 
         // convert the indexes of the shares into scalars
         let xs = shares
@@ -422,6 +434,57 @@ pub mod tests {
         assert_eq!(&recovered, private.public_key());
     }
 
+    /// Interpolating over zero points folds to the group identity, so a
+    /// threshold of zero would "recover" a value from no shares at all. It
+    /// must be rejected, not answered.
+    #[test]
+    fn recover_rejects_a_zero_threshold() {
+        assert!(matches!(
+            Poly::<Sc>::recover(0, vec![]),
+            Err(PolyError::ZeroThreshold)
+        ));
+        assert!(matches!(
+            Poly::<Sc>::full_recover(0, vec![]),
+            Err(PolyError::ZeroThreshold)
+        ));
+    }
+
+    /// A duplicated index is the same evaluation point, so it must not crowd
+    /// out the other shares: as long as t distinct points remain, recovery
+    /// succeeds.
+    #[test]
+    fn recover_ignores_duplicate_indices() {
+        let t = 4;
+        let private = Poly::<Sc>::new(t - 1);
+
+        let shares = vec![
+            private.eval(0),
+            private.eval(0),
+            private.eval(1),
+            private.eval(2),
+            private.eval(3),
+        ];
+
+        let recovered = Poly::<Sc>::recover(t, shares).expect("recovery should not error");
+        assert_eq!(&recovered, private.public_key());
+    }
+
+    /// Duplicates must not count towards the threshold. Interpolating over
+    /// fewer than t distinct points returns a wrong constant term, so this
+    /// input has to be rejected up front.
+    #[test]
+    fn recover_rejects_duplicates_masking_a_shortfall() {
+        let t = 3;
+        let private = Poly::<Sc>::new(t - 1);
+
+        let shares = vec![private.eval(0), private.eval(0), private.eval(1)];
+
+        assert!(matches!(
+            Poly::<Sc>::recover(t, shares),
+            Err(PolyError::InvalidRecovery(2, 3))
+        ));
+    }
+
     #[test]
     fn add_zero() {
         let p1 = Poly::<Sc>::new(3);
@@ -489,7 +552,9 @@ pub mod tests {
 
 
     #[test]
-    fn interpolation(degree in 0..100usize, num_evals in 0..100usize) {
+    // num_evals starts at 1: recovery with a threshold of zero is rejected,
+    // covered by recover_rejects_a_zero_threshold.
+    fn interpolation(degree in 0..100usize, num_evals in 1..100usize) {
         let poly = Poly::<Sc>::new(degree);
         let expected = poly.0[0];
 
