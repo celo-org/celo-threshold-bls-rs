@@ -623,4 +623,34 @@ mod tests {
             assert_eq!(hex::encode(&serialized), *expected_hex);
         }
     }
+
+    // The expected values pin this implementation's outputs, so a dependency
+    // upgrade that changes G2 hashing breaks this test instead of silently
+    // breaking interoperability with existing signatures.
+    #[test]
+    fn hash_to_curve_g2() {
+        use crate::group::Point;
+
+        let cases: &[(&[u8], &str)] = &[
+            (
+                &[0x00; 32],
+                "1f2855c5b9542908843dfb8f63966a863f63a0ea776bae7236ce6dfbb6ad676094e7428c79e590eef168d309b1e95801526da75adb79f16fd3b2f8c7913cb48cf11e0fdca3282a7cf78311bc56b0b84b1162cd019751605868902ad42c792c00",
+            ),
+            (
+                &[0x56; 32],
+                "cd55c00b0849fb761f26af4f900326b7a8cf6cc9bca6b424d8f256b9b268730740cba529e5cca4545da16f88fab505016f33e6df55ce89cde7ecda4b9be06472403fdd2f9e6b4c4fb6c38a6b452125f7ca2d08b5611620a0caafb13cd67d7f01",
+            ),
+            (
+                &[0xab; 32],
+                "0daef0086d6cb937913cc40c28a07b4fb47c12dabd135df517293729abca81d82dd6070583b165a4e68dbb90467d2c0088b26681bcf0775280eb5befdacdc41480037bbd1b00e10ef2f9c12b04476c16fb95287da8799a6104b413af08e35581",
+            ),
+        ];
+
+        for (msg, expected_hex) in cases {
+            let mut point = G2::new();
+            point.map(msg).expect("hash to curve failed");
+            let serialized = bincode::serialize(&point).unwrap();
+            assert_eq!(hex::encode(&serialized), *expected_hex);
+        }
+    }
 }
