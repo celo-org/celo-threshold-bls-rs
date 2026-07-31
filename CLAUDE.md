@@ -31,9 +31,9 @@ cargo test -p threshold-bls poly::      # single test / module filter
   outputs under `output/`). All but `ios` require Docker (linux/amd64 image);
   `ios` requires a macOS host with Xcode. The toolchain is pinned to Rust 1.95
   by `rust-toolchain.toml`; the Docker image version via `RUST_VERSION`.
-- CI split: GitHub Actions tests, lints, audits, and runs the downstream wasm
-  suite (clones `celo-org/blind-threshold-bls-wasm`, swaps in the fresh pkg,
-  `npm test`). CircleCI only builds the platform artifacts.
+- CI split: GitHub Actions tests, lints, audits, and runs the npm package
+  suite in `bindings/js` against a fresh wasm-pack build. CircleCI only
+  builds the platform artifacts.
 
 ## Architecture
 
@@ -79,11 +79,13 @@ feature. They serve different consumers and are not interchangeable.
   `ios_deployment_target` in the justfile) track that consumer's minimum
   supported targets (PR #168) — don't bump them unilaterally.
 - **`wasm` (`src/wasm.rs`)** — built for Node and published as
-  `@celo/blind-threshold-bls`. The ODIS signer and combiner in
-  `celo-org/social-connect` both depend on it, so this path is production
-  infrastructure. The `blind-threshold-bls-wasm-tests` job in
-  `.github/workflows/rust_ci.yml` exercises it against the real downstream
-  test suite.
+  `@celo/blind-threshold-bls`, whose npm packaging, examples and jest suite
+  live in `bindings/js` (`src/` there is gitignored and filled from wasm-pack
+  output). The ODIS signer and combiner in `celo-org/social-connect` both
+  depend on it, so this path is production infrastructure. The
+  `wasm-pkg-tests` job in `.github/workflows/rust_ci.yml` builds the package
+  and runs that suite. The former standalone repo
+  `celo-org/blind-threshold-bls-wasm` is legacy, pending archival.
 - **Browser** — no artifact is built here. `social-connect`'s `docs/privacy.md`
   points users at the unmerged `web-compatible` branch of
   `blind-threshold-bls-wasm` (commit `3d1013af`, October 2022), which predates
