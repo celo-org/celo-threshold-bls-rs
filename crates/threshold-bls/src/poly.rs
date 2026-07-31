@@ -479,13 +479,10 @@ pub mod tests {
 
         let shares = vec![private.eval(0), private.eval(0), private.eval(1)];
 
-        match Poly::<Sc>::recover(t, shares) {
-            Err(PolyError::InvalidRecovery(distinct, threshold)) => {
-                assert_eq!(distinct, 2);
-                assert_eq!(threshold, t);
-            }
-            other => panic!("expected InvalidRecovery, got {:?}", other.map(|_| ())),
-        }
+        assert!(matches!(
+            Poly::<Sc>::recover(t, shares),
+            Err(PolyError::InvalidRecovery(2, 3))
+        ));
     }
 
     #[test]
