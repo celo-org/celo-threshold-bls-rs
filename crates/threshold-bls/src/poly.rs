@@ -198,13 +198,18 @@ where
         t: usize,
         mut shares: Vec<Eval<C>>,
     ) -> Result<BTreeMap<Idx, (C::RHS, C)>, PolyError> {
-        if shares.len() < t {
-            return Err(PolyError::InvalidRecovery(shares.len(), t));
-        }
-
         // first sort the shares as it can happens recovery happens for
         // non-correlated shares so the subset chosen becomes important
         shares.sort_by_key(|a| a.index);
+
+        // Duplicate indices are the same evaluation point: keep the first
+        // occurrence, then count. Deduping after choosing the subset would
+        // interpolate over fewer than t points.
+        shares.dedup_by_key(|a| a.index);
+
+        if shares.len() < t {
+            return Err(PolyError::InvalidRecovery(shares.len(), t));
+        }
 
         // convert the indexes of the shares into scalars
         let xs = shares
@@ -420,6 +425,45 @@ pub mod tests {
 
         let recovered = Poly::<Sc>::recover(t, shares).expect("recovery should not error");
         assert_eq!(&recovered, private.public_key());
+    }
+
+    /// A duplicated index is the same evaluation point, so it must not crowd
+    /// out the other shares: as long as t distinct points remain, recovery
+    /// succeeds.
+    #[test]
+    fn recover_ignores_duplicate_indices() {
+        let t = 4;
+        let private = Poly::<Sc>::new(t - 1);
+
+        let shares = vec![
+            private.eval(0),
+            private.eval(0),
+            private.eval(1),
+            private.eval(2),
+            private.eval(3),
+        ];
+
+        let recovered = Poly::<Sc>::recover(t, shares).expect("recovery should not error");
+        assert_eq!(&recovered, private.public_key());
+    }
+
+    /// Duplicates must not count towards the threshold. Interpolating over
+    /// fewer than t distinct points returns a wrong constant term, so this
+    /// input has to be rejected up front.
+    #[test]
+    fn recover_rejects_duplicates_masking_a_shortfall() {
+        let t = 3;
+        let private = Poly::<Sc>::new(t - 1);
+
+        let shares = vec![private.eval(0), private.eval(0), private.eval(1)];
+
+        match Poly::<Sc>::recover(t, shares) {
+            Err(PolyError::InvalidRecovery(distinct, threshold)) => {
+                assert_eq!(distinct, 2);
+                assert_eq!(threshold, t);
+            }
+            other => panic!("expected InvalidRecovery, got {:?}", other.map(|_| ())),
+        }
     }
 
     #[test]
