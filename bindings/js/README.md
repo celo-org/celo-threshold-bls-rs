@@ -3,12 +3,25 @@
 
 This library provides wasm bindings for producing and verifying blind threshold signatures
 on BLS12-377. This is done by utilizing [`wasm-pack`](https://github.com/rustwasm/wasm-pack) and
-the underlying [Rust library](https://github.com/celo-org/celo-bls-threshold-rs).
+the underlying [Rust library](https://github.com/celo-org/celo-threshold-bls-rs).
 
 You can find details on the functionalities provided per function by inspecting
 the [Typescript types file](./src/blind_threshold_bls.d.ts)
 
 Install by running: `npm install @celo/blind-threshold-bls`
+
+## Building from source
+
+The package contents under `src/` are generated from the Rust crate in this
+repository and are not checked in. To build them:
+
+```
+cd crates/threshold-bls-ffi
+wasm-pack build --target nodejs -- --features=wasm
+cp pkg/blind* ../../bindings/js/src/
+```
+
+Then run the test suite from this directory with `npm ci && npm test`.
 
 ## Examples
 
@@ -82,6 +95,9 @@ const blinded = threshold.blind(msg, userSeed)
 const blindedMessage = blinded.message
 
 // Generate the secret shares for a 3-of-4 threshold scheme
+//
+// WARNING: thresholdKeygen is a helper for local testing. Do not use it in
+// production, unless you trust the party that generated the keys.
 const t = 3;
 const n = 4;
 const keys = threshold.thresholdKeygen(n, t, crypto.randomBytes(32))

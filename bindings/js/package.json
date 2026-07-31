@@ -6,11 +6,12 @@
   "license": "Apache-2.0",
   "repository": {
     "type": "git",
-    "url": "https://github.com/celo-org/blind-threshold-bls-wasm"
+    "url": "https://github.com/celo-org/celo-threshold-bls-rs",
+    "directory": "bindings/js"
   },
-  "homepage": "https://github.com/celo-org/blind-threshold-bls-wasm#readme",
+  "homepage": "https://github.com/celo-org/celo-threshold-bls-rs#readme",
   "bugs": {
-    "url": "https://github.com/celo-org/blind-threshold-bls-wasm/issues"
+    "url": "https://github.com/celo-org/celo-threshold-bls-rs/issues"
   },
   "keywords": [
     "bls",
@@ -22,7 +23,6 @@
     "README.md",
     "src/blind_threshold_bls_bg.wasm",
     "src/blind_threshold_bls.js",
-    "src/blind_threshold_bls_bg.js",
     "src/blind_threshold_bls.d.ts"
   ],
   "main": "src/blind_threshold_bls.js",
@@ -32,10 +32,6 @@
   },
   "devDependencies": {
     "jest": "^30.0.0"
-  },
-  "engines": {
-    "node": ">=24",
-    "npm": ">=11"
   },
   "publishConfig": {
     "access": "public"

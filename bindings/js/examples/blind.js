@@ -1,7 +1,7 @@
 // Simple Example of blinding, signing, unblinding and verifying.
 
 // Import the library
-const threshold = require("@celo/blind_threshold_bls")
+const threshold = require("../src/blind_threshold_bls")
 const crypto = require('crypto')
 
 // Get a message and a secret for the user
