@@ -408,6 +408,20 @@ pub mod tests {
         );
     }
 
+    /// The largest index is an ordinary evaluation point, not a special case:
+    /// an honest share dealt there must interpolate like any other. This is the
+    /// half that a fix clamping or rejecting `Idx::MAX` would fail.
+    #[test]
+    fn recover_works_with_a_share_at_the_max_index() {
+        let t = 3;
+        let private = Poly::<Sc>::new(t - 1);
+
+        let shares = vec![private.eval(0), private.eval(1), private.eval(Idx::MAX)];
+
+        let recovered = Poly::<Sc>::recover(t, shares).expect("recovery should not error");
+        assert_eq!(&recovered, private.public_key());
+    }
+
     #[test]
     fn add_zero() {
         let p1 = Poly::<Sc>::new(3);
