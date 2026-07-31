@@ -165,6 +165,40 @@ mod tests {
     }
 
     #[test]
+    fn aggregate_is_subset_independent_g1() {
+        aggregate_is_subset_independent::<G1Scheme<PCurve>>();
+    }
+
+    #[test]
+    fn aggregate_is_subset_independent_g2() {
+        aggregate_is_subset_independent::<G2Scheme<PCurve>>();
+    }
+
+    /// Any t distinct partials determine the same degree t-1 polynomial, so
+    /// the aggregated signature must be byte-identical no matter which valid
+    /// subset the caller provides. A wrong Lagrange node or a bug in the
+    /// subset selection would produce diverging signatures here.
+    fn aggregate_is_subset_independent<T: ThresholdScheme + SignatureScheme>() {
+        let threshold = 3;
+        let (shares, public) = shares::<T>(5, threshold);
+        let msg = vec![1, 9, 6, 9];
+
+        let partials: Vec<_> = shares
+            .iter()
+            .map(|s| T::partial_sign(s, &msg).unwrap())
+            .collect();
+
+        let from_low_indices = T::aggregate(threshold, &partials[0..3]).unwrap();
+        let from_high_indices = T::aggregate(threshold, &partials[2..5]).unwrap();
+
+        assert_eq!(
+            from_low_indices, from_high_indices,
+            "different share subsets aggregated to different signatures"
+        );
+        T::verify(public.public_key(), &msg, &from_low_indices).unwrap();
+    }
+
+    #[test]
     fn aggregate_rejects_a_zero_threshold_g1() {
         aggregate_rejects_a_zero_threshold::<G1Scheme<PCurve>>();
     }
