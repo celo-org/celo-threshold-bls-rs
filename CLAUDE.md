@@ -60,6 +60,14 @@ cargo test -p threshold-bls poly::      # single test / module filter
 G2, signatures 48 bytes on G1); the byte-length constants live in its
 `lib.rs`.
 
+## Changelog
+
+`CHANGELOG.md` follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
+Any consumer-visible change (API, behavior, security, feature flags, artifact
+properties, toolchain floors) gets an entry under `[Unreleased]` in the same
+PR; pure CI plumbing and routine dependency bumps do not. Prefix entries with
+the affected surface (`sig:`, `wasm:`, `ffi:`, ...) and link the PR or commit.
+
 ## Commit messages
 
 Use [Scoped Commits](https://scopedcommits.com/): `<scope>: <description>`,
