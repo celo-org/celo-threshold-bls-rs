@@ -86,11 +86,15 @@ pub fn verify(public_key_buf: &[u8], message: &[u8], signature: &[u8]) -> Result
 }
 
 #[wasm_bindgen(js_name = verifyBlindSignature)]
-/// Verifies the signature after it has been unblinded without hashing. Users will call this on the
-/// threshold signature against the full public key
+/// Verifies a signature over a message that is already a serialized group
+/// point (e.g. a blinded message), without hashing it to the curve.
+///
+/// Note that this only proves the signature was produced over the given
+/// point. It says nothing about the plaintext that was blinded — use
+/// `verify` on the unblinded signature and plaintext for that.
 ///
 /// * public_key: The public key used to sign the message
-/// * message: The message which was signed
+/// * message: The serialized group point which was signed
 /// * signature: The signature which was produced on the message
 ///
 /// # Throws
@@ -104,7 +108,7 @@ pub fn verify_blind_signature(
     let public_key: PublicKey = serialization::deserialize(public_key_buf)
         .map_err(|err| JsValue::from_str(&format!("could not deserialize public key {}", err)))?;
 
-    // checks the signature on the message hash
+    // checks the pairing against the message point directly, without hashing
     SigScheme::blind_verify(&public_key, message, signature)
         .map_err(|err| JsValue::from_str(&format!("signature verification failed: {}", err)))
 }
