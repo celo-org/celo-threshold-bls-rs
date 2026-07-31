@@ -59,9 +59,9 @@ jobs:
       - name: audit
         run: cargo audit
 
-  blind-threshold-bls-wasm-tests:
+  wasm-pkg-tests:
     runs-on: ubuntu-latest
-    name: blind-threshold-bls-wasm-tests
+    name: wasm-pkg-tests
     steps:
       - name: Checkout sources
         uses: actions/checkout@v6
@@ -78,11 +78,10 @@ jobs:
           path: crates/threshold-bls-ffi/pkg
 
       - uses: actions/setup-node@v6
-      - name: Run blind-threshold-bls-wasm tests
+      - name: Run wasm package tests
         run: |
-          git clone https://github.com/celo-org/blind-threshold-bls-wasm.git $RUNNER_TEMP/blind-threshold-bls-wasm
-          rm $RUNNER_TEMP/blind-threshold-bls-wasm/src/blind*
-          cp -r crates/threshold-bls-ffi/pkg/blind* $RUNNER_TEMP/blind-threshold-bls-wasm/src/
-          cd $RUNNER_TEMP/blind-threshold-bls-wasm
+          mkdir -p bindings/js/src
+          cp crates/threshold-bls-ffi/pkg/blind* bindings/js/src/
+          cd bindings/js
           npm ci
           npm test
