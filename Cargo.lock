@@ -815,6 +815,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "rand_core"
+version = "0.10.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "63b8176103e19a2643978565ca18b50549f6101881c443590420e4dc998a3c69"
+
+[[package]]
 name = "rand_xorshift"
 version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1102,7 +1108,7 @@ dependencies = [
  "proptest",
  "rand 0.8.6",
  "rand_chacha 0.3.1",
- "rand_core 0.6.4",
+ "rand_core 0.10.1",
  "serde",
  "static_assertions",
  "thiserror 1.0.69",
@@ -1117,7 +1123,7 @@ dependencies = [
  "getrandom 0.2.17",
  "jni",
  "rand_chacha 0.3.1",
- "rand_core 0.6.4",
+ "rand_core 0.10.1",
  "serde",
  "threshold-bls",
  "wasm-bindgen",

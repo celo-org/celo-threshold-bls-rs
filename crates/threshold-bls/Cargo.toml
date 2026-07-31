@@ -14,7 +14,7 @@ repository.workspace = true
 crate-type = ["lib"]
 
 [dependencies]
-rand_core = { version = "0.6", default-features = false }
+rand_core = { version = "0.10", default-features = false }
 rand = "0.8"
 serde = {version = "1", features = ["derive"] }
 
