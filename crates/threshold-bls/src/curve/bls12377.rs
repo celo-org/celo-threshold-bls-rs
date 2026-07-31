@@ -55,8 +55,9 @@ fn blake2_hash(
         return Err(BLSError::DomainTooLarge(domain.len()));
     }
     // The XOF digest length is encoded into a 16-bit node offset field;
-    // larger outputs would silently truncate in xof_digest_length_to_node_offset.
-    if output_size_in_bytes > u16::MAX as usize {
+    // larger outputs would silently truncate in xof_digest_length_to_node_offset,
+    // and BLAKE2X reserves the value 0xffff for unknown-length output.
+    if output_size_in_bytes >= u16::MAX as usize {
         return Err(BLSError::OutputSizeTooLarge(output_size_in_bytes));
     }
 
@@ -235,10 +236,12 @@ impl Element for G1 {
 /// - Parses x via `Field::from_random_bytes` (masks last byte to field bits)
 /// - Never rejects based on the infinity flag in random hash bytes
 ///
-/// Subgroup soundness: `mul_by_cofactor_to_group` maps an on-curve point into
-/// the prime-order subgroup only because `gcd(cofactor, r) = 1`, which holds
-/// for both groups of BLS12-377. Any curve added here must satisfy the same
-/// precondition.
+/// Subgroup soundness: `mul_by_cofactor_to_group` multiplies by the cofactor
+/// `h = #E/r`, so `r * (h*P) = #E * P = 0` and the result always lies in the
+/// prime-order subgroup. `gcd(h, r) = 1` — which holds for both groups of
+/// BLS12-377 — additionally keeps the map non-degenerate: only points of
+/// order dividing `h` land on the identity, and those are rejected by the
+/// zero check below. Any curve added here must preserve both properties.
 fn try_and_increment_hash<P: SWCurveConfig>(
     domain: &[u8],
     message: &[u8],
@@ -614,10 +617,14 @@ mod tests {
 
     #[test]
     fn blake2_hash_rejects_oversized_output() {
+        // 0xffff is reserved by BLAKE2X for unknown-length output, so the
+        // largest fixed-length request is u16::MAX - 1.
         assert!(matches!(
-            blake2_hash(b"", b"some message", u16::MAX as usize + 1),
+            blake2_hash(b"", b"some message", u16::MAX as usize),
             Err(BLSError::OutputSizeTooLarge(_))
         ));
+        let out = blake2_hash(b"", b"some message", u16::MAX as usize - 1).unwrap();
+        assert_eq!(out.len(), u16::MAX as usize - 1);
     }
 
     #[test]
