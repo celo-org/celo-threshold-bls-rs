@@ -85,7 +85,7 @@ feature. They serve different consumers and are not interchangeable.
   depend on it, so this path is production infrastructure. The
   `wasm-pkg-tests` job in `.github/workflows/rust_ci.yml` builds the package
   and runs that suite. The former standalone repo
-  `celo-org/blind-threshold-bls-wasm` is legacy, pending archival.
+  `celo-org/blind-threshold-bls-wasm` is archived.
 - **Browser** — no artifact is built here. `social-connect`'s `docs/privacy.md`
   points users at the unmerged `web-compatible` branch of
   `blind-threshold-bls-wasm` (commit `3d1013af`, October 2022), which predates
