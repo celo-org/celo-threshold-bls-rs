@@ -174,9 +174,9 @@ mod tests {
         aggregate_rejects_a_zero_threshold::<G2Scheme<PCurve>>();
     }
 
-    /// A threshold of zero used to pass both length guards and produce the
-    /// identity signature from an empty slice — a valid-looking signature
-    /// from no inputs at all.
+    /// Aggregating over zero partials folds to the identity signature — a
+    /// valid-looking signature from no inputs at all — so a threshold of
+    /// zero is rejected outright.
     fn aggregate_rejects_a_zero_threshold<T>()
     where
         T: ThresholdScheme<Error = ThresholdError<T>> + SignatureScheme,
