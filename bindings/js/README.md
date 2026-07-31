@@ -59,7 +59,7 @@ const private_key = keypair.privateKey
 const public_key = keypair.publicKey
 
 // Sign the user's blinded message with the service's private key
-const blind_sig = threshold.sign(private_key, blind_msg)
+const blind_sig = threshold.signBlindedMessage(private_key, blind_msg)
 
 // User unblinds the signature with this scalar
 const unblinded_sig = threshold.unblind(blind_sig, blinded_msg.blindingFactor)
@@ -107,13 +107,13 @@ const polynomial = keys.polynomial
 // each of these shares proceed to sign the blinded sig
 let sigs = []
 for (let i = 0 ; i < keys.numShares(); i++ ) {
-    const sig = threshold.partialSign(keys.getShare(i), blindedMessage)
+    const sig = threshold.partialSignBlindedMessage(keys.getShare(i), blindedMessage)
     sigs.push(sig)
 }
 
 // The combiner will verify all the individual partial signatures
 for (const sig of sigs) {
-    threshold.partialVerify(polynomial, blindedMessage, sig)
+    threshold.partialVerifyBlindSignature(polynomial, blindedMessage, sig)
 }
 
 const blindSig = threshold.combine(t, flattenSigsArray(sigs))
