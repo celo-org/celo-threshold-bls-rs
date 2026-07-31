@@ -34,6 +34,11 @@ pub enum ThresholdError<I: SignatureScheme> {
     /// were fewer than the threshold
     #[error("not enough partial signatures: {0}/{1}")]
     NotEnoughPartialSignatures(usize, usize),
+
+    /// ZeroThreshold is raised if aggregation is attempted with a threshold of
+    /// zero, which would produce a signature from no partials at all
+    #[error("threshold must be at least one")]
+    ZeroThreshold,
 }
 
 impl<I: SignatureScheme> ThresholdScheme for I {
@@ -68,6 +73,10 @@ impl<I: SignatureScheme> ThresholdScheme for I {
         threshold: usize,
         partials: &[Partial],
     ) -> Result<Vec<u8>, <Self as ThresholdScheme>::Error> {
+        if threshold == 0 {
+            return Err(ThresholdError::ZeroThreshold);
+        }
+
         if threshold > partials.len() {
             return Err(ThresholdError::NotEnoughPartialSignatures(
                 partials.len(),
@@ -153,6 +162,29 @@ mod tests {
     fn threshold_g2() {
         type S = G2Scheme<PCurve>;
         test_threshold_scheme::<S>(shares::<S>);
+    }
+
+    #[test]
+    fn aggregate_rejects_a_zero_threshold_g1() {
+        aggregate_rejects_a_zero_threshold::<G1Scheme<PCurve>>();
+    }
+
+    #[test]
+    fn aggregate_rejects_a_zero_threshold_g2() {
+        aggregate_rejects_a_zero_threshold::<G2Scheme<PCurve>>();
+    }
+
+    /// A threshold of zero used to pass both length guards and produce the
+    /// identity signature from an empty slice — a valid-looking signature
+    /// from no inputs at all.
+    fn aggregate_rejects_a_zero_threshold<T>()
+    where
+        T: ThresholdScheme<Error = ThresholdError<T>> + SignatureScheme,
+    {
+        assert!(matches!(
+            T::aggregate(0, &[]),
+            Err(ThresholdError::ZeroThreshold)
+        ));
     }
 
     #[test]

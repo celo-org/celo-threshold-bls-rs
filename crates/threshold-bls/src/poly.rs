@@ -95,6 +95,8 @@ pub enum PolyError {
     InvalidRecovery(usize, usize),
     #[error("Could not invert scalar")]
     NoInverse,
+    #[error("Cannot recover with a threshold of zero")]
+    ZeroThreshold,
 }
 
 impl<C> Poly<C>
@@ -198,6 +200,11 @@ where
         t: usize,
         mut shares: Vec<Eval<C>>,
     ) -> Result<BTreeMap<Idx, (C::RHS, C)>, PolyError> {
+        // Interpolating over zero points would "recover" the group identity.
+        if t == 0 {
+            return Err(PolyError::ZeroThreshold);
+        }
+
         // first sort the shares as it can happens recovery happens for
         // non-correlated shares so the subset chosen becomes important
         shares.sort_by_key(|a| a.index);
@@ -427,6 +434,21 @@ pub mod tests {
         assert_eq!(&recovered, private.public_key());
     }
 
+    /// Interpolating over zero points folds to the group identity, so a
+    /// threshold of zero would "recover" a value from no shares at all. It
+    /// must be rejected, not answered.
+    #[test]
+    fn recover_rejects_a_zero_threshold() {
+        assert!(matches!(
+            Poly::<Sc>::recover(0, vec![]),
+            Err(PolyError::ZeroThreshold)
+        ));
+        assert!(matches!(
+            Poly::<Sc>::full_recover(0, vec![]),
+            Err(PolyError::ZeroThreshold)
+        ));
+    }
+
     /// A duplicated index is the same evaluation point, so it must not crowd
     /// out the other shares: as long as t distinct points remain, recovery
     /// succeeds.
@@ -533,7 +555,9 @@ pub mod tests {
 
 
     #[test]
-    fn interpolation(degree in 0..100usize, num_evals in 0..100usize) {
+    // num_evals starts at 1: recovery with a threshold of zero is rejected,
+    // covered by recover_rejects_a_zero_threshold.
+    fn interpolation(degree in 0..100usize, num_evals in 1..100usize) {
         let poly = Poly::<Sc>::new(degree);
         let expected = poly.0[0];
 
