@@ -1,0 +1,40 @@
+{
+  "name": "@celo/blind-threshold-bls",
+  "version": "1.0.0-beta",
+  "description": "WASM bindings for blind BLS threshold signature generation and verification",
+  "private": false,
+  "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/celo-org/celo-threshold-bls-rs",
+    "directory": "bindings/js"
+  },
+  "homepage": "https://github.com/celo-org/celo-threshold-bls-rs#readme",
+  "bugs": {
+    "url": "https://github.com/celo-org/celo-threshold-bls-rs/issues"
+  },
+  "keywords": [
+    "bls",
+    "blind",
+    "wasm",
+    "celo"
+  ],
+  "files": [
+    "README.md",
+    "examples/",
+    "src/blind_threshold_bls_bg.wasm",
+    "src/blind_threshold_bls.js",
+    "src/blind_threshold_bls.d.ts"
+  ],
+  "main": "src/blind_threshold_bls.js",
+  "types": "src/blind_threshold_bls.d.ts",
+  "scripts": {
+    "test": "jest"
+  },
+  "devDependencies": {
+    "jest": "^30.0.0"
+  },
+  "publishConfig": {
+    "access": "public"
+  }
+}
