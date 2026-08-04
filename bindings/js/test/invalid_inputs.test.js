@@ -88,6 +88,59 @@ describe('Invalid inputs', () => {
     });
   });
 
+  // These arguments used to panic, which in wasm traps and leaves the instance
+  // unusable. Testing them from Rust cannot show that they now reach JS as
+  // exceptions: those tests run natively, where building a JsValue aborts the
+  // process. So the boundary itself is only covered here.
+  describe('caller arguments', () => {
+    const SHORT_SEED = STATIC_SEED.slice(0, 31);
+
+    it('keygen throws on a seed shorter than 32 bytes', () => {
+      expect(() => threshold.keygen(SHORT_SEED)).toThrow('seed must be at least 32 bytes');
+    });
+
+    it('blind throws on a seed shorter than 32 bytes', () => {
+      expect(() =>
+        threshold.blind(STATIC_MESSAGE, SHORT_SEED)
+      ).toThrow('seed must be at least 32 bytes');
+    });
+
+    it('thresholdKeygen throws on a seed shorter than 32 bytes', () => {
+      expect(() =>
+        threshold.thresholdKeygen(5, 3, SHORT_SEED)
+      ).toThrow('seed must be at least 32 bytes');
+    });
+
+    it('thresholdKeygen throws on a threshold outside 1..=n', () => {
+      expect(() =>
+        threshold.thresholdKeygen(5, 0, STATIC_THRESHOLD_SEED)
+      ).toThrow('threshold must be between 1 and 5');
+      expect(() =>
+        threshold.thresholdKeygen(5, 6, STATIC_THRESHOLD_SEED)
+      ).toThrow('threshold must be between 1 and 5');
+    });
+
+    it('thresholdKeygen throws on a group larger than the maximum', () => {
+      expect(() =>
+        threshold.thresholdKeygen(1000000000, 3, STATIC_THRESHOLD_SEED)
+      ).toThrow('the number of shares must be between 1 and 1024');
+    });
+
+    it('getShare throws past the last share', () => {
+      const keys = threshold.thresholdKeygen(5, 3, STATIC_THRESHOLD_SEED);
+      expect(keys.numShares()).toBe(5);
+      expect(() => keys.getShare(5)).toThrow('no share at index 5');
+    });
+
+    // A thrown exception must leave the module usable. A panic would not have:
+    // it poisons the instance, and every later call fails too.
+    it('leaves the module usable afterwards', () => {
+      const keypair = threshold.keygen(STATIC_SEED);
+      const signature = threshold.sign(keypair.privateKey, STATIC_MESSAGE);
+      expect(() => threshold.verify(keypair.publicKey, STATIC_MESSAGE, signature)).not.toThrow();
+    });
+  });
+
   describe('unblind', () => {
     const keypair = threshold.keygen(STATIC_SEED);
     const blinded = threshold.blind(STATIC_MESSAGE, OTHER_SEED);
