@@ -42,25 +42,22 @@ impl<'a> From<&Buffer> for &'a [u8] {
     }
 }
 
-// The C surface names these instead of `Token<PrivateKey>`, `Share<PrivateKey>`
-// and `Poly<PublicKey>`. cbindgen cannot render a generic from another crate —
-// it emits the Rust syntax verbatim, which is not C — and resolving them needs
-// `parse_deps`, which panics on the arkworks generics underneath.
-//
-// `repr(transparent)` makes "a pointer to the wrapper is a pointer to the inner
-// value" a guarantee rather than an artefact of the current layout algorithm.
-
 /// Opaque handle to a blinding factor produced by `blind`.
+///
+/// The C surface names this instead of `Token<PrivateKey>`: cbindgen cannot
+/// render a generic from another crate — it emits the Rust syntax verbatim,
+/// which is not C — and resolving it needs `parse_deps`, which panics on the
+/// arkworks generics underneath.
+///
+/// `repr(transparent)` makes "a pointer to the wrapper is a pointer to the
+/// inner value" a guarantee rather than an artefact of the current layout
+/// algorithm.
+///
+/// A blinding factor is the one value the C API hands back that has no
+/// serialized form, so it is the only handle here. Everything else crosses the
+/// boundary as bytes.
 #[repr(transparent)]
 pub struct BlindingFactor(Token<PrivateKey>);
-
-/// Opaque handle to one participant's share of a threshold private key.
-#[repr(transparent)]
-pub struct KeyShare(Share<PrivateKey>);
-
-/// Opaque handle to the public commitment polynomial of a threshold key.
-#[repr(transparent)]
-pub struct PublicPoly(Poly<PublicKey>);
 
 ///////////////////////////////////////////////////////////////////////////
 // User -> Library
@@ -255,6 +252,9 @@ pub unsafe extern "C" fn sign_blinded_message(
 /// Signs the message with the provided **share** of the private key and returns the **partial**
 /// signature.
 ///
+/// * share: The serialized share of the private key, as the holder received it from key
+///   generation
+///
 /// # Safety
 /// - **This function will dereference the provided pointers. If any invalid pointers are passed
 ///   then the software will crash**.
@@ -263,7 +263,7 @@ pub unsafe extern "C" fn sign_blinded_message(
 /// Returns true if successful, otherwise false.
 #[no_mangle]
 pub unsafe extern "C" fn partial_sign(
-    share: *const KeyShare,
+    share: *const Buffer,
     message: *const Buffer,
     signature: *mut Buffer,
 ) -> bool {
@@ -271,9 +271,13 @@ pub unsafe extern "C" fn partial_sign(
         return false;
     }
 
-    let share = &unsafe { &*share }.0;
+    let share: Share<PrivateKey> =
+        match serialization::deserialize(<&[u8]>::from(unsafe { &*share })) {
+            Ok(s) => s,
+            Err(_) => return false,
+        };
     let message = unsafe { &*message };
-    let sig = match SigScheme::partial_sign(share, <&[u8]>::from(message)) {
+    let sig = match SigScheme::partial_sign(&share, <&[u8]>::from(message)) {
         Ok(s) => s,
         Err(_) => return false,
     };
@@ -287,6 +291,9 @@ pub unsafe extern "C" fn partial_sign(
 /// Signs a *blinded* message with the provided *share* of the private key and returns the
 /// *partial blind* signature.
 ///
+/// * share: The serialized share of the private key, as the holder received it from key
+///   generation
+///
 /// # Safety
 /// - **This function will dereference the provided pointers. If any invalid pointers are passed
 ///   then the software will crash**.
@@ -295,7 +302,7 @@ pub unsafe extern "C" fn partial_sign(
 /// Returns true if successful, otherwise false.
 #[no_mangle]
 pub unsafe extern "C" fn partial_sign_blinded_message(
-    share: *const KeyShare,
+    share: *const Buffer,
     blinded_message: *const Buffer,
     signature: *mut Buffer,
 ) -> bool {
@@ -303,9 +310,13 @@ pub unsafe extern "C" fn partial_sign_blinded_message(
         return false;
     }
 
-    let share = &unsafe { &*share }.0;
+    let share: Share<PrivateKey> =
+        match serialization::deserialize(<&[u8]>::from(unsafe { &*share })) {
+            Ok(s) => s,
+            Err(_) => return false,
+        };
     let message = unsafe { &*blinded_message };
-    let sig = match SigScheme::sign_blind_partial(share, <&[u8]>::from(message)) {
+    let sig = match SigScheme::sign_blind_partial(&share, <&[u8]>::from(message)) {
         Ok(s) => s,
         Err(_) => return false,
     };
@@ -323,6 +334,9 @@ pub unsafe extern "C" fn partial_sign_blinded_message(
 /// Verifies a partial signature against the public key corresponding to the secret shared
 /// polynomial.
 ///
+/// * polynomial: The serialized public commitment polynomial from key generation. It carries
+///   its own length, so a separate length argument is not needed.
+///
 /// # Safety
 /// - **This function will dereference the provided pointers. If any invalid pointers are passed
 ///   then the software will crash**.
@@ -331,9 +345,7 @@ pub unsafe extern "C" fn partial_sign_blinded_message(
 /// Returns true if successful, otherwise false.
 #[no_mangle]
 pub unsafe extern "C" fn partial_verify(
-    // TODO: The polynomial does not have a constant length type. Is it safe to not
-    // pass any length parameter?
-    polynomial: *const PublicPoly,
+    polynomial: *const Buffer,
     blinded_message: *const Buffer,
     signature: *const Buffer,
 ) -> bool {
@@ -341,15 +353,22 @@ pub unsafe extern "C" fn partial_verify(
         return false;
     }
 
-    let polynomial = &unsafe { &*polynomial }.0;
+    let polynomial: Poly<PublicKey> =
+        match serialization::deserialize(<&[u8]>::from(unsafe { &*polynomial })) {
+            Ok(p) => p,
+            Err(_) => return false,
+        };
     let blinded_message = <&[u8]>::from(unsafe { &*blinded_message });
     let signature = <&[u8]>::from(unsafe { &*signature });
 
-    SigScheme::partial_verify(polynomial, blinded_message, signature).is_ok()
+    SigScheme::partial_verify(&polynomial, blinded_message, signature).is_ok()
 }
 
 /// Verifies a partial *blinded* signature against the public key corresponding to the secret shared
 /// polynomial.
+///
+/// * polynomial: The serialized public commitment polynomial from key generation. It carries
+///   its own length, so a separate length argument is not needed.
 ///
 /// # Safety
 /// - **This function will dereference the provided pointers. If any invalid pointers are passed
@@ -359,9 +378,7 @@ pub unsafe extern "C" fn partial_verify(
 /// Returns true if successful, otherwise false.
 #[no_mangle]
 pub unsafe extern "C" fn partial_verify_blind_signature(
-    // TODO: The polynomial does not have a constant length type. Is it safe to not
-    // pass any length parameter?
-    polynomial: *const PublicPoly,
+    polynomial: *const Buffer,
     blinded_message: *const Buffer,
     signature: *const Buffer,
 ) -> bool {
@@ -369,11 +386,15 @@ pub unsafe extern "C" fn partial_verify_blind_signature(
         return false;
     }
 
-    let polynomial = &unsafe { &*polynomial }.0;
+    let polynomial: Poly<PublicKey> =
+        match serialization::deserialize(<&[u8]>::from(unsafe { &*polynomial })) {
+            Ok(p) => p,
+            Err(_) => return false,
+        };
     let blinded_message = <&[u8]>::from(unsafe { &*blinded_message });
     let signature = <&[u8]>::from(unsafe { &*signature });
 
-    SigScheme::verify_blind_partial(polynomial, blinded_message, signature).is_ok()
+    SigScheme::verify_blind_partial(&polynomial, blinded_message, signature).is_ok()
 }
 
 /// Combines a flattened vector of partial signatures to a single threshold signature
@@ -772,19 +793,19 @@ mod tests {
 
         // 2. partially sign the blinded message
         //
-        // `Keys` holds the plain threshold-bls types, so the handles the C
-        // surface takes are built here rather than stored.
-        let shares: Vec<KeyShare> = keys.shares.iter().cloned().map(KeyShare).collect();
+        // The C surface takes the share as bytes, the form a signer receives it
+        // in from key generation.
+        let shares: Vec<Vec<u8>> = keys
+            .shares
+            .iter()
+            .map(|share| bincode::serialize(share).unwrap())
+            .collect();
         let mut sigs = Vec::new();
         for share in shares.iter().take(t) {
+            let share = Buffer::from(&share[..]);
             let mut partial_sig = MaybeUninit::<Buffer>::uninit();
-            let ret = unsafe {
-                partial_sign_fn(
-                    share as *const _,
-                    &message_to_sign,
-                    partial_sig.as_mut_ptr(),
-                )
-            };
+            let ret =
+                unsafe { partial_sign_fn(&share, &message_to_sign, partial_sig.as_mut_ptr()) };
             assert!(ret);
 
             let partial_sig = unsafe { partial_sig.assume_init() };
@@ -792,7 +813,8 @@ mod tests {
         }
 
         // 3. verify the partial signatures & concatenate them
-        let public_poly = PublicPoly(keys.polynomial.clone());
+        let polynomial = bincode::serialize(&keys.polynomial).unwrap();
+        let public_poly = Buffer::from(&polynomial[..]);
         let public_key = &public_poly as *const _;
         let mut concatenated = Vec::new();
         for sig in &sigs {

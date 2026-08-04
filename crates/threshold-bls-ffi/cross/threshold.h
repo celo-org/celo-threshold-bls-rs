@@ -13,8 +13,6 @@ typedef struct PrivateKey PrivateKey;
 typedef struct PublicKey PublicKey;
 typedef struct Signature Signature;
 typedef struct BlindingFactor BlindingFactor;
-typedef struct KeyShare KeyShare;
-typedef struct PublicPoly PublicPoly;
 
 
 #define PUBKEY_LEN 96
@@ -159,6 +157,9 @@ bool sign_blinded_message(const PrivateKey *private_key,
  * Signs the message with the provided **share** of the private key and returns the **partial**
  * signature.
  *
+ * * share: The serialized share of the private key, as the holder received it from key
+ *   generation
+ *
  * # Safety
  * - **This function will dereference the provided pointers. If any invalid pointers are passed
  *   then the software will crash**.
@@ -166,12 +167,17 @@ bool sign_blinded_message(const PrivateKey *private_key,
  *
  * Returns true if successful, otherwise false.
  */
-bool partial_sign(const KeyShare *share, const struct Buffer *message, struct Buffer *signature);
+bool partial_sign(const struct Buffer *share,
+                  const struct Buffer *message,
+                  struct Buffer *signature);
 
 /**
  * Signs a *blinded* message with the provided *share* of the private key and returns the
  * *partial blind* signature.
  *
+ * * share: The serialized share of the private key, as the holder received it from key
+ *   generation
+ *
  * # Safety
  * - **This function will dereference the provided pointers. If any invalid pointers are passed
  *   then the software will crash**.
@@ -179,7 +185,7 @@ bool partial_sign(const KeyShare *share, const struct Buffer *message, struct Bu
  *
  * Returns true if successful, otherwise false.
  */
-bool partial_sign_blinded_message(const KeyShare *share,
+bool partial_sign_blinded_message(const struct Buffer *share,
                                   const struct Buffer *blinded_message,
                                   struct Buffer *signature);
 
@@ -187,6 +193,9 @@ bool partial_sign_blinded_message(const KeyShare *share,
  * Verifies a partial signature against the public key corresponding to the secret shared
  * polynomial.
  *
+ * * polynomial: The serialized public commitment polynomial from key generation. It carries
+ *   its own length, so a separate length argument is not needed.
+ *
  * # Safety
  * - **This function will dereference the provided pointers. If any invalid pointers are passed
  *   then the software will crash**.
@@ -194,7 +203,7 @@ bool partial_sign_blinded_message(const KeyShare *share,
  *
  * Returns true if successful, otherwise false.
  */
-bool partial_verify(const PublicPoly *polynomial,
+bool partial_verify(const struct Buffer *polynomial,
                     const struct Buffer *blinded_message,
                     const struct Buffer *signature);
 
@@ -202,6 +211,9 @@ bool partial_verify(const PublicPoly *polynomial,
  * Verifies a partial *blinded* signature against the public key corresponding to the secret shared
  * polynomial.
  *
+ * * polynomial: The serialized public commitment polynomial from key generation. It carries
+ *   its own length, so a separate length argument is not needed.
+ *
  * # Safety
  * - **This function will dereference the provided pointers. If any invalid pointers are passed
  *   then the software will crash**.
@@ -209,7 +221,7 @@ bool partial_verify(const PublicPoly *polynomial,
  *
  * Returns true if successful, otherwise false.
  */
-bool partial_verify_blind_signature(const PublicPoly *polynomial,
+bool partial_verify_blind_signature(const struct Buffer *polynomial,
                                     const struct Buffer *blinded_message,
                                     const struct Buffer *signature);
 
