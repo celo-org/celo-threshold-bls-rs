@@ -17,6 +17,34 @@ typedef struct KeyShare KeyShare;
 typedef struct PublicPoly PublicPoly;
 
 
+#define PUBKEY_LEN 96
+
+#define PRIVKEY_LEN 32
+
+/**
+ * Bytes bincode prepends to a serialized sequence as its length prefix.
+ */
+#define VEC_LENGTH 8
+
+/**
+ * Bytes in a serialized signature, compressed G1.
+ */
+#define SIGNATURE_LEN 48
+
+/**
+ * Bytes in a share index, spelled as a literal because cbindgen evaluates
+ * these expressions itself and cannot call `size_of`. The assertion below
+ * keeps it tied to `Idx`.
+ */
+#define IDX_LEN 4
+
+/**
+ * Bytes in one serialized partial signature. `combine` splits its flattened
+ * input into chunks of this size, so a caller has to build that input to
+ * match.
+ */
+#define PARTIAL_SIG_LENGTH ((VEC_LENGTH + SIGNATURE_LEN) + IDX_LEN)
+
 /**
  * A BLS12-377 Keypair
  */
