@@ -107,7 +107,6 @@ mod tests {
     use super::*;
     use crate::{
         curve::bls12377::PairingCurve as PCurve,
-        group::Element,
         sig::{
             bls::{BLSError, G1Scheme, G2Scheme},
             Scheme, SignatureScheme,
@@ -293,24 +292,15 @@ mod tests {
         empty_polynomial_verifies_nothing::<G2Scheme<PCurve>>();
     }
 
-    /// A public polynomial with no coefficients is a bare length prefix on the
-    /// wire, and evaluates to the identity at every index. Rejecting the
-    /// identity public key is what stops it standing in for a real key.
+    /// A polynomial with no coefficients is a bare length prefix on the wire.
+    /// It used to parse and evaluate to the identity at every index, leaving
+    /// the identity public key check to stop it. That check still exists; this
+    /// asserts the input no longer reaches it.
     fn empty_polynomial_verifies_nothing<T>()
     where
         T: SignatureScheme<Error = BLSError> + ThresholdScheme<Error = ThresholdError<T>>,
     {
-        let empty: Poly<T::Public> = serialization::deserialize(&[0u8; 8]).unwrap();
-
-        let partial = bincode::serialize(&Eval {
-            index: 7,
-            value: bincode::serialize(&<T as Scheme>::Signature::new()).unwrap(),
-        })
-        .unwrap();
-
-        assert!(matches!(
-            T::partial_verify(&empty, b"any message at all", &partial),
-            Err(ThresholdError::SignatureError(BLSError::InvalidPublicKey))
-        ));
+        let empty = serialization::deserialize::<Poly<T::Public>>(&[0u8; 8]);
+        assert!(empty.is_err(), "a polynomial with no coefficients parsed");
     }
 }
