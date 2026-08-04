@@ -452,12 +452,16 @@ fn get_rng(digest: &[u8]) -> TryResult<impl RngCore> {
 /// A shorter seed is refused rather than padded: the padding is not secret, so
 /// the key material would be drawn from less randomness than the caller
 /// supplied bytes for.
-fn from_slice(bytes: &[u8]) -> TryResult<[u8; 32]> {
-    let mut array = [0; 32];
-    let bytes = bytes
-        .get(..array.len())
-        .ok_or_else(|| format!("seed must be at least 32 bytes (got {})", bytes.len()))?;
-    array.copy_from_slice(bytes);
+fn from_slice(bytes: &[u8]) -> TryResult<[u8; SEED_LEN]> {
+    let mut array = [0; SEED_LEN];
+    let seed = bytes.get(..SEED_LEN).ok_or_else(|| {
+        format!(
+            "seed must be at least {} bytes (got {})",
+            SEED_LEN,
+            bytes.len()
+        )
+    })?;
+    array.copy_from_slice(seed);
     Ok(array)
 }
 

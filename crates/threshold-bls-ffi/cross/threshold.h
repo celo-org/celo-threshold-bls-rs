@@ -20,6 +20,12 @@ typedef struct BlindingFactor BlindingFactor;
 #define PRIVKEY_LEN 32
 
 /**
+ * Bytes of seed the entry points that draw randomness require. It is the whole
+ * state of the RNG they seed, so a shorter seed is refused rather than padded.
+ */
+#define SEED_LEN 32
+
+/**
  * Bytes bincode prepends to a serialized sequence as its length prefix.
  */
 #define VEC_LENGTH 8
@@ -66,7 +72,8 @@ typedef struct Buffer {
  * Given a message and a seed, it will blind it and return the blinded message
  *
  * * message: A cleartext message which you want to blind
- * * seed: A 32 byte seed for randomness. You can get one securely via `crypto.randomBytes(32)`
+ * * seed: A `SEED_LEN` byte seed for randomness. You can get one securely via
+ *   `crypto.randomBytes(32)`
  * * blinded_message_out : Pointer to the memory where the blinded message will be written to
  * * blinding_factor_out : Pointer to the object storing the blinding factor
  *
@@ -81,6 +88,7 @@ typedef struct Buffer {
  * - **This function will dereference the provided pointers. If any invalid pointers are passed
  *   then the software will crash**.
  * - If NULL pointers are passed, the function will return false
+ * - If the seed is shorter than `SEED_LEN` bytes, the function will return false
  *
  * Returns true if successful, otherwise false.
  */
@@ -391,10 +399,10 @@ void destroy_sig(Signature *signature);
  * The return value should be destroyed with `destroy_keypair`.
  *
  * # Safety
- * - The seed MUST be at least 32 bytes long
  * - **This function will dereference the provided pointers. If any invalid pointers are passed
  *   then the software will crash**.
  * - If NULL pointers are passed, the function will return false
+ * - If the seed is shorter than `SEED_LEN` bytes, the function will return false
  *
  * Returns true if successful, otherwise false.
  */
