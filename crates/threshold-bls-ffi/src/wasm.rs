@@ -487,11 +487,11 @@ mod tests {
     // exported bindings, because the conversion the bindings do would abort the
     // test process. See `TryResult`.
 
-    // A seed shorter than the RNG's state used to be padded with zeros by a
-    // slice expression that panicked instead.
+    // A seed shorter than the RNG's state used to be sliced to length, which
+    // panicked, and a panic in wasm poisons the instance it happened in.
     #[test]
     fn a_short_seed_is_rejected() {
-        let short = [7u8; 31];
+        let short = [7u8; SEED_LEN - 1];
 
         assert!(try_keygen(short.to_vec()).is_err());
         assert!(try_blind(vec![1, 2, 3], &short).is_err());
@@ -499,11 +499,11 @@ mod tests {
         assert!(try_keygen(Vec::new()).is_err());
     }
 
-    // The whole seed is consumed, so 32 bytes is enough: the boundary is not off
-    // by one in the other direction.
+    // The whole seed is consumed, so the exact length is enough: the check is
+    // not off by one in the other direction.
     #[test]
-    fn a_seed_of_exactly_32_bytes_is_accepted() {
-        let seed = [7u8; 32];
+    fn a_seed_of_exactly_the_required_length_is_accepted() {
+        let seed = [7u8; SEED_LEN];
 
         assert!(try_keygen(seed.to_vec()).is_ok());
         assert!(try_blind(vec![1, 2, 3], &seed).is_ok());
@@ -513,7 +513,7 @@ mod tests {
     // A threshold of zero asked for a polynomial of degree `usize::MAX`.
     #[test]
     fn a_threshold_outside_1_to_n_is_rejected() {
-        let seed = [7u8; 32];
+        let seed = [7u8; SEED_LEN];
 
         assert!(try_threshold_keygen(5, 0, &seed).is_err());
         assert!(try_threshold_keygen(5, 6, &seed).is_err());
@@ -525,7 +525,7 @@ mod tests {
     // `numShares` is the caller's only guard, and it was advisory.
     #[test]
     fn a_share_index_past_the_last_share_is_rejected() {
-        let keys = try_threshold_keygen(5, 3, &[7u8; 32]).unwrap();
+        let keys = try_threshold_keygen(5, 3, &[7u8; SEED_LEN]).unwrap();
         assert_eq!(keys.num_shares(), 5);
 
         assert!(keys.try_get_share(4).is_ok());

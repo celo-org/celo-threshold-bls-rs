@@ -763,7 +763,7 @@ pub unsafe extern "C" fn destroy_sig(signature: *mut Signature) {
 /// secret.
 #[cfg(test)]
 fn threshold_keygen(n: usize, t: usize, seed: &[u8]) -> Keys {
-    let mut rng = get_rng(seed).expect("the tests seed this with more than SEED_LEN bytes");
+    let mut rng = get_rng(seed).expect("the tests seed this with at least SEED_LEN bytes");
     let private = Poly::<PrivateKey>::new_from(t - 1, &mut rng);
     let shares = (0..n)
         .map(|i| private.eval(i as Index))
@@ -877,12 +877,12 @@ fn get_rng(digest: &[u8]) -> Option<impl RngCore> {
 
 /// Takes the RNG's whole seed from the caller's bytes.
 ///
-/// Returns `None` for anything shorter, which the exports report as `false`. A
-/// short seed used to be sliced to length, which panicked — and a panic
-/// crossing `extern "C"` aborts the process it was called from. Padding it
-/// instead is not an option: the padding is not secret, so the key material
+/// Returns `None` for fewer than `SEED_LEN` of them, which the exports report
+/// as `false`. A short seed used to be sliced to length, which panicked — and a
+/// panic crossing `extern "C"` aborts the process it was called from. Padding
+/// it instead is not an option: the padding is not secret, so the key material
 /// would be drawn from less randomness than the caller supplied bytes for.
-fn from_slice(bytes: &[u8]) -> Option<[u8; 32]> {
+fn from_slice(bytes: &[u8]) -> Option<[u8; SEED_LEN]> {
     let mut array = [0; SEED_LEN];
     array.copy_from_slice(bytes.get(..SEED_LEN)?);
     Some(array)
