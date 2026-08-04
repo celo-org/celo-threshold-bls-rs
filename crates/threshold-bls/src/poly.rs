@@ -24,7 +24,10 @@ impl<A: fmt::Display> fmt::Display for Eval<A> {
 /// A polynomial that is using a scalar for the variable x and a generic
 /// element for the coefficients. The coefficients must be able to multiply
 /// the type of the variable, which is always a scalar.
+///
+/// Always has at least one coefficient, on the wire as well as in memory.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(try_from = "Vec<C>")]
 pub struct Poly<C>(Vec<C>);
 
 impl<C> Poly<C> {
@@ -32,7 +35,7 @@ impl<C> Poly<C> {
     pub fn degree(&self) -> usize {
         // e.g. c_3 * x^3 + c_2 * x^2 + c_1 * x + c_0
         // ^ 4 coefficients correspond to a 3rd degree poly
-        self.0.len() - 1
+        self.0.len() - 1 // cannot underflow: there is always one coefficient
     }
 }
 
@@ -42,7 +45,7 @@ impl<C: Element> Poly<C> {
     /// In the context of secret sharing, the threshold is the degree + 1.
     pub fn new_from<R: RngCore>(degree: usize, rng: &mut R) -> Self {
         let coeffs: Vec<C> = (0..=degree).map(|_| C::rand(rng)).collect();
-        Self::from(coeffs)
+        Self(coeffs)
     }
 
     /// get returns the given coefficient at the requested index. It will panic
@@ -71,11 +74,11 @@ impl<C: Element> Poly<C> {
     // TODO fix semantics of zero:
     // it should be G1::zero() as only element
     pub fn zero() -> Self {
-        Self::from(vec![C::zero()])
+        Self(vec![C::zero()])
     }
 
     fn is_zero(&self) -> bool {
-        self.0.is_empty() || self.0.iter().all(|coeff| coeff == &C::zero())
+        self.0.iter().all(|coeff| coeff == &C::zero())
     }
 
     /// Performs polynomial addition in place
@@ -97,6 +100,8 @@ pub enum PolyError {
     NoInverse,
     #[error("Cannot recover with a threshold of zero")]
     ZeroThreshold,
+    #[error("A polynomial must have at least one coefficient")]
+    NoCoefficients,
 }
 
 impl<C> Poly<C>
@@ -186,7 +191,7 @@ where
                     })
                     .collect::<Vec<_>>();
 
-                Self::from(linear_coeffs)
+                Self(linear_coeffs)
             })
             .fold(Self::zero(), |mut acc, poly| {
                 acc.add(&poly);
@@ -239,13 +244,21 @@ where
     /// Returns the constant term of the polynomial which can be interpreted as
     /// the threshold public key
     pub fn public_key(&self) -> &C {
-        &self.0[0]
+        &self.0[0] // cannot panic: there is always one coefficient
     }
 }
 
-impl<C: Element> From<Vec<C>> for Poly<C> {
-    fn from(c: Vec<C>) -> Self {
-        Self(c)
+impl<C> TryFrom<Vec<C>> for Poly<C> {
+    type Error = PolyError;
+
+    /// The only way in from outside this module, which is what makes the
+    /// invariant the type's rather than its callers'.
+    fn try_from(coefficients: Vec<C>) -> Result<Self, Self::Error> {
+        if coefficients.is_empty() {
+            return Err(PolyError::NoCoefficients);
+        }
+
+        Ok(Self(coefficients))
     }
 }
 
@@ -290,12 +303,12 @@ impl<X: Scalar<RHS = X>> Poly<X> {
     /// Returns the scalar polynomial f(x) = x - c
     fn new_neg_constant(mut c: X) -> Poly<X> {
         c.negate();
-        Poly::from(vec![c, X::one()])
+        Poly(vec![c, X::one()])
     }
 
     /// Computes the lagrange basis polynomial of index i
     fn lagrange_basis<E: Element<RHS = X>>(i: Idx, xs: &BTreeMap<Idx, (X, E)>) -> Poly<X> {
-        let mut basis = Poly::<X>::from(vec![X::one()]);
+        let mut basis = Poly::<X>(vec![X::one()]);
 
         // accumulator of the denominator values
         let mut acc = X::one();
@@ -324,7 +337,7 @@ impl<X: Scalar<RHS = X>> Poly<X> {
         }
 
         // multiply all coefficients by the denominator
-        basis.mul(&Poly::from(vec![acc]));
+        basis.mul(&Poly(vec![acc]));
         basis
     }
 
@@ -344,7 +357,7 @@ impl<X: Scalar<RHS = X>> Poly<X> {
             })
             .collect::<Vec<P>>();
 
-        Poly::<P>::from(commits)
+        Poly::<P>(commits)
     }
 }
 
@@ -698,7 +711,7 @@ pub mod tests {
 
         constant.negate();
         let v = vec![constant, Sc::one()];
-        let res = Poly::from(v);
+        let res = Poly::try_from(v).unwrap();
 
         assert_eq!(res, p);
     }
@@ -716,8 +729,46 @@ pub mod tests {
                 p
             })
             .collect::<Vec<_>>();
-        let commitment = Poly::from(commitment);
+        let commitment = Poly::try_from(commitment).unwrap();
 
         assert_eq!(commitment, secret.commit::<G1>());
+    }
+
+    // `degree()` used to answer `usize::MAX` in release, having computed
+    // `0 - 1`, and `public_key()` indexed an empty vector.
+    #[test]
+    fn no_coefficients_is_not_a_polynomial() {
+        assert!(matches!(
+            Poly::<Sc>::try_from(Vec::new()),
+            Err(PolyError::NoCoefficients)
+        ));
+
+        let single = Poly::<Sc>::try_from(vec![Sc::one()]).unwrap();
+        assert_eq!(single.degree(), 0);
+    }
+
+    // Where it matters: an empty list is a bare length prefix any caller can
+    // send, and both bindings deserialize a polynomial from caller bytes.
+
+    #[test]
+    fn no_coefficients_does_not_deserialize() {
+        let empty = crate::serialization::deserialize::<Poly<Sc>>(&[0u8; 8]);
+        assert!(empty.is_err(), "a polynomial with no coefficients parsed");
+
+        // Still a valid empty `Vec`, so it is the invariant rejecting it,
+        // not the encoding.
+        let as_vec: Vec<Sc> = crate::serialization::deserialize(&[0u8; 8]).unwrap();
+        assert!(as_vec.is_empty());
+    }
+
+    // Deserialization goes through `TryFrom` now, so check it still accepts.
+    #[test]
+    fn a_polynomial_round_trips() {
+        let poly = Poly::<Sc>::new(3);
+        let bytes = bincode::serialize(&poly).unwrap();
+        let decoded: Poly<Sc> = crate::serialization::deserialize(&bytes).unwrap();
+
+        assert_eq!(poly, decoded);
+        assert_eq!(decoded.degree(), 3);
     }
 }

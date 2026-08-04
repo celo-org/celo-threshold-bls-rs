@@ -145,7 +145,7 @@ mod tests {
                 .map(get_keypair)
                 .map(|(priv_key, _)| priv_key)
                 .collect();
-            let private_poly = Poly::<PrivateKey>::from(private_keys);
+            let private_poly = Poly::<PrivateKey>::try_from(private_keys).unwrap();
             let shares = (0..n)
                 .map(|i| {
                     let eval = private_poly.eval(i as Idx);
@@ -225,7 +225,7 @@ mod tests {
                     .collect();
 
                 // Create a private polynomial from our private keys
-                let private_poly = Poly::<PrivateKey>::from(private_keys);
+                let private_poly = Poly::<PrivateKey>::try_from(private_keys).unwrap();
 
                 // Generate the shares from the polynomial
                 let shares = (0..n)

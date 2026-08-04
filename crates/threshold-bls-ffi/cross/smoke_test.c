@@ -426,6 +426,27 @@ static void short_seeds_are_rejected(void) {
     destroy_keypair(keypair);
 }
 
+/*
+ * A polynomial with no coefficients is a bare 8-byte length prefix. Two things
+ * refuse it now — Poly at deserialization, the identity key check at
+ * verification — so this pins the contract, not either mechanism.
+ */
+static void empty_polynomials_are_rejected(void) {
+    static const uint8_t NO_COEFFICIENTS[8] = {0};
+    Buffer empty = buf(NO_COEFFICIENTS, sizeof NO_COEFFICIENTS);
+    Buffer polynomial = buf(PUBLIC_POLY, sizeof PUBLIC_POLY);
+    Buffer message = buf(MESSAGE, sizeof MESSAGE);
+    Buffer share = buf(SHARE_0, sizeof SHARE_0);
+    Buffer partial;
+
+    CHECK(partial_sign(&share, &message, &partial));
+    CHECK(partial_verify(&polynomial, &message, &partial));
+    CHECK(!partial_verify(&empty, &message, &partial));
+    CHECK(!partial_verify_blind_signature(&empty, &message, &partial));
+
+    free_vector(partial.ptr, partial.len);
+}
+
 /* Freeing NULL is a no-op, as it is for free(3). */
 static void destructors_accept_null(void) {
     destroy_token(NULL);
@@ -447,6 +468,7 @@ int main(void) {
     null_arguments_are_rejected();
     buffers_with_no_memory_are_rejected();
     short_seeds_are_rejected();
+    empty_polynomials_are_rejected();
     destructors_accept_null();
 
     printf("threshold.h agrees with the library\n");
