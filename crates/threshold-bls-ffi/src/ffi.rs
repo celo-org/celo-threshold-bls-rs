@@ -107,7 +107,8 @@ pub struct BlindingFactor(Token<PrivateKey>);
 /// Given a message and a seed, it will blind it and return the blinded message
 ///
 /// * message: A cleartext message which you want to blind
-/// * seed: A 32 byte seed for randomness. You can get one securely via `crypto.randomBytes(32)`
+/// * seed: A `SEED_LEN` byte seed for randomness. You can get one securely via
+///   `crypto.randomBytes(32)`
 /// * blinded_message_out : Pointer to the memory where the blinded message will be written to
 /// * blinding_factor_out : Pointer to the object storing the blinding factor
 ///
@@ -122,6 +123,7 @@ pub struct BlindingFactor(Token<PrivateKey>);
 /// - **This function will dereference the provided pointers. If any invalid pointers are passed
 ///   then the software will crash**.
 /// - If NULL pointers are passed, the function will return false
+/// - If the seed is shorter than `SEED_LEN` bytes, the function will return false
 ///
 /// Returns true if successful, otherwise false.
 #[no_mangle]
@@ -142,7 +144,9 @@ pub unsafe extern "C" fn blind(
     };
 
     // convert the seed to randomness
-    let mut rng = get_rng(seed);
+    let Some(mut rng) = get_rng(seed) else {
+        return false;
+    };
 
     // blind the message with this randomness
     let (blinding_factor, blinded_message_bytes) = SigScheme::blind_msg(message, &mut rng);
@@ -755,7 +759,7 @@ pub unsafe extern "C" fn destroy_sig(signature: *mut Signature) {
 /// secret.
 #[cfg(test)]
 fn threshold_keygen(n: usize, t: usize, seed: &[u8]) -> Keys {
-    let mut rng = get_rng(seed);
+    let mut rng = get_rng(seed).expect("the tests seed this with more than SEED_LEN bytes");
     let private = Poly::<PrivateKey>::new_from(t - 1, &mut rng);
     let shares = (0..n)
         .map(|i| private.eval(i as Index))
@@ -779,10 +783,10 @@ fn threshold_keygen(n: usize, t: usize, seed: &[u8]) -> Keys {
 /// The return value should be destroyed with `destroy_keypair`.
 ///
 /// # Safety
-/// - The seed MUST be at least 32 bytes long
 /// - **This function will dereference the provided pointers. If any invalid pointers are passed
 ///   then the software will crash**.
 /// - If NULL pointers are passed, the function will return false
+/// - If the seed is shorter than `SEED_LEN` bytes, the function will return false
 ///
 /// Returns true if successful, otherwise false.
 #[no_mangle]
@@ -794,7 +798,9 @@ pub unsafe extern "C" fn keygen(seed: *const Buffer, keypair: *mut *mut Keypair)
         return false;
     };
 
-    let mut rng = get_rng(seed);
+    let Some(mut rng) = get_rng(seed) else {
+        return false;
+    };
     let (private, public) = SigScheme::keypair(&mut rng);
     let keypair_local = Keypair { private, public };
     unsafe { *keypair = Box::into_raw(Box::new(keypair_local)) };
@@ -861,16 +867,21 @@ pub struct Keypair {
     public: PublicKey,
 }
 
-fn get_rng(digest: &[u8]) -> impl RngCore {
-    let seed = from_slice(digest);
-    ChaChaRng::from_seed(seed)
+fn get_rng(digest: &[u8]) -> Option<impl RngCore> {
+    Some(ChaChaRng::from_seed(from_slice(digest)?))
 }
 
-fn from_slice(bytes: &[u8]) -> [u8; 32] {
-    let mut array = [0; 32];
-    let bytes = &bytes[..array.len()]; // panics if not enough data
-    array.copy_from_slice(bytes);
-    array
+/// Takes the RNG's whole seed from the caller's bytes.
+///
+/// Returns `None` for anything shorter, which the exports report as `false`. A
+/// short seed used to be sliced to length, which panicked — and a panic
+/// crossing `extern "C"` aborts the process it was called from. Padding it
+/// instead is not an option: the padding is not secret, so the key material
+/// would be drawn from less randomness than the caller supplied bytes for.
+fn from_slice(bytes: &[u8]) -> Option<[u8; 32]> {
+    let mut array = [0; SEED_LEN];
+    array.copy_from_slice(bytes.get(..SEED_LEN)?);
+    Some(array)
 }
 
 // The general pattern in these FFI tests is:
@@ -1368,6 +1379,43 @@ mod tests {
             }
             destroy_token(blinding_factor);
             destroy_keypair(keypair);
+        }
+    }
+
+    // A seed too short to fill the RNG's state used to be sliced to length,
+    // which panicked — and a panic crossing `extern "C"` aborts the process the
+    // library was called from, which for the mobile consumer is the whole app.
+    #[test]
+    fn a_short_seed_is_rejected() {
+        let short = [7u8; SEED_LEN - 1];
+        let msg = [1u8, 2, 3, 4, 6];
+        let mut keypair = MaybeUninit::<*mut Keypair>::uninit();
+        let mut blinded = MaybeUninit::<Buffer>::uninit();
+        let mut blinding_factor = MaybeUninit::<*mut BlindingFactor>::uninit();
+
+        unsafe {
+            assert!(!keygen(&Buffer::from(&short[..]), keypair.as_mut_ptr()));
+            assert!(!keygen(&Buffer::from(&short[..0]), keypair.as_mut_ptr()));
+
+            assert!(!blind(
+                &Buffer::from(&msg[..]),
+                &Buffer::from(&short[..]),
+                blinded.as_mut_ptr(),
+                blinding_factor.as_mut_ptr()
+            ));
+        }
+    }
+
+    // The whole seed is consumed, so the exact length is enough: the check is
+    // not off by one in the other direction.
+    #[test]
+    fn a_seed_of_exactly_the_required_length_is_accepted() {
+        let seed = [7u8; SEED_LEN];
+        let mut keypair = MaybeUninit::<*mut Keypair>::uninit();
+
+        unsafe {
+            assert!(keygen(&Buffer::from(&seed[..]), keypair.as_mut_ptr()));
+            destroy_keypair(keypair.assume_init());
         }
     }
 

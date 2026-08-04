@@ -43,6 +43,9 @@ static const uint8_t SEED[32] = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
 static const uint8_t USER_SEED[32] = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
 static const uint8_t MESSAGE[5] = {1, 2, 3, 4, 6};
 
+_Static_assert(sizeof SEED == SEED_LEN, "the seeds here must be full length");
+_Static_assert(sizeof USER_SEED == SEED_LEN, "the seeds here must be full length");
+
 /*
  * A 3-of-5 threshold key. Key generation is not part of the C API — a trustful
  * central keygen has no place in production — so a signer receives its share
@@ -394,6 +397,35 @@ static void buffers_with_no_memory_are_rejected(void) {
     destroy_keypair(keypair);
 }
 
+/*
+ * The header asks for a seed of SEED_LEN bytes, and the library now holds
+ * callers to it. A shorter one used to be sliced to length, which panicked, and
+ * a panic crossing `extern "C"` aborts the process that made the call. Each
+ * call is made with a full seed first, so `false` means the short seed was
+ * caught.
+ */
+static void short_seeds_are_rejected(void) {
+    Buffer message = buf(MESSAGE, sizeof MESSAGE);
+    Buffer full = buf(SEED, SEED_LEN);
+    Buffer one_short = buf(SEED, SEED_LEN - 1);
+    Buffer none = buf(SEED, 0);
+    BlindingFactor *factor = NULL;
+    struct Keypair *keypair = NULL;
+    Buffer blinded;
+
+    CHECK(keygen(&full, &keypair));
+    CHECK(!keygen(&one_short, &keypair));
+    CHECK(!keygen(&none, &keypair));
+
+    CHECK(blind(&message, &full, &blinded, &factor));
+    CHECK(!blind(&message, &one_short, &blinded, &factor));
+    CHECK(!blind(&message, &none, &blinded, &factor));
+
+    free_vector(blinded.ptr, blinded.len);
+    destroy_token(factor);
+    destroy_keypair(keypair);
+}
+
 /* Freeing NULL is a no-op, as it is for free(3). */
 static void destructors_accept_null(void) {
     destroy_token(NULL);
@@ -414,6 +446,7 @@ int main(void) {
     threshold_operations_reject_null();
     null_arguments_are_rejected();
     buffers_with_no_memory_are_rejected();
+    short_seeds_are_rejected();
     destructors_accept_null();
 
     printf("threshold.h agrees with the library\n");

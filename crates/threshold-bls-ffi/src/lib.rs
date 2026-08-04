@@ -26,6 +26,11 @@ pub(crate) type PublicKey = <SigScheme as Scheme>::Public;
 #[allow(dead_code)]
 pub(crate) type PrivateKey = <SigScheme as Scheme>::Private;
 
+/// Bytes of seed the entry points that draw randomness require. It is the whole
+/// state of the RNG they seed, so a shorter seed is refused rather than padded.
+#[allow(dead_code)]
+pub const SEED_LEN: usize = 32;
+
 /// Bytes bincode prepends to a serialized sequence as its length prefix.
 #[allow(dead_code)]
 pub const VEC_LENGTH: usize = 8;
