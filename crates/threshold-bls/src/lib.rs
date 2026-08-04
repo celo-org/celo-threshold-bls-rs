@@ -38,7 +38,7 @@
 //! let msg = b"hello";
 //!
 //! // the blinding factor needs to be saved for unblinding later
-//! let (blinding_factor, blinded) = SigScheme::blind_msg(&msg[..], &mut rand::thread_rng());
+//! let (blinding_factor, blinded) = SigScheme::blind_msg(&msg[..], &mut rand::thread_rng()).unwrap();
 //!
 //! // sign the blinded message
 //! let blinded_sig = SigScheme::blind_sign(&private, &blinded).unwrap();
