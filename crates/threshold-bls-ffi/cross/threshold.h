@@ -315,16 +315,23 @@ bool serialize_sig(const Signature *sig, uint8_t **sig_buf);
  *
  * # Safety
  *
- * The pointer must point to a valid instance of the data type
+ * The pointer must be NULL, or point to a valid instance of the data type that
+ * has not already been freed. Freeing a pointer twice corrupts the heap; NULL
+ * does nothing.
  */
 void destroy_token(BlindingFactor *token);
 
 /**
  * Frees the memory allocated for the keypair helper
  *
+ * This also frees the keys behind `public_key_ptr` and `private_key_ptr`, which
+ * borrow from the keypair rather than owning their memory.
+ *
  * # Safety
  *
- * The pointer must point to a valid instance of the data type
+ * The pointer must be NULL, or point to a valid instance of the data type that
+ * has not already been freed. Freeing a pointer twice corrupts the heap; NULL
+ * does nothing.
  */
 void destroy_keypair(struct Keypair *keypair);
 
@@ -333,7 +340,10 @@ void destroy_keypair(struct Keypair *keypair);
  *
  * # Safety
  *
- * The pointer must point to a valid instance of the data type
+ * The pointer must be NULL, or come from `deserialize_privkey` and not have
+ * been freed already. In particular it must not come from `private_key_ptr`,
+ * which borrows from a keypair instead of allocating. Freeing a pointer twice
+ * corrupts the heap; NULL does nothing.
  */
 void destroy_privkey(PrivateKey *private_key);
 
@@ -345,7 +355,10 @@ void destroy_privkey(PrivateKey *private_key);
  *
  * # Safety
  *
- * The pointer must point to a valid instance of the data type
+ * The pointer must be NULL, or be one this library handed out together with
+ * the exact length it reported for it: the allocation is reconstructed from
+ * the two, so a different length frees a different allocation. Freeing a
+ * pointer twice corrupts the heap; NULL does nothing.
  */
 void free_vector(const uint8_t *bytes, size_t len);
 
@@ -354,7 +367,10 @@ void free_vector(const uint8_t *bytes, size_t len);
  *
  * # Safety
  *
- * The pointer must point to a valid instance of the data type
+ * The pointer must be NULL, or come from `deserialize_pubkey` and not have
+ * been freed already. In particular it must not come from `public_key_ptr`,
+ * which borrows from a keypair instead of allocating. Freeing a pointer twice
+ * corrupts the heap; NULL does nothing.
  */
 void destroy_pubkey(PublicKey *public_key);
 
@@ -363,7 +379,9 @@ void destroy_pubkey(PublicKey *public_key);
  *
  * # Safety
  *
- * The pointer must point to a valid instance of the data type
+ * The pointer must be NULL, or point to a valid instance of the data type that
+ * has not already been freed. Freeing a pointer twice corrupts the heap; NULL
+ * does nothing.
  */
 void destroy_sig(Signature *signature);
 
@@ -373,24 +391,40 @@ void destroy_sig(Signature *signature);
  * The return value should be destroyed with `destroy_keypair`.
  *
  * # Safety
+ * - The seed MUST be at least 32 bytes long
+ * - **This function will dereference the provided pointers. If any invalid pointers are passed
+ *   then the software will crash**.
+ * - If NULL pointers are passed, the function will return false
  *
- * The seed MUST be at least 32 bytes long
+ * Returns true if successful, otherwise false.
  */
-void keygen(const struct Buffer *seed, struct Keypair **keypair);
+bool keygen(const struct Buffer *seed, struct Keypair **keypair);
 
 /**
  * Gets a pointer to the public key corresponding to the provided `KeyPair` pointer
  *
+ * The key is **borrowed from the keypair**, not a separate allocation: it stays
+ * valid until `destroy_keypair` and must never be passed to `destroy_pubkey`,
+ * which would free memory that was never allocated on its own and leave
+ * `destroy_keypair` to free it a second time.
+ *
  * # Safety
- * The provided pointer will be dereferenced, so there must be valid data beneath it
+ * The provided pointer will be dereferenced, so there must be valid data beneath it.
+ * Returns NULL if a NULL keypair is passed.
  */
 const PublicKey *public_key_ptr(const struct Keypair *keypair);
 
 /**
  * Gets a pointer to the private key corresponding to the provided `KeyPair` pointer
  *
+ * The key is **borrowed from the keypair**, not a separate allocation: it stays
+ * valid until `destroy_keypair` and must never be passed to `destroy_privkey`,
+ * which would free memory that was never allocated on its own and leave
+ * `destroy_keypair` to free it a second time.
+ *
  * # Safety
- * The provided pointer will be dereferenced, so there must be valid data beneath it
+ * The provided pointer will be dereferenced, so there must be valid data beneath it.
+ * Returns NULL if a NULL keypair is passed.
  */
 const PrivateKey *private_key_ptr(const struct Keypair *keypair);
 

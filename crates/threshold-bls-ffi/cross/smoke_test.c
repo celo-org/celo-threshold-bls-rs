@@ -120,7 +120,7 @@ static Buffer buf(const uint8_t *ptr, size_t len) {
 static void plain_signing(void) {
     Buffer seed = buf(SEED, sizeof SEED);
     struct Keypair *keypair = NULL;
-    keygen(&seed, &keypair);
+    CHECK(keygen(&seed, &keypair));
     CHECK(keypair != NULL);
 
     const PrivateKey *priv = private_key_ptr(keypair);
@@ -147,7 +147,7 @@ static void plain_signing(void) {
 static void blind_signing(void) {
     Buffer seed = buf(SEED, sizeof SEED);
     struct Keypair *keypair = NULL;
-    keygen(&seed, &keypair);
+    CHECK(keygen(&seed, &keypair));
 
     Buffer message = buf(MESSAGE, sizeof MESSAGE);
     Buffer user_seed = buf(USER_SEED, sizeof USER_SEED);
@@ -174,7 +174,7 @@ static void blind_signing(void) {
 static void serialization(void) {
     Buffer seed = buf(SEED, sizeof SEED);
     struct Keypair *keypair = NULL;
-    keygen(&seed, &keypair);
+    CHECK(keygen(&seed, &keypair));
 
     uint8_t *pub_bytes = NULL;
     CHECK(serialize_pubkey(public_key_ptr(keypair), &pub_bytes));
@@ -313,10 +313,12 @@ static void threshold_operations_reject_null(void) {
 
 /* The NULL contract the header now documents, checked from C. */
 static void null_arguments_are_rejected(void) {
+    Buffer seed = buf(SEED, sizeof SEED);
     Buffer message = buf(MESSAGE, sizeof MESSAGE);
     Buffer out;
     BlindingFactor *factor = NULL;
     PublicKey *pub = NULL;
+    struct Keypair *keypair = NULL;
     uint8_t *bytes = NULL;
 
     CHECK(!blind(NULL, &message, &out, &factor));
@@ -324,6 +326,8 @@ static void null_arguments_are_rejected(void) {
     CHECK(!verify(NULL, &message, &message));
     CHECK(!sign(NULL, &message, &out));
     CHECK(!sign_blinded_message(NULL, &message, &out));
+    CHECK(!keygen(NULL, &keypair));
+    CHECK(!keygen(&seed, NULL));
 
     CHECK(!deserialize_pubkey(NULL, &pub));
     CHECK(!deserialize_privkey(NULL, (PrivateKey **)&pub));
@@ -331,6 +335,74 @@ static void null_arguments_are_rejected(void) {
     CHECK(!serialize_pubkey(NULL, &bytes));
     CHECK(!serialize_privkey(NULL, &bytes));
     CHECK(!serialize_sig(NULL, &bytes));
+
+    CHECK(public_key_ptr(NULL) == NULL);
+    CHECK(private_key_ptr(NULL) == NULL);
+}
+
+/*
+ * A buffer that claims a length behind a NULL pointer describes memory the
+ * caller does not have. Reading it as an empty message would sign or verify
+ * something the caller never supplied, so every entry point refuses it.
+ *
+ * Each call is made once with arguments that work, then again with one buffer
+ * replaced, so that `false` means the replacement was caught rather than that
+ * the other arguments were bad anyway.
+ */
+static void buffers_with_no_memory_are_rejected(void) {
+    Buffer no_memory = buf(NULL, sizeof MESSAGE);
+    Buffer message = buf(MESSAGE, sizeof MESSAGE);
+    Buffer seed = buf(SEED, sizeof SEED);
+    Buffer user_seed = buf(USER_SEED, sizeof USER_SEED);
+    Buffer share = buf(SHARE_0, 36);
+    Buffer polynomial = buf(PUBLIC_POLY, sizeof PUBLIC_POLY);
+    BlindingFactor *factor = NULL;
+    struct Keypair *keypair = NULL;
+
+    CHECK(keygen(&seed, &keypair));
+    CHECK(!keygen(&no_memory, &keypair));
+
+    Buffer signature;
+    CHECK(sign(private_key_ptr(keypair), &message, &signature));
+    CHECK(!sign(private_key_ptr(keypair), &no_memory, &signature));
+
+    CHECK(verify(public_key_ptr(keypair), &message, &signature));
+    CHECK(!verify(public_key_ptr(keypair), &no_memory, &signature));
+    CHECK(!verify(public_key_ptr(keypair), &message, &no_memory));
+
+    Buffer blinded;
+    CHECK(blind(&message, &user_seed, &blinded, &factor));
+    CHECK(!blind(&no_memory, &user_seed, &blinded, &factor));
+    CHECK(!blind(&message, &no_memory, &blinded, &factor));
+
+    Buffer partial;
+    CHECK(partial_sign(&share, &message, &partial));
+    CHECK(!partial_sign(&no_memory, &message, &partial));
+    CHECK(!partial_sign(&share, &no_memory, &partial));
+
+    CHECK(partial_verify(&polynomial, &message, &partial));
+    CHECK(!partial_verify(&no_memory, &message, &partial));
+    CHECK(!partial_verify(&polynomial, &no_memory, &partial));
+    CHECK(!partial_verify(&polynomial, &message, &no_memory));
+
+    CHECK(!combine(THRESHOLD, &no_memory, &signature));
+
+    free_vector(partial.ptr, partial.len);
+    free_vector(blinded.ptr, blinded.len);
+    free_vector(signature.ptr, signature.len);
+    destroy_token(factor);
+    destroy_keypair(keypair);
+}
+
+/* Freeing NULL is a no-op, as it is for free(3). */
+static void destructors_accept_null(void) {
+    destroy_token(NULL);
+    destroy_keypair(NULL);
+    destroy_privkey(NULL);
+    destroy_pubkey(NULL);
+    destroy_sig(NULL);
+    free_vector(NULL, 0);
+    free_vector(NULL, PUBKEY_LEN);
 }
 
 int main(void) {
@@ -341,6 +413,8 @@ int main(void) {
     blind_threshold_signing();
     threshold_operations_reject_null();
     null_arguments_are_rejected();
+    buffers_with_no_memory_are_rejected();
+    destructors_accept_null();
 
     printf("threshold.h agrees with the library\n");
     return 0;
