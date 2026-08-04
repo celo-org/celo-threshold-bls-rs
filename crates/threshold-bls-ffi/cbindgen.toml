@@ -32,6 +32,14 @@ typedef struct KeyShare KeyShare;
 typedef struct PublicPoly PublicPoly;
 """
 
+# There is deliberately no [defines] section, which is why generation logs
+# "Missing `[defines]` entry for `feature = ffi`" once per item behind that
+# feature. The entry cbindgen asks for maps the cfg onto a C macro and wraps
+# every declaration in `#if defined(...)`. Nothing defines that macro today, so
+# consumers would get a header that expands to nothing — the first error is
+# `unknown type name 'Buffer'`. A noisy log beats an API that silently
+# disappears.
+
 [parse]
 # Leave this false. With parse_deps = true cbindgen walks into threshold-bls and
 # panics on the arkworks generics: "G1Curve has 0 params but is being
