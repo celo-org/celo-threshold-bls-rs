@@ -14,7 +14,19 @@ use threshold_bls::{
 
 use crate::*;
 
+/// What an exported binding returns: a value, or a JS exception.
 type Result<T> = std::result::Result<T, JsValue>;
+
+/// What the fallible half of a binding returns, before the error becomes a JS
+/// exception.
+///
+/// Every failure path lives in an internal `try_*` function returning this, and
+/// the exported binding does nothing but convert it. `JsValue::from_str` is a
+/// shim that panics without unwinding on non-wasm targets, which is where these
+/// tests run, so a test that reached one would abort the process instead of
+/// failing — and `#[should_panic]` could not contain it either. Error paths are
+/// therefore tested against the `try_*` function.
+type TryResult<T> = std::result::Result<T, String>;
 
 ///////////////////////////////////////////////////////////////////////////
 // User -> Library
@@ -29,20 +41,28 @@ type Result<T> = std::result::Result<T, JsValue>;
 /// Returns a `BlindedMessage`. The `BlindedMessage.blinding_factor` should be saved for unblinding any
 /// signatures on `BlindedMessage.message`
 ///
+/// # Throws
+///
+/// - If the seed is shorter than 32 bytes
+///
 /// # Safety
 /// - If the same seed is used twice, the blinded result WILL be the same
-pub fn blind(message: Vec<u8>, seed: &[u8]) -> BlindedMessage {
+pub fn blind(message: Vec<u8>, seed: &[u8]) -> Result<BlindedMessage> {
+    try_blind(message, seed).map_err(|err| JsValue::from_str(&err))
+}
+
+fn try_blind(message: Vec<u8>, seed: &[u8]) -> TryResult<BlindedMessage> {
     // convert the seed to randomness
-    let mut rng = get_rng(seed);
+    let mut rng = get_rng(seed)?;
 
     // blind the message with this randomness
     let (blinding_factor, blinded_message) = SigScheme::blind_msg(&message, &mut rng);
 
     // return the message and the blinding_factor used for blinding
-    BlindedMessage {
+    Ok(BlindedMessage {
         message: blinded_message,
         blinding_factor,
-    }
+    })
 }
 
 #[wasm_bindgen]
@@ -268,9 +288,24 @@ pub fn combine(threshold: usize, signatures: Vec<u8>) -> Result<Vec<u8>> {
 /// WARNING: This is a helper function for local testing of the library. Do not use
 /// in production, unless you trust the person that generated the keys.
 ///
-/// The seed MUST be at least 32 bytes long
-pub fn threshold_keygen(n: usize, t: usize, seed: &[u8]) -> Keys {
-    let mut rng = get_rng(seed);
+/// # Throws
+///
+/// - If the threshold is not between 1 and `n`
+/// - If the seed is shorter than 32 bytes
+pub fn threshold_keygen(n: usize, t: usize, seed: &[u8]) -> Result<Keys> {
+    try_threshold_keygen(n, t, seed).map_err(|err| JsValue::from_str(&err))
+}
+
+fn try_threshold_keygen(n: usize, t: usize, seed: &[u8]) -> TryResult<Keys> {
+    // A polynomial of degree `t - 1` is what makes `t` shares reconstruct the
+    // secret, so a threshold of zero has no polynomial to ask for: it would
+    // underflow to a degree of `usize::MAX`. A threshold above `n` cannot be
+    // met by the shares this deals out.
+    if t < 1 || t > n {
+        return Err(format!("threshold must be between 1 and {} (got {})", n, t));
+    }
+
+    let mut rng = get_rng(seed)?;
     let private = Poly::<PrivateKey>::new_from(t - 1, &mut rng);
     let shares = (0..n)
         .map(|i| private.eval(i as Index))
@@ -280,12 +315,12 @@ pub fn threshold_keygen(n: usize, t: usize, seed: &[u8]) -> Keys {
         })
         .collect();
     let polynomial = private.commit();
-    Keys {
+    Ok(Keys {
         shares,
         polynomial,
         t,
         n,
-    }
+    })
 }
 
 #[wasm_bindgen(inspectable)]
@@ -344,14 +379,18 @@ impl WasmKeypair {
 
 /// Generates a single private key from the provided seed.
 ///
-/// # Safety
+/// # Throws
 ///
-/// The seed MUST be at least 32 bytes long
+/// - If the seed is shorter than 32 bytes
 #[wasm_bindgen]
-pub fn keygen(seed: Vec<u8>) -> WasmKeypair {
-    let mut rng = get_rng(&seed);
+pub fn keygen(seed: Vec<u8>) -> Result<WasmKeypair> {
+    try_keygen(seed).map_err(|err| JsValue::from_str(&err))
+}
+
+fn try_keygen(seed: Vec<u8>) -> TryResult<WasmKeypair> {
+    let mut rng = get_rng(&seed)?;
     let (private, public) = SigScheme::keypair(&mut rng);
-    WasmKeypair { private, public }
+    Ok(WasmKeypair { private, public })
 }
 
 #[wasm_bindgen]
@@ -362,11 +401,28 @@ pub struct Keys {
     pub n: usize,
 }
 
+impl Keys {
+    fn try_get_share(&self, index: usize) -> TryResult<Vec<u8>> {
+        let share = self
+            .shares
+            .get(index)
+            .ok_or_else(|| format!("no share at index {}", index))?;
+
+        bincode::serialize(share).map_err(|err| format!("could not serialize share: {}", err))
+    }
+}
+
 #[wasm_bindgen]
 impl Keys {
+    /// Returns the share dealt to the holder at `index`, serialized.
+    ///
+    /// # Throws
+    ///
+    /// - If there is no share at that index. `numShares` is the bound.
     #[wasm_bindgen(js_name = getShare)]
-    pub fn get_share(&self, index: usize) -> Vec<u8> {
-        bincode::serialize(&self.shares[index]).expect("could not serialize share")
+    pub fn get_share(&self, index: usize) -> Result<Vec<u8>> {
+        self.try_get_share(index)
+            .map_err(|err| JsValue::from_str(&err))
     }
 
     #[wasm_bindgen(js_name = numShares)]
@@ -386,16 +442,23 @@ impl Keys {
     }
 }
 
-fn get_rng(digest: &[u8]) -> impl RngCore {
-    let seed = from_slice(digest);
-    ChaChaRng::from_seed(seed)
+fn get_rng(digest: &[u8]) -> TryResult<impl RngCore> {
+    let seed = from_slice(digest)?;
+    Ok(ChaChaRng::from_seed(seed))
 }
 
-fn from_slice(bytes: &[u8]) -> [u8; 32] {
+/// Takes the RNG's whole seed from the caller's bytes.
+///
+/// A shorter seed is refused rather than padded: the padding is not secret, so
+/// the key material would be drawn from less randomness than the caller
+/// supplied bytes for.
+fn from_slice(bytes: &[u8]) -> TryResult<[u8; 32]> {
     let mut array = [0; 32];
-    let bytes = &bytes[..array.len()]; // panics if not enough data
+    let bytes = bytes
+        .get(..array.len())
+        .ok_or_else(|| format!("seed must be at least 32 bytes (got {})", bytes.len()))?;
     array.copy_from_slice(bytes);
-    array
+    Ok(array)
 }
 
 #[cfg(test)]
@@ -414,15 +477,65 @@ mod tests {
         wasm_should_blind(false);
     }
 
+    // The negative tests below call the `try_*` functions rather than the
+    // exported bindings, because the conversion the bindings do would abort the
+    // test process. See `TryResult`.
+
+    // A seed shorter than the RNG's state used to be padded with zeros by a
+    // slice expression that panicked instead.
+    #[test]
+    fn a_short_seed_is_rejected() {
+        let short = [7u8; 31];
+
+        assert!(try_keygen(short.to_vec()).is_err());
+        assert!(try_blind(vec![1, 2, 3], &short).is_err());
+        assert!(try_threshold_keygen(5, 3, &short).is_err());
+        assert!(try_keygen(Vec::new()).is_err());
+    }
+
+    // The whole seed is consumed, so 32 bytes is enough: the boundary is not off
+    // by one in the other direction.
+    #[test]
+    fn a_seed_of_exactly_32_bytes_is_accepted() {
+        let seed = [7u8; 32];
+
+        assert!(try_keygen(seed.to_vec()).is_ok());
+        assert!(try_blind(vec![1, 2, 3], &seed).is_ok());
+        assert!(try_threshold_keygen(5, 3, &seed).is_ok());
+    }
+
+    // A threshold of zero asked for a polynomial of degree `usize::MAX`.
+    #[test]
+    fn a_threshold_outside_1_to_n_is_rejected() {
+        let seed = [7u8; 32];
+
+        assert!(try_threshold_keygen(5, 0, &seed).is_err());
+        assert!(try_threshold_keygen(5, 6, &seed).is_err());
+        assert!(try_threshold_keygen(0, 0, &seed).is_err());
+        assert!(try_threshold_keygen(5, 1, &seed).is_ok());
+        assert!(try_threshold_keygen(5, 5, &seed).is_ok());
+    }
+
+    // `numShares` is the caller's only guard, and it was advisory.
+    #[test]
+    fn a_share_index_past_the_last_share_is_rejected() {
+        let keys = try_threshold_keygen(5, 3, &[7u8; 32]).unwrap();
+        assert_eq!(keys.num_shares(), 5);
+
+        assert!(keys.try_get_share(4).is_ok());
+        assert!(keys.try_get_share(5).is_err());
+        assert!(keys.try_get_share(usize::MAX).is_err());
+    }
+
     fn wasm_should_blind(should_blind: bool) {
         let seed = b"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
-        let keypair = keygen(seed.to_vec());
+        let keypair = keygen(seed.to_vec()).unwrap();
 
         let msg = vec![1, 2, 3, 4, 6];
         let key = b"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
 
         let (message, token) = if should_blind {
-            let ret = blind(msg.clone(), &key[..]);
+            let ret = blind(msg.clone(), &key[..]).unwrap();
             (ret.message.clone(), ret.blinding_factor())
         } else {
             (msg.clone(), vec![])
@@ -448,13 +561,13 @@ mod tests {
     fn threshold_wasm_should_blind(should_blind: bool) {
         let (n, t) = (5, 3);
         let seed = b"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
-        let keys = threshold_keygen(n, t, &seed[..]);
+        let keys = threshold_keygen(n, t, &seed[..]).unwrap();
 
         let msg = vec![1, 2, 3, 4, 6];
         let key = b"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
 
         let (message, token) = if should_blind {
-            let ret = blind(msg.clone(), &key[..]);
+            let ret = blind(msg.clone(), &key[..]).unwrap();
             (ret.message.clone(), ret.blinding_factor())
         } else {
             (msg.clone(), vec![])
@@ -473,7 +586,7 @@ mod tests {
         };
 
         let sigs = (0..t)
-            .map(|i| sign_fn(&keys.get_share(i), &message).unwrap())
+            .map(|i| sign_fn(&keys.get_share(i).unwrap(), &message).unwrap())
             .collect::<Vec<Vec<_>>>();
 
         sigs.iter()
