@@ -2,10 +2,10 @@
 #
 # Variables in upper case are the knobs meant to be overridden, either as an
 # environment variable (`FEATURES=ffi just android`) or as a command line
-# assignment (`just RUST_VERSION=1.95.0 all`). Lower case variables are derived
+# assignment (`just RUST_VERSION=1.97.1 all`). Lower case variables are derived
 # and not meant to be set.
 
-RUST_VERSION := env("RUST_VERSION", "1.95.0")
+RUST_VERSION := env("RUST_VERSION", "1.97.1")
 
 # Cargo features for the Android/iOS cross builds. The mobile consumers link
 # against the C ABI (threshold.h), which requires "ffi"; without it the
