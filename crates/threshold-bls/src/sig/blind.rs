@@ -53,18 +53,20 @@ where
     type Token = Token<I::Private>;
     type Error = BlindError;
 
-    fn blind_msg<R: RngCore>(msg: &[u8], rng: &mut R) -> (Self::Token, Vec<u8>) {
+    fn blind_msg<R: RngCore>(
+        msg: &[u8],
+        rng: &mut R,
+    ) -> Result<(Self::Token, Vec<u8>), Self::Error> {
         let r = I::Private::rand(rng);
 
         let mut h = I::Signature::new();
 
         // r * H(m)
-        // XXX result from zexe API but it shouldn't
-        h.map(msg).expect("could not map to the group");
+        h.map(msg).map_err(|_| BLSError::HashingError)?;
         h.mul(&r);
 
-        let serialized = bincode::serialize(&h).expect("serialization should not fail");
-        (Token(r), serialized)
+        let serialized = bincode::serialize(&h)?;
+        Ok((Token(r), serialized))
     }
 
     fn unblind_sig(t: &Self::Token, sigbuff: &[u8]) -> Result<Vec<u8>, Self::Error> {
@@ -124,7 +126,7 @@ mod tests {
         let (private, public) = B::keypair(&mut thread_rng());
         let msg = vec![1, 9, 6, 9];
 
-        let (token, blinded) = B::blind_msg(&msg, &mut thread_rng());
+        let (token, blinded) = B::blind_msg(&msg, &mut thread_rng()).unwrap();
 
         // signs the blinded message w/o hashing
         let blinded_sig = B::blind_sign(&private, &blinded).unwrap();
@@ -154,7 +156,7 @@ mod tests {
     {
         let (_, public) = B::keypair(&mut thread_rng());
         let identity = bincode::serialize(&B::Signature::new()).unwrap();
-        let (_, blinded_msg) = B::blind_msg(&[1, 9, 6, 9], &mut thread_rng());
+        let (_, blinded_msg) = B::blind_msg(&[1, 9, 6, 9], &mut thread_rng()).unwrap();
 
         assert!(
             matches!(

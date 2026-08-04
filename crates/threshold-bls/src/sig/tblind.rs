@@ -113,7 +113,7 @@ mod tests {
         let msg = vec![1, 9, 6, 9];
 
         // blind the msg
-        let (token, blinded) = B::blind_msg(&msg, &mut thread_rng());
+        let (token, blinded) = B::blind_msg(&msg, &mut thread_rng()).unwrap();
 
         // partially sign it
         let partials: Vec<_> = shares

@@ -44,6 +44,7 @@ type TryResult<T> = std::result::Result<T, String>;
 /// # Throws
 ///
 /// - If the seed is shorter than 32 bytes
+/// - If the message cannot be blinded
 ///
 /// # Safety
 /// - If the same seed is used twice, the blinded result WILL be the same
@@ -56,7 +57,8 @@ fn try_blind(message: Vec<u8>, seed: &[u8]) -> TryResult<BlindedMessage> {
     let mut rng = get_rng(seed)?;
 
     // blind the message with this randomness
-    let (blinding_factor, blinded_message) = SigScheme::blind_msg(&message, &mut rng);
+    let (blinding_factor, blinded_message) = SigScheme::blind_msg(&message, &mut rng)
+        .map_err(|err| format!("could not blind message: {}", err))?;
 
     // return the message and the blinding_factor used for blinding
     Ok(BlindedMessage {

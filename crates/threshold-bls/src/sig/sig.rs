@@ -82,7 +82,7 @@ pub trait SignatureScheme: Scheme {
 ///  let (private,public) = G2Scheme::<PC>::keypair(&mut thread_rng());
 ///  // we first blind the message so the signers don't know the real underlying
 ///  // message they are signing.
-///  let (token, blinded_msg) = G2Scheme::<PC>::blind_msg(&msg,&mut thread_rng());
+///  let (token, blinded_msg) = G2Scheme::<PC>::blind_msg(&msg,&mut thread_rng()).unwrap();
 ///  // this method is called by the signers, that sign blindly.
 ///  let blinded_sig = G2Scheme::<PC>::blind_sign(&private,&blinded_msg).unwrap();
 ///  // this method can be called by a third party that is able to verify if a
@@ -110,7 +110,10 @@ pub trait BlindScheme: Scheme {
 
     /// Blinds the provided message using randomness from the provided RNG and returns
     /// the blinding factor and the blinded message.
-    fn blind_msg<R: RngCore>(msg: &[u8], rng: &mut R) -> (Self::Token, Vec<u8>);
+    fn blind_msg<R: RngCore>(
+        msg: &[u8],
+        rng: &mut R,
+    ) -> Result<(Self::Token, Vec<u8>), Self::Error>;
 
     /// Given the blinding factor that was used to blind the provided message, it will
     /// unblind it and return the cleartext message

@@ -89,6 +89,7 @@ typedef struct Buffer {
  *   then the software will crash**.
  * - If NULL pointers are passed, the function will return false
  * - If the seed is shorter than `SEED_LEN` bytes, the function will return false
+ * - If the message cannot be blinded, the function will return false
  *
  * Returns true if successful, otherwise false.
  */

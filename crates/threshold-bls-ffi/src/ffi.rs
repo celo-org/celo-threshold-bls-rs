@@ -124,6 +124,7 @@ pub struct BlindingFactor(Token<PrivateKey>);
 ///   then the software will crash**.
 /// - If NULL pointers are passed, the function will return false
 /// - If the seed is shorter than `SEED_LEN` bytes, the function will return false
+/// - If the message cannot be blinded, the function will return false
 ///
 /// Returns true if successful, otherwise false.
 #[no_mangle]
@@ -149,7 +150,10 @@ pub unsafe extern "C" fn blind(
     };
 
     // blind the message with this randomness
-    let (blinding_factor, blinded_message_bytes) = SigScheme::blind_msg(message, &mut rng);
+    let (blinding_factor, blinded_message_bytes) = match SigScheme::blind_msg(message, &mut rng) {
+        Ok(blinded) => blinded,
+        Err(_) => return false,
+    };
 
     unsafe { *blinded_message_out = into_buffer(blinded_message_bytes) };
     unsafe { *blinding_factor_out = Box::into_raw(Box::new(BlindingFactor(blinding_factor))) };
