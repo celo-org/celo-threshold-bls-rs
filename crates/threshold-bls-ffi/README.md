@@ -31,17 +31,19 @@ committed copy is stale. `just check-abi` additionally compiles
 it — Rust tests cannot catch a header that disagrees with the library it
 describes.
 
-### Known limitation: the partial-signing operations are unreachable from C
+### Threshold operations
 
 `partial_sign`, `partial_sign_blinded_message`, `partial_verify` and
-`partial_verify_blind_signature` take a `KeyShare` or a `PublicPoly`, and
-nothing in the C API produces either — the threshold key generation helper is
-test-only, since a trustful central keygen has no place in production. A C
-caller can only reach these by obtaining the handles out of band. The WASM
-surface has the same operations and does not have this problem, because it
-takes serialized bytes.
+`partial_verify_blind_signature` take the share and the public commitment
+polynomial as serialized bytes, the same way the WASM surface does. Key
+generation is deliberately not part of this API — a trustful central keygen has
+no place in production — so a signer receives its share out of band, from a DKG,
+and hands the bytes straight to `partial_sign`.
 
-Two more rough edges, both deferred to a planned redesign of this surface:
+`combine` splits its flattened input into `PARTIAL_SIG_LENGTH` chunks, so build
+that buffer by concatenating whole partials.
+
+Two rough edges are deferred to a planned redesign of this surface:
 `serialize_pubkey`, `serialize_privkey` and `serialize_sig` return a pointer
 without its length, so a caller has to pair it with the matching `PUBKEY_LEN`,
 `PRIVKEY_LEN` or `SIGNATURE_LEN` from the header to call `free_vector`

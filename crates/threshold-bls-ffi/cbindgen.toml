@@ -16,20 +16,17 @@ usize_is_size_t = true
 #   of the fixed SigScheme, which cbindgen resolves to `Private`, `Public` and
 #   `Signature` — names it cannot declare, the last one self-referential.
 #
-#   BlindingFactor, KeyShare and PublicPoly are repr(transparent), which
-#   cbindgen renders as a typedef of the wrapped type. That would put
-#   `typedef Token<PrivateKey> BlindingFactor;` — Rust generic syntax — back
-#   into the header, which is what the wrappers exist to avoid. The
-#   representation is load-bearing on the Rust side, so declare the C view by
-#   hand rather than dropping it.
+#   BlindingFactor is repr(transparent), which cbindgen renders as a typedef of
+#   the wrapped type. That would put `typedef Token<PrivateKey> BlindingFactor;`
+#   — Rust generic syntax — back into the header, which is what the wrapper
+#   exists to avoid. The representation is load-bearing on the Rust side, so
+#   declare the C view by hand rather than dropping it.
 after_includes = """
 
 typedef struct PrivateKey PrivateKey;
 typedef struct PublicKey PublicKey;
 typedef struct Signature Signature;
 typedef struct BlindingFactor BlindingFactor;
-typedef struct KeyShare KeyShare;
-typedef struct PublicPoly PublicPoly;
 """
 
 # There is deliberately no [defines] section, which is why generation logs
@@ -55,7 +52,5 @@ exclude = [
     "PublicKey",
     "Signature",
     "BlindingFactor",
-    "KeyShare",
-    "PublicPoly",
     "WasmKeypair",
 ]
