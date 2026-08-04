@@ -36,10 +36,51 @@ impl From<&[u8]> for Buffer {
     }
 }
 
-impl<'a> From<&Buffer> for &'a [u8] {
-    fn from(src: &Buffer) -> &'a [u8] {
-        unsafe { std::slice::from_raw_parts(src.ptr, src.len) }
+/// Borrows a buffer the caller supplied as a slice.
+///
+/// This is the single place where a caller-supplied pointer becomes something
+/// Rust reads, so it is where the buffer contract is enforced. A buffer is
+/// rejected if the `Buffer` itself is NULL, or if it claims a non-zero length
+/// behind a NULL pointer: `slice::from_raw_parts` is undefined behaviour on a
+/// NULL pointer, and reading such a buffer as empty would sign or verify a
+/// message the caller never supplied. A length of zero is an empty message, the
+/// usual C spelling of which is a NULL pointer.
+///
+/// # Safety
+/// A non-NULL `ptr` must point to `len` initialized bytes that stay valid, and
+/// unwritten, for as long as the returned slice is used. The lifetime is the
+/// caller's to choose, because a raw pointer carries none.
+unsafe fn buffer_slice<'a>(buffer: *const Buffer) -> Option<&'a [u8]> {
+    let buffer = unsafe { buffer.as_ref() }?;
+
+    if buffer.len == 0 {
+        return Some(&[]);
     }
+    if buffer.ptr.is_null() {
+        return None;
+    }
+
+    Some(unsafe { std::slice::from_raw_parts(buffer.ptr, buffer.len) })
+}
+
+/// Hands a Rust allocation to C, giving up ownership of it.
+///
+/// The vector becomes a boxed slice first because `free_vector` rebuilds the
+/// allocation from the pointer and the length alone: it has to be exactly `len`
+/// bytes, while a `Vec` only promises to allocate *at least* the capacity it
+/// was asked for. `into_boxed_slice` drops any excess.
+fn into_raw_bytes(bytes: Vec<u8>) -> (*mut u8, usize) {
+    let bytes = bytes.into_boxed_slice();
+    let len = bytes.len();
+
+    (Box::into_raw(bytes).cast::<u8>(), len)
+}
+
+/// Hands a Rust allocation to C as a `Buffer`, to be freed with `free_vector`.
+fn into_buffer(bytes: Vec<u8>) -> Buffer {
+    let (ptr, len) = into_raw_bytes(bytes);
+
+    Buffer { ptr, len }
 }
 
 /// Opaque handle to a blinding factor produced by `blind`.
@@ -90,24 +131,23 @@ pub unsafe extern "C" fn blind(
     blinded_message_out: *mut Buffer,
     blinding_factor_out: *mut *mut BlindingFactor,
 ) -> bool {
-    if message.is_null()
-        || seed.is_null()
-        || blinded_message_out.is_null()
-        || blinding_factor_out.is_null()
-    {
+    if blinded_message_out.is_null() || blinding_factor_out.is_null() {
         return false;
     }
+    let Some(message) = (unsafe { buffer_slice(message) }) else {
+        return false;
+    };
+    let Some(seed) = (unsafe { buffer_slice(seed) }) else {
+        return false;
+    };
 
     // convert the seed to randomness
-    let seed = <&[u8]>::from(unsafe { &*seed });
     let mut rng = get_rng(seed);
 
     // blind the message with this randomness
-    let message = <&[u8]>::from(unsafe { &*message });
     let (blinding_factor, blinded_message_bytes) = SigScheme::blind_msg(message, &mut rng);
 
-    unsafe { *blinded_message_out = Buffer::from(&blinded_message_bytes[..]) };
-    std::mem::forget(blinded_message_bytes);
+    unsafe { *blinded_message_out = into_buffer(blinded_message_bytes) };
     unsafe { *blinding_factor_out = Box::into_raw(Box::new(BlindingFactor(blinding_factor))) };
 
     true
@@ -132,11 +172,13 @@ pub unsafe extern "C" fn unblind(
     blinding_factor: *const BlindingFactor,
     unblinded_signature: *mut Buffer,
 ) -> bool {
-    if blinded_signature.is_null() || blinding_factor.is_null() || unblinded_signature.is_null() {
+    if blinding_factor.is_null() || unblinded_signature.is_null() {
         return false;
     }
+    let Some(blinded_signature) = (unsafe { buffer_slice(blinded_signature) }) else {
+        return false;
+    };
 
-    let blinded_signature = <&[u8]>::from(unsafe { &*blinded_signature });
     let blinding_factor = &unsafe { &*blinding_factor }.0;
 
     let sig = match SigScheme::unblind_sig(blinding_factor, blinded_signature) {
@@ -144,8 +186,7 @@ pub unsafe extern "C" fn unblind(
         Err(_) => return false,
     };
 
-    unsafe { *unblinded_signature = Buffer::from(&sig[..]) };
-    std::mem::forget(sig);
+    unsafe { *unblinded_signature = into_buffer(sig) };
 
     true
 }
@@ -169,15 +210,19 @@ pub unsafe extern "C" fn verify(
     message: *const Buffer,
     signature: *const Buffer,
 ) -> bool {
-    if public_key.is_null() || message.is_null() || signature.is_null() {
+    if public_key.is_null() {
         return false;
     }
+    let Some(message) = (unsafe { buffer_slice(message) }) else {
+        return false;
+    };
+    let Some(signature) = (unsafe { buffer_slice(signature) }) else {
+        return false;
+    };
 
     let public_key = unsafe { &*public_key };
-    let message = <&[u8]>::from(unsafe { &*message });
 
     // checks the signature on the message hash
-    let signature = <&[u8]>::from(unsafe { &*signature });
     SigScheme::verify(public_key, message, signature).is_ok()
 }
 
@@ -199,20 +244,21 @@ pub unsafe extern "C" fn sign(
     message: *const Buffer,
     signature: *mut Buffer,
 ) -> bool {
-    if private_key.is_null() || message.is_null() || signature.is_null() {
+    if private_key.is_null() || signature.is_null() {
         return false;
     }
+    let Some(message) = (unsafe { buffer_slice(message) }) else {
+        return false;
+    };
 
     let private_key = unsafe { &*private_key };
-    let message = <&[u8]>::from(unsafe { &*message });
 
     let sig = match SigScheme::sign(private_key, message) {
         Ok(s) => s,
         Err(_) => return false,
     };
 
-    unsafe { *signature = Buffer::from(&sig[..]) };
-    std::mem::forget(sig);
+    unsafe { *signature = into_buffer(sig) };
 
     true
 }
@@ -231,20 +277,21 @@ pub unsafe extern "C" fn sign_blinded_message(
     message: *const Buffer,
     signature: *mut Buffer,
 ) -> bool {
-    if private_key.is_null() || message.is_null() || signature.is_null() {
+    if private_key.is_null() || signature.is_null() {
         return false;
     }
+    let Some(message) = (unsafe { buffer_slice(message) }) else {
+        return false;
+    };
 
     let private_key = unsafe { &*private_key };
-    let message = <&[u8]>::from(unsafe { &*message });
 
     let sig = match SigScheme::blind_sign(private_key, message) {
         Ok(s) => s,
         Err(_) => return false,
     };
 
-    unsafe { *signature = Buffer::from(&sig[..]) };
-    std::mem::forget(sig);
+    unsafe { *signature = into_buffer(sig) };
 
     true
 }
@@ -267,23 +314,26 @@ pub unsafe extern "C" fn partial_sign(
     message: *const Buffer,
     signature: *mut Buffer,
 ) -> bool {
-    if share.is_null() || message.is_null() || signature.is_null() {
+    if signature.is_null() {
         return false;
     }
+    let Some(share) = (unsafe { buffer_slice(share) }) else {
+        return false;
+    };
+    let Some(message) = (unsafe { buffer_slice(message) }) else {
+        return false;
+    };
 
-    let share: Share<PrivateKey> =
-        match serialization::deserialize(<&[u8]>::from(unsafe { &*share })) {
-            Ok(s) => s,
-            Err(_) => return false,
-        };
-    let message = unsafe { &*message };
-    let sig = match SigScheme::partial_sign(&share, <&[u8]>::from(message)) {
+    let share: Share<PrivateKey> = match serialization::deserialize(share) {
+        Ok(s) => s,
+        Err(_) => return false,
+    };
+    let sig = match SigScheme::partial_sign(&share, message) {
         Ok(s) => s,
         Err(_) => return false,
     };
 
-    unsafe { *signature = Buffer::from(&sig[..]) };
-    std::mem::forget(sig);
+    unsafe { *signature = into_buffer(sig) };
 
     true
 }
@@ -306,23 +356,26 @@ pub unsafe extern "C" fn partial_sign_blinded_message(
     blinded_message: *const Buffer,
     signature: *mut Buffer,
 ) -> bool {
-    if share.is_null() || blinded_message.is_null() || signature.is_null() {
+    if signature.is_null() {
         return false;
     }
+    let Some(share) = (unsafe { buffer_slice(share) }) else {
+        return false;
+    };
+    let Some(blinded_message) = (unsafe { buffer_slice(blinded_message) }) else {
+        return false;
+    };
 
-    let share: Share<PrivateKey> =
-        match serialization::deserialize(<&[u8]>::from(unsafe { &*share })) {
-            Ok(s) => s,
-            Err(_) => return false,
-        };
-    let message = unsafe { &*blinded_message };
-    let sig = match SigScheme::sign_blind_partial(&share, <&[u8]>::from(message)) {
+    let share: Share<PrivateKey> = match serialization::deserialize(share) {
+        Ok(s) => s,
+        Err(_) => return false,
+    };
+    let sig = match SigScheme::sign_blind_partial(&share, blinded_message) {
         Ok(s) => s,
         Err(_) => return false,
     };
 
-    unsafe { *signature = Buffer::from(&sig[..]) };
-    std::mem::forget(sig);
+    unsafe { *signature = into_buffer(sig) };
 
     true
 }
@@ -349,17 +402,20 @@ pub unsafe extern "C" fn partial_verify(
     blinded_message: *const Buffer,
     signature: *const Buffer,
 ) -> bool {
-    if polynomial.is_null() || blinded_message.is_null() || signature.is_null() {
+    let Some(polynomial) = (unsafe { buffer_slice(polynomial) }) else {
         return false;
-    }
+    };
+    let Some(blinded_message) = (unsafe { buffer_slice(blinded_message) }) else {
+        return false;
+    };
+    let Some(signature) = (unsafe { buffer_slice(signature) }) else {
+        return false;
+    };
 
-    let polynomial: Poly<PublicKey> =
-        match serialization::deserialize(<&[u8]>::from(unsafe { &*polynomial })) {
-            Ok(p) => p,
-            Err(_) => return false,
-        };
-    let blinded_message = <&[u8]>::from(unsafe { &*blinded_message });
-    let signature = <&[u8]>::from(unsafe { &*signature });
+    let polynomial: Poly<PublicKey> = match serialization::deserialize(polynomial) {
+        Ok(p) => p,
+        Err(_) => return false,
+    };
 
     SigScheme::partial_verify(&polynomial, blinded_message, signature).is_ok()
 }
@@ -382,17 +438,20 @@ pub unsafe extern "C" fn partial_verify_blind_signature(
     blinded_message: *const Buffer,
     signature: *const Buffer,
 ) -> bool {
-    if polynomial.is_null() || blinded_message.is_null() || signature.is_null() {
+    let Some(polynomial) = (unsafe { buffer_slice(polynomial) }) else {
         return false;
-    }
+    };
+    let Some(blinded_message) = (unsafe { buffer_slice(blinded_message) }) else {
+        return false;
+    };
+    let Some(signature) = (unsafe { buffer_slice(signature) }) else {
+        return false;
+    };
 
-    let polynomial: Poly<PublicKey> =
-        match serialization::deserialize(<&[u8]>::from(unsafe { &*polynomial })) {
-            Ok(p) => p,
-            Err(_) => return false,
-        };
-    let blinded_message = <&[u8]>::from(unsafe { &*blinded_message });
-    let signature = <&[u8]>::from(unsafe { &*signature });
+    let polynomial: Poly<PublicKey> = match serialization::deserialize(polynomial) {
+        Ok(p) => p,
+        Err(_) => return false,
+    };
 
     SigScheme::verify_blind_partial(&polynomial, blinded_message, signature).is_ok()
 }
@@ -412,12 +471,14 @@ pub unsafe extern "C" fn combine(
     signatures: *const Buffer,
     asig: *mut Buffer,
 ) -> bool {
-    if signatures.is_null() || asig.is_null() {
+    if asig.is_null() {
         return false;
     }
+    let Some(signatures) = (unsafe { buffer_slice(signatures) }) else {
+        return false;
+    };
 
     // split the flattened vector to a Vec<Vec<u8>> where each element is a serialized signature
-    let signatures = <&[u8]>::from(unsafe { &*signatures });
     let sigs = signatures
         .chunks(PARTIAL_SIG_LENGTH)
         .map(|chunk| chunk.to_vec())
@@ -428,8 +489,7 @@ pub unsafe extern "C" fn combine(
         Err(_) => return false,
     };
 
-    unsafe { *asig = Buffer::from(&signature[..]) };
-    std::mem::forget(signature);
+    unsafe { *asig = into_buffer(signature) };
 
     true
 }
@@ -496,7 +556,7 @@ pub unsafe extern "C" fn serialize_pubkey(
     pubkey: *const PublicKey,
     pubkey_buf: *mut *mut u8,
 ) -> bool {
-    serialize(pubkey, pubkey_buf)
+    serialize(pubkey, PUBKEY_LEN, pubkey_buf)
 }
 
 #[no_mangle]
@@ -512,7 +572,7 @@ pub unsafe extern "C" fn serialize_privkey(
     privkey: *const PrivateKey,
     privkey_buf: *mut *mut u8,
 ) -> bool {
-    serialize(privkey, privkey_buf)
+    serialize(privkey, PRIVKEY_LEN, privkey_buf)
 }
 
 #[no_mangle]
@@ -525,7 +585,7 @@ pub unsafe extern "C" fn serialize_privkey(
 ///
 /// Returns true if successful, otherwise false.
 pub unsafe extern "C" fn serialize_sig(sig: *const Signature, sig_buf: *mut *mut u8) -> bool {
-    serialize(sig, sig_buf)
+    serialize(sig, SIGNATURE_LEN, sig_buf)
 }
 
 // The null checks live here rather than in the six exported wrappers so that no
@@ -552,22 +612,29 @@ unsafe fn deserialize<T: DeserializeOwned>(
     true
 }
 
-unsafe fn serialize<T: Serialize>(in_obj: *const T, out_bytes: *mut *mut u8) -> bool {
+// `len` is the size the caller will hand to `free_vector`, which it takes from
+// the constant in the header rather than from this function — nothing here
+// reports a length. Serializing to any other size would leave the caller freeing
+// an allocation of the wrong size, so refuse instead.
+unsafe fn serialize<T: Serialize>(in_obj: *const T, len: usize, out_bytes: *mut *mut u8) -> bool {
     if in_obj.is_null() || out_bytes.is_null() {
         return false;
     }
 
     let obj = unsafe { &*in_obj };
-    let mut marshalled = if let Ok(res) = bincode::serialize(obj) {
+    let marshalled = if let Ok(res) = bincode::serialize(obj) {
         res
     } else {
         return false;
     };
+    if marshalled.len() != len {
+        return false;
+    }
 
+    let (bytes, _) = into_raw_bytes(marshalled);
     unsafe {
-        *out_bytes = marshalled.as_mut_ptr();
+        *out_bytes = bytes;
     };
-    std::mem::forget(marshalled);
 
     true
 }
@@ -577,18 +644,31 @@ unsafe fn serialize<T: Serialize>(in_obj: *const T, out_bytes: *mut *mut u8) -> 
 ///
 /// # Safety
 ///
-/// The pointer must point to a valid instance of the data type
+/// The pointer must be NULL, or point to a valid instance of the data type that
+/// has not already been freed. Freeing a pointer twice corrupts the heap; NULL
+/// does nothing.
 pub unsafe extern "C" fn destroy_token(token: *mut BlindingFactor) {
+    if token.is_null() {
+        return;
+    }
     drop(unsafe { Box::from_raw(token) });
 }
 
 #[no_mangle]
 /// Frees the memory allocated for the keypair helper
 ///
+/// This also frees the keys behind `public_key_ptr` and `private_key_ptr`, which
+/// borrow from the keypair rather than owning their memory.
+///
 /// # Safety
 ///
-/// The pointer must point to a valid instance of the data type
+/// The pointer must be NULL, or point to a valid instance of the data type that
+/// has not already been freed. Freeing a pointer twice corrupts the heap; NULL
+/// does nothing.
 pub unsafe extern "C" fn destroy_keypair(keypair: *mut Keypair) {
+    if keypair.is_null() {
+        return;
+    }
     drop(unsafe { Box::from_raw(keypair) });
 }
 
@@ -597,8 +677,14 @@ pub unsafe extern "C" fn destroy_keypair(keypair: *mut Keypair) {
 ///
 /// # Safety
 ///
-/// The pointer must point to a valid instance of the data type
+/// The pointer must be NULL, or come from `deserialize_privkey` and not have
+/// been freed already. In particular it must not come from `private_key_ptr`,
+/// which borrows from a keypair instead of allocating. Freeing a pointer twice
+/// corrupts the heap; NULL does nothing.
 pub unsafe extern "C" fn destroy_privkey(private_key: *mut PrivateKey) {
+    if private_key.is_null() {
+        return;
+    }
     drop(unsafe { Box::from_raw(private_key) });
 }
 
@@ -610,9 +696,18 @@ pub unsafe extern "C" fn destroy_privkey(private_key: *mut PrivateKey) {
 ///
 /// # Safety
 ///
-/// The pointer must point to a valid instance of the data type
+/// The pointer must be NULL, or be one this library handed out together with
+/// the exact length it reported for it: the allocation is reconstructed from
+/// the two, so a different length frees a different allocation. Freeing a
+/// pointer twice corrupts the heap; NULL does nothing.
 pub unsafe extern "C" fn free_vector(bytes: *const u8, len: usize) {
-    drop(unsafe { Vec::from_raw_parts(bytes as *mut u8, len, len) });
+    if bytes.is_null() {
+        return;
+    }
+    // Reconstructed as the boxed slice `into_raw_bytes` handed out, whose
+    // allocation is exactly `len` bytes.
+    let bytes = std::ptr::slice_from_raw_parts_mut(bytes as *mut u8, len);
+    drop(unsafe { Box::from_raw(bytes) });
 }
 
 #[no_mangle]
@@ -620,8 +715,14 @@ pub unsafe extern "C" fn free_vector(bytes: *const u8, len: usize) {
 ///
 /// # Safety
 ///
-/// The pointer must point to a valid instance of the data type
+/// The pointer must be NULL, or come from `deserialize_pubkey` and not have
+/// been freed already. In particular it must not come from `public_key_ptr`,
+/// which borrows from a keypair instead of allocating. Freeing a pointer twice
+/// corrupts the heap; NULL does nothing.
 pub unsafe extern "C" fn destroy_pubkey(public_key: *mut PublicKey) {
+    if public_key.is_null() {
+        return;
+    }
     drop(unsafe { Box::from_raw(public_key) });
 }
 
@@ -630,8 +731,13 @@ pub unsafe extern "C" fn destroy_pubkey(public_key: *mut PublicKey) {
 ///
 /// # Safety
 ///
-/// The pointer must point to a valid instance of the data type
+/// The pointer must be NULL, or point to a valid instance of the data type that
+/// has not already been freed. Freeing a pointer twice corrupts the heap; NULL
+/// does nothing.
 pub unsafe extern "C" fn destroy_sig(signature: *mut Signature) {
+    if signature.is_null() {
+        return;
+    }
     drop(unsafe { Box::from_raw(signature) });
 }
 
@@ -673,33 +779,63 @@ fn threshold_keygen(n: usize, t: usize, seed: &[u8]) -> Keys {
 /// The return value should be destroyed with `destroy_keypair`.
 ///
 /// # Safety
+/// - The seed MUST be at least 32 bytes long
+/// - **This function will dereference the provided pointers. If any invalid pointers are passed
+///   then the software will crash**.
+/// - If NULL pointers are passed, the function will return false
 ///
-/// The seed MUST be at least 32 bytes long
+/// Returns true if successful, otherwise false.
 #[no_mangle]
-pub unsafe extern "C" fn keygen(seed: *const Buffer, keypair: *mut *mut Keypair) {
-    let seed = <&[u8]>::from(unsafe { &*seed });
+pub unsafe extern "C" fn keygen(seed: *const Buffer, keypair: *mut *mut Keypair) -> bool {
+    if keypair.is_null() {
+        return false;
+    }
+    let Some(seed) = (unsafe { buffer_slice(seed) }) else {
+        return false;
+    };
+
     let mut rng = get_rng(seed);
     let (private, public) = SigScheme::keypair(&mut rng);
     let keypair_local = Keypair { private, public };
     unsafe { *keypair = Box::into_raw(Box::new(keypair_local)) };
+
+    true
 }
 
 /// Gets a pointer to the public key corresponding to the provided `KeyPair` pointer
 ///
+/// The key is **borrowed from the keypair**, not a separate allocation: it stays
+/// valid until `destroy_keypair` and must never be passed to `destroy_pubkey`,
+/// which would free memory that was never allocated on its own and leave
+/// `destroy_keypair` to free it a second time.
+///
 /// # Safety
-/// The provided pointer will be dereferenced, so there must be valid data beneath it
+/// The provided pointer will be dereferenced, so there must be valid data beneath it.
+/// Returns NULL if a NULL keypair is passed.
 #[no_mangle]
 pub unsafe extern "C" fn public_key_ptr(keypair: *const Keypair) -> *const PublicKey {
-    &(*keypair).public as *const PublicKey
+    match unsafe { keypair.as_ref() } {
+        Some(keypair) => &keypair.public,
+        None => std::ptr::null(),
+    }
 }
 
 /// Gets a pointer to the private key corresponding to the provided `KeyPair` pointer
 ///
+/// The key is **borrowed from the keypair**, not a separate allocation: it stays
+/// valid until `destroy_keypair` and must never be passed to `destroy_privkey`,
+/// which would free memory that was never allocated on its own and leave
+/// `destroy_keypair` to free it a second time.
+///
 /// # Safety
-/// The provided pointer will be dereferenced, so there must be valid data beneath it
+/// The provided pointer will be dereferenced, so there must be valid data beneath it.
+/// Returns NULL if a NULL keypair is passed.
 #[no_mangle]
 pub unsafe extern "C" fn private_key_ptr(keypair: *const Keypair) -> *const PrivateKey {
-    &(*keypair).private as *const PrivateKey
+    match unsafe { keypair.as_ref() } {
+        Some(keypair) => &keypair.private,
+        None => std::ptr::null(),
+    }
 }
 
 /// T-of-n threshold key parameters. Test-only helper produced by the central
@@ -818,7 +954,7 @@ mod tests {
         let public_key = &public_poly as *const _;
         let mut concatenated = Vec::new();
         for sig in &sigs {
-            let sig_slice = <&[u8]>::from(sig);
+            let sig_slice = unsafe { buffer_slice(sig) }.unwrap();
             concatenated.extend_from_slice(sig_slice);
             let ret = unsafe { partial_verify_fn(public_key, &message_to_sign, sig) };
             assert!(ret);
@@ -871,7 +1007,7 @@ mod tests {
         };
 
         let mut keypair = MaybeUninit::<*mut Keypair>::uninit();
-        unsafe { keygen(&Buffer::from(&seed[..]), keypair.as_mut_ptr()) };
+        assert!(unsafe { keygen(&Buffer::from(&seed[..]), keypair.as_mut_ptr()) });
         let keypair = unsafe { &*keypair.assume_init() };
 
         let (message_to_sign, blinding_factor) = if should_blind {
@@ -917,7 +1053,7 @@ mod tests {
         let seed = b"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
 
         let mut keypair = MaybeUninit::<*mut Keypair>::uninit();
-        unsafe { keygen(&Buffer::from(&seed[..]), keypair.as_mut_ptr()) };
+        assert!(unsafe { keygen(&Buffer::from(&seed[..]), keypair.as_mut_ptr()) });
         let keypair = unsafe { &*keypair.assume_init() };
 
         let private_key_ptr = unsafe { private_key_ptr(keypair) };
@@ -949,7 +1085,7 @@ mod tests {
         let seed = b"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
 
         let mut keypair = MaybeUninit::<*mut Keypair>::uninit();
-        unsafe { keygen(&Buffer::from(&seed[..]), keypair.as_mut_ptr()) };
+        assert!(unsafe { keygen(&Buffer::from(&seed[..]), keypair.as_mut_ptr()) });
         let keypair = unsafe { &*keypair.assume_init() };
 
         let public_key_ptr = unsafe { public_key_ptr(keypair) };
@@ -1033,7 +1169,7 @@ mod tests {
     fn serialization_rejects_null_output() {
         let seed = b"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
         let mut keypair = MaybeUninit::<*mut Keypair>::uninit();
-        unsafe { keygen(&Buffer::from(&seed[..]), keypair.as_mut_ptr()) };
+        assert!(unsafe { keygen(&Buffer::from(&seed[..]), keypair.as_mut_ptr()) });
         let keypair = unsafe { &*keypair.assume_init() };
         let pubkey = unsafe { public_key_ptr(keypair) };
         let marshalled = bincode::serialize(unsafe { &*pubkey }).unwrap();
@@ -1045,5 +1181,249 @@ mod tests {
                 std::ptr::null_mut()
             ));
         }
+    }
+
+    // Every buffer argument on the C surface reaches Rust through
+    // `buffer_slice`, so the whole surface inherits what it rejects.
+    #[test]
+    fn buffer_slice_validates_the_buffer() {
+        let bytes = [1u8, 2, 3];
+
+        assert_eq!(unsafe { buffer_slice(std::ptr::null()) }, None);
+
+        // A length behind a NULL pointer describes memory the caller does not
+        // have. Reading it as empty would sign or verify the empty message.
+        let lying = Buffer {
+            ptr: std::ptr::null(),
+            len: bytes.len(),
+        };
+        assert_eq!(unsafe { buffer_slice(&lying) }, None);
+
+        // An empty buffer, however the caller spells it.
+        let empty = Buffer {
+            ptr: std::ptr::null(),
+            len: 0,
+        };
+        assert_eq!(unsafe { buffer_slice(&empty) }, Some(&[][..]));
+        assert_eq!(
+            unsafe { buffer_slice(&Buffer::from(&bytes[..0])) },
+            Some(&[][..])
+        );
+
+        assert_eq!(
+            unsafe { buffer_slice(&Buffer::from(&bytes[..])) },
+            Some(&bytes[..])
+        );
+    }
+
+    /// A buffer claiming a length behind a NULL pointer must be refused by
+    /// every entry point that takes one, rather than dereferenced.
+    #[test]
+    fn entry_points_reject_a_buffer_with_no_memory() {
+        let seed = b"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+        let user_seed = &b"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"[..];
+        let msg = [1u8, 2, 3, 4, 6];
+        let (n, t) = (5, 3);
+
+        // Arguments that work. Every call below is asserted to succeed with
+        // these, then repeated with one buffer swapped for one that has no
+        // memory behind it, so a `false` is attributable to that swap and not
+        // to an argument that would have been rejected anyway.
+        let keys = threshold_keygen(n, t, &seed[..]);
+        let share_bytes = bincode::serialize(&keys.shares[0]).unwrap();
+        let polynomial_bytes = bincode::serialize(&keys.polynomial).unwrap();
+        let seed_buffer = Buffer::from(&seed[..]);
+        let message = Buffer::from(&msg[..]);
+        let share = Buffer::from(&share_bytes[..]);
+        let polynomial = Buffer::from(&polynomial_bytes[..]);
+
+        let no_memory = Buffer {
+            ptr: std::ptr::null(),
+            len: msg.len(),
+        };
+        let mut out = MaybeUninit::<Buffer>::uninit();
+        let mut factor = MaybeUninit::<*mut BlindingFactor>::uninit();
+
+        unsafe {
+            let mut keypair = MaybeUninit::<*mut Keypair>::uninit();
+            assert!(keygen(&seed_buffer, keypair.as_mut_ptr()));
+            assert!(!keygen(&no_memory, keypair.as_mut_ptr()));
+            let keypair = keypair.assume_init();
+            let (privkey, pubkey) = (private_key_ptr(keypair), public_key_ptr(keypair));
+
+            assert!(sign(privkey, &message, out.as_mut_ptr()));
+            assert!(!sign(privkey, &no_memory, out.as_mut_ptr()));
+            let signature = out.assume_init_read();
+
+            assert!(verify(pubkey, &message, &signature));
+            assert!(!verify(pubkey, &no_memory, &signature));
+            assert!(!verify(pubkey, &message, &no_memory));
+
+            assert!(blind(
+                &message,
+                &Buffer::from(user_seed),
+                out.as_mut_ptr(),
+                factor.as_mut_ptr()
+            ));
+            assert!(!blind(
+                &no_memory,
+                &Buffer::from(user_seed),
+                out.as_mut_ptr(),
+                factor.as_mut_ptr()
+            ));
+            assert!(!blind(
+                &message,
+                &no_memory,
+                out.as_mut_ptr(),
+                factor.as_mut_ptr()
+            ));
+            let blinded = out.assume_init_read();
+            let blinding_factor = factor.assume_init();
+
+            assert!(sign_blinded_message(privkey, &blinded, out.as_mut_ptr()));
+            assert!(!sign_blinded_message(privkey, &no_memory, out.as_mut_ptr()));
+            let blind_signature = out.assume_init_read();
+
+            assert!(unblind(&blind_signature, blinding_factor, out.as_mut_ptr()));
+            assert!(!unblind(&no_memory, blinding_factor, out.as_mut_ptr()));
+            let unblinded = out.assume_init_read();
+
+            assert!(partial_sign(&share, &message, out.as_mut_ptr()));
+            assert!(!partial_sign(&no_memory, &message, out.as_mut_ptr()));
+            assert!(!partial_sign(&share, &no_memory, out.as_mut_ptr()));
+            let partial = out.assume_init_read();
+
+            assert!(partial_verify(&polynomial, &message, &partial));
+            assert!(!partial_verify(&no_memory, &message, &partial));
+            assert!(!partial_verify(&polynomial, &no_memory, &partial));
+            assert!(!partial_verify(&polynomial, &message, &no_memory));
+
+            assert!(partial_sign_blinded_message(
+                &share,
+                &blinded,
+                out.as_mut_ptr()
+            ));
+            assert!(!partial_sign_blinded_message(
+                &no_memory,
+                &blinded,
+                out.as_mut_ptr()
+            ));
+            assert!(!partial_sign_blinded_message(
+                &share,
+                &no_memory,
+                out.as_mut_ptr()
+            ));
+            let blind_partial = out.assume_init_read();
+
+            assert!(partial_verify_blind_signature(
+                &polynomial,
+                &blinded,
+                &blind_partial
+            ));
+            assert!(!partial_verify_blind_signature(
+                &no_memory,
+                &blinded,
+                &blind_partial
+            ));
+            assert!(!partial_verify_blind_signature(
+                &polynomial,
+                &no_memory,
+                &blind_partial
+            ));
+            assert!(!partial_verify_blind_signature(
+                &polynomial,
+                &blinded,
+                &no_memory
+            ));
+
+            // `combine` needs a threshold's worth of partials, so build them
+            // from the remaining shares.
+            let mut concatenated = Vec::new();
+            for share in keys.shares.iter().take(t) {
+                let share_bytes = bincode::serialize(share).unwrap();
+                assert!(partial_sign(
+                    &Buffer::from(&share_bytes[..]),
+                    &message,
+                    out.as_mut_ptr()
+                ));
+                let partial = out.assume_init_read();
+                concatenated.extend_from_slice(buffer_slice(&partial).unwrap());
+                free_vector(partial.ptr, partial.len);
+            }
+            let partials = Buffer::from(&concatenated[..]);
+            assert!(combine(t, &partials, out.as_mut_ptr()));
+            assert!(!combine(t, &no_memory, out.as_mut_ptr()));
+            let combined = out.assume_init_read();
+
+            for buffer in [
+                signature,
+                blinded,
+                blind_signature,
+                unblinded,
+                partial,
+                blind_partial,
+                combined,
+            ] {
+                free_vector(buffer.ptr, buffer.len);
+            }
+            destroy_token(blinding_factor);
+            destroy_keypair(keypair);
+        }
+    }
+
+    // `keygen` used to return void, so a caller had no way to learn that it had
+    // written nothing.
+    #[test]
+    fn keygen_reports_failure() {
+        let seed = b"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+        let mut keypair = MaybeUninit::<*mut Keypair>::uninit();
+
+        unsafe {
+            assert!(!keygen(std::ptr::null(), keypair.as_mut_ptr()));
+            assert!(!keygen(&Buffer::from(&seed[..]), std::ptr::null_mut()));
+        }
+    }
+
+    #[test]
+    fn key_accessors_reject_null() {
+        unsafe {
+            assert!(public_key_ptr(std::ptr::null()).is_null());
+            assert!(private_key_ptr(std::ptr::null()).is_null());
+        }
+    }
+
+    // Freeing NULL is a no-op in C, and callers rely on it: a cleanup path that
+    // runs after a failed allocation has nothing else to pass.
+    #[test]
+    fn destructors_accept_null() {
+        unsafe {
+            destroy_token(std::ptr::null_mut());
+            destroy_keypair(std::ptr::null_mut());
+            destroy_privkey(std::ptr::null_mut());
+            destroy_pubkey(std::ptr::null_mut());
+            destroy_sig(std::ptr::null_mut());
+            free_vector(std::ptr::null(), 0);
+            free_vector(std::ptr::null(), 32);
+        }
+    }
+
+    // `free_vector` rebuilds the allocation from the pointer and the length, so
+    // handing C a `Vec` with spare capacity would free fewer bytes than were
+    // allocated. Only a sanitizer sees the mismatch, so what this test pins is
+    // that the slack is gone before the pointer leaves Rust.
+    #[test]
+    fn buffers_handed_to_c_are_exactly_sized() {
+        let mut bytes = Vec::with_capacity(64);
+        bytes.extend_from_slice(&[1, 2, 3]);
+        assert!(
+            bytes.capacity() > bytes.len(),
+            "the test needs a vector with spare capacity"
+        );
+
+        let buffer = into_buffer(bytes);
+        assert_eq!(buffer.len, 3);
+        assert_eq!(unsafe { buffer_slice(&buffer) }, Some(&[1u8, 2, 3][..]));
+
+        unsafe { free_vector(buffer.ptr, buffer.len) };
     }
 }
