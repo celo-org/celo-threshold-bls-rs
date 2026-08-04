@@ -292,18 +292,31 @@ pub fn combine(threshold: usize, signatures: Vec<u8>) -> Result<Vec<u8>> {
 ///
 /// # Throws
 ///
+/// - If the number of shares is not between 1 and `MAX_SHARES`
 /// - If the threshold is not between 1 and `n`
 /// - If the seed is shorter than 32 bytes
 pub fn threshold_keygen(n: usize, t: usize, seed: &[u8]) -> Result<Keys> {
     try_threshold_keygen(n, t, seed).map_err(|err| JsValue::from_str(&err))
 }
 
+/// The largest group this deals keys for. A threshold group is a handful of
+/// signers, so the bound is far above any real one; it is here so that a
+/// mistyped `n` fails with a message rather than asking the allocator for
+/// gigabytes, which in wasm traps and poisons the instance.
+const MAX_SHARES: usize = 1024;
+
 fn try_threshold_keygen(n: usize, t: usize, seed: &[u8]) -> TryResult<Keys> {
+    if !(1..=MAX_SHARES).contains(&n) {
+        return Err(format!(
+            "the number of shares must be between 1 and {} (got {})",
+            MAX_SHARES, n
+        ));
+    }
     // A polynomial of degree `t - 1` is what makes `t` shares reconstruct the
     // secret, so a threshold of zero has no polynomial to ask for: it would
     // underflow to a degree of `usize::MAX`. A threshold above `n` cannot be
     // met by the shares this deals out.
-    if t < 1 || t > n {
+    if !(1..=n).contains(&t) {
         return Err(format!("threshold must be between 1 and {} (got {})", n, t));
     }
 
@@ -520,6 +533,18 @@ mod tests {
         assert!(try_threshold_keygen(0, 0, &seed).is_err());
         assert!(try_threshold_keygen(5, 1, &seed).is_ok());
         assert!(try_threshold_keygen(5, 5, &seed).is_ok());
+    }
+
+    // A group of a billion is a plausible typo and an allocation no wasm
+    // instance survives. The threshold check alone does not catch it: any `t`
+    // up to `n` passes.
+    #[test]
+    fn a_group_larger_than_the_maximum_is_rejected() {
+        let seed = [7u8; SEED_LEN];
+
+        assert!(try_threshold_keygen(MAX_SHARES + 1, 1, &seed).is_err());
+        assert!(try_threshold_keygen(usize::MAX, 1, &seed).is_err());
+        assert!(try_threshold_keygen(0, 1, &seed).is_err());
     }
 
     // `numShares` is the caller's only guard, and it was advisory.
