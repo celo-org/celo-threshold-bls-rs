@@ -133,9 +133,11 @@ hard way:
 - `[parse] parse_deps = true` panics on the arkworks generics
   (`G1Curve has 0 params but is being instantiated with 1 values`).
 - cbindgen renders a `repr(transparent)` struct as a typedef of the type it
-  wraps, so `BlindingFactor`, `KeyShare` and `PublicPoly` would come out as
-  `typedef Token<PrivateKey> BlindingFactor;`. They are declared by hand in
+  wraps, so `BlindingFactor` would come out as
+  `typedef Token<PrivateKey> BlindingFactor;`. It is declared by hand in
   `after_includes` and excluded, as are the `PrivateKey`/`PublicKey`/`Signature`
-  aliases, which resolve to names cbindgen cannot declare.
+  aliases, which resolve to names cbindgen cannot declare. It is the only such
+  handle: everything else the C API returns has a serialized form and crosses as
+  bytes.
 - cbindgen does not evaluate features, so it sees `wasm.rs` too. That is why the
   struct behind the `Keypair` JS class is named `WasmKeypair`.
