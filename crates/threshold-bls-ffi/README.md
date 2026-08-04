@@ -43,11 +43,11 @@ takes serialized bytes.
 
 Two more rough edges, both deferred to a planned redesign of this surface:
 `serialize_pubkey`, `serialize_privkey` and `serialize_sig` return a pointer
-without its length, and the length constants are not exported, so a caller has
-to know that public keys are 96 bytes, private keys 32 and signatures 48 in
-order to call `free_vector` correctly. And `verify_blind_signature`, which
-verifies a blind signature without unblinding it first, exists in the WASM
-surface but has no C counterpart.
+without its length, so a caller has to pair it with the matching `PUBKEY_LEN`,
+`PRIVKEY_LEN` or `SIGNATURE_LEN` from the header to call `free_vector`
+correctly. And `verify_blind_signature`, which verifies a blind signature
+without unblinding it first, exists in the WASM surface but has no C
+counterpart.
 
 ## WASM bindings (`wasm`)
 

@@ -15,9 +15,9 @@ pub mod ffi;
 #[cfg(feature = "ffi")]
 pub(crate) type Signature = <SigScheme as Scheme>::Signature;
 #[cfg(feature = "ffi")]
-pub(crate) const PUBKEY_LEN: usize = 96;
+pub const PUBKEY_LEN: usize = 96;
 #[cfg(feature = "ffi")]
-pub(crate) const PRIVKEY_LEN: usize = 32;
+pub const PRIVKEY_LEN: usize = 32;
 
 use threshold_bls::{poly::Idx, schemes::bls12_377::G2Scheme as SigScheme, sig::Scheme};
 
@@ -26,10 +26,21 @@ pub(crate) type PublicKey = <SigScheme as Scheme>::Public;
 #[allow(dead_code)]
 pub(crate) type PrivateKey = <SigScheme as Scheme>::Private;
 
+/// Bytes bincode prepends to a serialized sequence as its length prefix.
 #[allow(dead_code)]
-pub(crate) const VEC_LENGTH: usize = 8;
+pub const VEC_LENGTH: usize = 8;
+/// Bytes in a serialized signature, compressed G1.
 #[allow(dead_code)]
-pub(crate) const SIGNATURE_LEN: usize = 48;
+pub const SIGNATURE_LEN: usize = 48;
+/// Bytes in a share index, spelled as a literal because cbindgen evaluates
+/// these expressions itself and cannot call `size_of`. The assertion below
+/// keeps it tied to `Idx`.
 #[allow(dead_code)]
-pub(crate) const PARTIAL_SIG_LENGTH: usize =
-    VEC_LENGTH + SIGNATURE_LEN + std::mem::size_of::<Idx>();
+pub const IDX_LEN: usize = 4;
+const _: () = assert!(IDX_LEN == std::mem::size_of::<Idx>());
+
+/// Bytes in one serialized partial signature. `combine` splits its flattened
+/// input into chunks of this size, so a caller has to build that input to
+/// match.
+#[allow(dead_code)]
+pub const PARTIAL_SIG_LENGTH: usize = VEC_LENGTH + SIGNATURE_LEN + IDX_LEN;

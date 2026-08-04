@@ -24,18 +24,6 @@
 #include "threshold.h"
 
 /*
- * The serialize_* functions hand back a pointer with no length, and
- * PUBKEY_LEN / PRIVKEY_LEN / SIGNATURE_LEN are pub(crate) so they do not reach
- * the header. Freeing therefore means repeating the lengths here. That is the
- * missing-length defect, not an accident of this test; it is deferred to the
- * byte-oriented redesign. Without these constants a C caller cannot free a
- * serialized key at all.
- */
-#define PUBKEY_LEN 96
-#define PRIVKEY_LEN 32
-#define SIGNATURE_LEN 48
-
-/*
  * Not assert(): under NDEBUG the standard requires assert to expand to nothing,
  * taking its argument expression with it. Every library call below is made
  * inside one of these, while the free_vector and destroy_* calls that follow
