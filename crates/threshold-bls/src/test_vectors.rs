@@ -6,8 +6,8 @@ mod tests {
         use crate::schemes::bls12_377::G2Scheme;
         use crate::serialization;
         use crate::sig::{Scheme, Share, SignatureScheme, ThresholdScheme};
-        use rand_chacha::rand_core::SeedableRng;
         use rand_chacha::ChaChaRng;
+        use rand_chacha::rand_core::SeedableRng;
 
         // Define concrete types to avoid ambiguity
         type PrivateKey = <G2Scheme as Scheme>::Private;

@@ -109,8 +109,8 @@ mod tests {
         curve::bls12377::PairingCurve as PCurve,
         group::Element,
         sig::{
-            bls::{BLSError, G1Scheme, G2Scheme},
             Scheme, SignatureScheme,
+            bls::{BLSError, G1Scheme, G2Scheme},
         },
     };
 
@@ -144,9 +144,11 @@ mod tests {
             .map(|s| T::partial_sign(s, &msg).unwrap())
             .collect();
 
-        assert!(!partials
-            .iter()
-            .any(|p| T::partial_verify(&public, &msg, p).is_err()));
+        assert!(
+            !partials
+                .iter()
+                .any(|p| T::partial_verify(&public, &msg, p).is_err())
+        );
         let final_sig = T::aggregate(threshold, &partials).unwrap();
 
         T::verify(public.public_key(), &msg, &final_sig).unwrap();

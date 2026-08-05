@@ -364,8 +364,8 @@ impl<C: fmt::Display> fmt::Display for Poly<C> {
 #[cfg(test)]
 pub mod tests {
     use super::*;
-    use crate::curve::bls12377::Scalar as Sc;
     use crate::curve::bls12377::G1;
+    use crate::curve::bls12377::Scalar as Sc;
     use rand::prelude::*;
 
     #[test]
