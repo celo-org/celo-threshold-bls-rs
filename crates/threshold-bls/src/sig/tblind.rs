@@ -71,10 +71,10 @@ mod tests {
     use crate::group::Element;
     use crate::poly::{Idx, Poly};
     use crate::sig::{
+        BlindScheme, SignatureScheme,
         blind::BlindError,
         bls::{BLSError, G1Scheme, G2Scheme},
         tbls::Share,
-        BlindScheme, SignatureScheme,
     };
     use rand::thread_rng;
 
@@ -122,9 +122,11 @@ mod tests {
             .collect();
 
         // verify if each blind partial signatures is correct
-        assert!(!partials
-            .iter()
-            .any(|p| B::verify_blind_partial(&public, &blinded, p).is_err()));
+        assert!(
+            !partials
+                .iter()
+                .any(|p| B::verify_blind_partial(&public, &blinded, p).is_err())
+        );
 
         // unblind each partial sig
         let unblindeds_partials: Vec<_> = partials

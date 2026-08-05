@@ -2,7 +2,7 @@
 use rand_chacha::ChaChaRng;
 use rand_core::{RngCore, SeedableRng};
 
-use serde::{de::DeserializeOwned, Serialize};
+use serde::{Serialize, de::DeserializeOwned};
 use threshold_bls::{
     poly::Poly,
     serialization,
@@ -127,7 +127,7 @@ pub struct BlindingFactor(Token<PrivateKey>);
 /// - If the message cannot be blinded, the function will return false
 ///
 /// Returns true if successful, otherwise false.
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn blind(
     message: *const Buffer,
     seed: *const Buffer,
@@ -174,7 +174,7 @@ pub unsafe extern "C" fn blind(
 /// - If NULL pointers are passed, the function will return false
 ///
 /// Returns true if successful, otherwise false.
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn unblind(
     blinded_signature: *const Buffer,
     blinding_factor: *const BlindingFactor,
@@ -212,7 +212,7 @@ pub unsafe extern "C" fn unblind(
 /// - If NULL pointers are passed, the function will return false
 ///
 /// Returns true if successful, otherwise false.
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn verify(
     public_key: *const PublicKey,
     message: *const Buffer,
@@ -246,7 +246,7 @@ pub unsafe extern "C" fn verify(
 /// - If NULL pointers are passed, the function will return false
 ///
 /// Returns true if successful, otherwise false.
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn sign(
     private_key: *const PrivateKey,
     message: *const Buffer,
@@ -279,7 +279,7 @@ pub unsafe extern "C" fn sign(
 /// - If NULL pointers are passed, the function will return false
 ///
 /// Returns true if successful, otherwise false.
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn sign_blinded_message(
     private_key: *const PrivateKey,
     message: *const Buffer,
@@ -316,7 +316,7 @@ pub unsafe extern "C" fn sign_blinded_message(
 /// - If NULL pointers are passed, the function will return false
 ///
 /// Returns true if successful, otherwise false.
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn partial_sign(
     share: *const Buffer,
     message: *const Buffer,
@@ -358,7 +358,7 @@ pub unsafe extern "C" fn partial_sign(
 /// - If NULL pointers are passed, the function will return false
 ///
 /// Returns true if successful, otherwise false.
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn partial_sign_blinded_message(
     share: *const Buffer,
     blinded_message: *const Buffer,
@@ -404,7 +404,7 @@ pub unsafe extern "C" fn partial_sign_blinded_message(
 /// - If NULL pointers are passed, the function will return false
 ///
 /// Returns true if successful, otherwise false.
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn partial_verify(
     polynomial: *const Buffer,
     blinded_message: *const Buffer,
@@ -440,7 +440,7 @@ pub unsafe extern "C" fn partial_verify(
 /// - If NULL pointers are passed, the function will return false
 ///
 /// Returns true if successful, otherwise false.
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn partial_verify_blind_signature(
     polynomial: *const Buffer,
     blinded_message: *const Buffer,
@@ -473,7 +473,7 @@ pub unsafe extern "C" fn partial_verify_blind_signature(
 /// - This function does not check if the signatures are valid!
 ///
 /// Returns true if successful, otherwise false.
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn combine(
     threshold: usize,
     signatures: *const Buffer,
@@ -506,7 +506,7 @@ pub unsafe extern "C" fn combine(
 // Serialization
 ///////////////////////////////////////////////////////////////////////////
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 /// Deserializes a public key from the provided buffer
 ///
 /// # Safety
@@ -519,10 +519,10 @@ pub unsafe extern "C" fn deserialize_pubkey(
     pubkey_buf: *const u8,
     pubkey: *mut *mut PublicKey,
 ) -> bool {
-    deserialize(pubkey_buf, PUBKEY_LEN, pubkey)
+    unsafe { deserialize(pubkey_buf, PUBKEY_LEN, pubkey) }
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 /// Deserializes a private key from the provided buffer
 ///
 /// # Safety
@@ -535,10 +535,10 @@ pub unsafe extern "C" fn deserialize_privkey(
     privkey_buf: *const u8,
     privkey: *mut *mut PrivateKey,
 ) -> bool {
-    deserialize(privkey_buf, PRIVKEY_LEN, privkey)
+    unsafe { deserialize(privkey_buf, PRIVKEY_LEN, privkey) }
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 /// Deserializes a signature from the provided buffer
 ///
 /// # Safety
@@ -548,10 +548,10 @@ pub unsafe extern "C" fn deserialize_privkey(
 ///
 /// Returns true if successful, otherwise false.
 pub unsafe extern "C" fn deserialize_sig(sig_buf: *const u8, sig: *mut *mut Signature) -> bool {
-    deserialize(sig_buf, SIGNATURE_LEN, sig)
+    unsafe { deserialize(sig_buf, SIGNATURE_LEN, sig) }
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 /// Serializes a public key to the provided buffer
 ///
 /// # Safety
@@ -564,10 +564,10 @@ pub unsafe extern "C" fn serialize_pubkey(
     pubkey: *const PublicKey,
     pubkey_buf: *mut *mut u8,
 ) -> bool {
-    serialize(pubkey, PUBKEY_LEN, pubkey_buf)
+    unsafe { serialize(pubkey, PUBKEY_LEN, pubkey_buf) }
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 /// Serializes a private key to the provided buffer
 ///
 /// # Safety
@@ -580,10 +580,10 @@ pub unsafe extern "C" fn serialize_privkey(
     privkey: *const PrivateKey,
     privkey_buf: *mut *mut u8,
 ) -> bool {
-    serialize(privkey, PRIVKEY_LEN, privkey_buf)
+    unsafe { serialize(privkey, PRIVKEY_LEN, privkey_buf) }
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 /// Serializes a signature to the provided buffer
 ///
 /// # Safety
@@ -593,7 +593,7 @@ pub unsafe extern "C" fn serialize_privkey(
 ///
 /// Returns true if successful, otherwise false.
 pub unsafe extern "C" fn serialize_sig(sig: *const Signature, sig_buf: *mut *mut u8) -> bool {
-    serialize(sig, SIGNATURE_LEN, sig_buf)
+    unsafe { serialize(sig, SIGNATURE_LEN, sig_buf) }
 }
 
 // The null checks live here rather than in the six exported wrappers so that no
@@ -647,7 +647,7 @@ unsafe fn serialize<T: Serialize>(in_obj: *const T, len: usize, out_bytes: *mut 
     true
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 /// Frees the memory allocated for the blinding factor
 ///
 /// # Safety
@@ -662,7 +662,7 @@ pub unsafe extern "C" fn destroy_token(token: *mut BlindingFactor) {
     drop(unsafe { Box::from_raw(token) });
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 /// Frees the memory allocated for the keypair helper
 ///
 /// This also frees the keys behind `public_key_ptr` and `private_key_ptr`, which
@@ -680,7 +680,7 @@ pub unsafe extern "C" fn destroy_keypair(keypair: *mut Keypair) {
     drop(unsafe { Box::from_raw(keypair) });
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 /// Frees the memory allocated for a private key
 ///
 /// # Safety
@@ -696,7 +696,7 @@ pub unsafe extern "C" fn destroy_privkey(private_key: *mut PrivateKey) {
     drop(unsafe { Box::from_raw(private_key) });
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 /// Frees the memory allocated for a vector
 ///
 /// Takes a const pointer so that a caller can pass `Buffer::ptr` straight back
@@ -718,7 +718,7 @@ pub unsafe extern "C" fn free_vector(bytes: *const u8, len: usize) {
     drop(unsafe { Box::from_raw(bytes) });
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 /// Frees the memory allocated for a public key
 ///
 /// # Safety
@@ -734,7 +734,7 @@ pub unsafe extern "C" fn destroy_pubkey(public_key: *mut PublicKey) {
     drop(unsafe { Box::from_raw(public_key) });
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 /// Frees the memory allocated for a signature
 ///
 /// # Safety
@@ -793,7 +793,7 @@ fn threshold_keygen(n: usize, t: usize, seed: &[u8]) -> Keys {
 /// - If the seed is shorter than `SEED_LEN` bytes, the function will return false
 ///
 /// Returns true if successful, otherwise false.
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn keygen(seed: *const Buffer, keypair: *mut *mut Keypair) -> bool {
     if keypair.is_null() {
         return false;
@@ -822,7 +822,7 @@ pub unsafe extern "C" fn keygen(seed: *const Buffer, keypair: *mut *mut Keypair)
 /// # Safety
 /// The provided pointer will be dereferenced, so there must be valid data beneath it.
 /// Returns NULL if a NULL keypair is passed.
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn public_key_ptr(keypair: *const Keypair) -> *const PublicKey {
     match unsafe { keypair.as_ref() } {
         Some(keypair) => &keypair.public,
@@ -840,7 +840,7 @@ pub unsafe extern "C" fn public_key_ptr(keypair: *const Keypair) -> *const Publi
 /// # Safety
 /// The provided pointer will be dereferenced, so there must be valid data beneath it.
 /// Returns NULL if a NULL keypair is passed.
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn private_key_ptr(keypair: *const Keypair) -> *const PrivateKey {
     match unsafe { keypair.as_ref() } {
         Some(keypair) => &keypair.private,

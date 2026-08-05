@@ -9,8 +9,8 @@ members = [
 # Fields shared by both crates. `rust-version` tracks the toolchain pinned in
 # rust-toolchain.toml, which is the only version the builds are tested against.
 [workspace.package]
-edition = "2021"
-rust-version = "1.95"
+edition = "2024"
+rust-version = "1.97"
 license = "Apache-2.0"
 repository = "https://github.com/celo-org/celo-threshold-bls-rs"
 

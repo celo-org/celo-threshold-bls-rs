@@ -29,7 +29,7 @@ cargo test -p threshold-bls poly::      # single test / module filter
   `cargo test -p threshold-bls-ffi --no-default-features --features ffi`.
 - Release artifacts are built by justfile recipes (`just wasm|jvm|android|ios`,
   outputs under `output/`). All but `ios` require Docker (linux/amd64 image);
-  `ios` requires a macOS host with Xcode. The toolchain is pinned to Rust 1.95
+  `ios` requires a macOS host with Xcode. The toolchain is pinned to Rust 1.97
   by `rust-toolchain.toml`; the Docker image version via `RUST_VERSION`.
 - CI split: GitHub Actions tests, lints, audits, and runs the npm package
   suite in `bindings/js` against a fresh wasm-pack build. CircleCI only

@@ -1,6 +1,6 @@
+use jni::EnvUnowned;
 use jni::objects::{JByteArray, JClass};
 use jni::sys::jboolean;
-use jni::EnvUnowned;
 
 use threshold_bls::{serialization, sig::SignatureScheme};
 
@@ -8,7 +8,7 @@ use crate::*;
 
 // This keeps Rust from "mangling" the name and making it unique for this
 // crate.
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "system" fn Java_org_celo_BlindThresholdBls_verify<'local>(
     mut env: EnvUnowned<'local>,
     _class: JClass<'local>,

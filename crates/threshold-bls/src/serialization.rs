@@ -7,7 +7,7 @@
 //! compatibility with previously serialized data.
 
 use bincode::Options;
-use serde::{de::DeserializeOwned, Deserialize};
+use serde::{Deserialize, de::DeserializeOwned};
 use std::io::Read;
 
 /// Upper bound (in bytes) on any single deserialize call.

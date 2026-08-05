@@ -4,7 +4,7 @@ use crate::{
     poly::Poly,
 };
 use rand_core::RngCore;
-use serde::{de::DeserializeOwned, Serialize};
+use serde::{Serialize, de::DeserializeOwned};
 use std::{error::Error, fmt::Debug};
 
 /// The `Scheme` trait contains the basic information of the groups over

@@ -1,6 +1,6 @@
 use crate::group::{Element, Point, Scalar};
 use crate::serialization;
-use crate::sig::bls::{common::BLSScheme, BLSError};
+use crate::sig::bls::{BLSError, common::BLSScheme};
 use crate::sig::{BlindScheme, Scheme};
 use rand::RngCore;
 use serde::{Deserialize, Serialize};
@@ -105,8 +105,8 @@ where
 mod tests {
     use super::*;
     use crate::curve::bls12377::PairingCurve as PCurve;
-    use crate::sig::bls::{G1Scheme, G2Scheme};
     use crate::sig::SignatureScheme;
+    use crate::sig::bls::{G1Scheme, G2Scheme};
     use rand::thread_rng;
 
     #[test]
