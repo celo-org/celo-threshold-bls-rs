@@ -24,7 +24,7 @@ ark-serialize = { version = "0.6.0", features = [ "derive" ] }
 ark-ff = { version = "0.6.0", features = [ "std" ] }
 ark-ec = { version = "0.6.0", features = [ "std" ] }
 blake2s_simd = "1.0"
-thiserror = "1.0"
+thiserror = "2.0"
 bincode = "1.2"
 
 [dev-dependencies]
