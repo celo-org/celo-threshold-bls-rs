@@ -509,14 +509,18 @@ pub unsafe extern "C" fn combine(
 #[unsafe(no_mangle)]
 /// Deserializes a public key from the provided buffer
 ///
+/// * pubkey_buf: A buffer of exactly `PUBKEY_LEN` bytes
+/// * pubkey: Pointer to the memory where the public key handle will be written to
+///
 /// # Safety
 /// - **This function will dereference the provided pointers. If any invalid pointers are passed
 ///   then the software will crash**.
 /// - If NULL pointers are passed, the function will return false
+/// - If the buffer does not hold exactly `PUBKEY_LEN` bytes, the function will return false
 ///
 /// Returns true if successful, otherwise false.
 pub unsafe extern "C" fn deserialize_pubkey(
-    pubkey_buf: *const u8,
+    pubkey_buf: *const Buffer,
     pubkey: *mut *mut PublicKey,
 ) -> bool {
     unsafe { deserialize(pubkey_buf, PUBKEY_LEN, pubkey) }
@@ -525,14 +529,18 @@ pub unsafe extern "C" fn deserialize_pubkey(
 #[unsafe(no_mangle)]
 /// Deserializes a private key from the provided buffer
 ///
+/// * privkey_buf: A buffer of exactly `PRIVKEY_LEN` bytes
+/// * privkey: Pointer to the memory where the private key handle will be written to
+///
 /// # Safety
 /// - **This function will dereference the provided pointers. If any invalid pointers are passed
 ///   then the software will crash**.
 /// - If NULL pointers are passed, the function will return false
+/// - If the buffer does not hold exactly `PRIVKEY_LEN` bytes, the function will return false
 ///
 /// Returns true if successful, otherwise false.
 pub unsafe extern "C" fn deserialize_privkey(
-    privkey_buf: *const u8,
+    privkey_buf: *const Buffer,
     privkey: *mut *mut PrivateKey,
 ) -> bool {
     unsafe { deserialize(privkey_buf, PRIVKEY_LEN, privkey) }
@@ -541,13 +549,17 @@ pub unsafe extern "C" fn deserialize_privkey(
 #[unsafe(no_mangle)]
 /// Deserializes a signature from the provided buffer
 ///
+/// * sig_buf: A buffer of exactly `SIGNATURE_LEN` bytes
+/// * sig: Pointer to the memory where the signature handle will be written to
+///
 /// # Safety
 /// - **This function will dereference the provided pointers. If any invalid pointers are passed
 ///   then the software will crash**.
 /// - If NULL pointers are passed, the function will return false
+/// - If the buffer does not hold exactly `SIGNATURE_LEN` bytes, the function will return false
 ///
 /// Returns true if successful, otherwise false.
-pub unsafe extern "C" fn deserialize_sig(sig_buf: *const u8, sig: *mut *mut Signature) -> bool {
+pub unsafe extern "C" fn deserialize_sig(sig_buf: *const Buffer, sig: *mut *mut Signature) -> bool {
     unsafe { deserialize(sig_buf, SIGNATURE_LEN, sig) }
 }
 
@@ -596,18 +608,29 @@ pub unsafe extern "C" fn serialize_sig(sig: *const Signature, sig_buf: *mut *mut
     unsafe { serialize(sig, SIGNATURE_LEN, sig_buf) }
 }
 
-// The null checks live here rather than in the six exported wrappers so that no
-// call site can omit them; every wrapper documents that NULL returns false.
+// The null and length checks live here rather than in the six exported wrappers
+// so that no call site can omit them; every wrapper documents both.
+//
+// `len` is the serialized size of `T`, and the buffer has to hold exactly that.
+// All three values are fixed-size, so a buffer of any other length is the
+// caller holding something else — and reading `len` bytes from it, which a
+// pointer without a length left no way to avoid, runs off the end of their
+// allocation.
 unsafe fn deserialize<T: DeserializeOwned>(
-    in_buf: *const u8,
+    in_buf: *const Buffer,
     len: usize,
     out: *mut *mut T,
 ) -> bool {
-    if in_buf.is_null() || out.is_null() {
+    if out.is_null() {
         return false;
     }
 
-    let buf = unsafe { std::slice::from_raw_parts(in_buf, len) };
+    let Some(buf) = (unsafe { buffer_slice(in_buf) }) else {
+        return false;
+    };
+    if buf.len() != len {
+        return false;
+    }
 
     let obj = if let Ok(res) = serialization::deserialize(buf) {
         res
@@ -1088,7 +1111,7 @@ mod tests {
         assert_eq!(&unmarshalled, private_key);
 
         let mut de = MaybeUninit::<*mut PrivateKey>::uninit();
-        let ret = unsafe { deserialize_privkey(&message[0] as *const u8, de.as_mut_ptr()) };
+        let ret = unsafe { deserialize_privkey(&Buffer::from(message), de.as_mut_ptr()) };
         assert!(ret);
         let de = unsafe { de.assume_init() };
 
@@ -1122,7 +1145,7 @@ mod tests {
         assert_eq!(&unmarshalled, public_key);
 
         let mut de = MaybeUninit::<*mut PublicKey>::uninit();
-        let ret = unsafe { deserialize_pubkey(&message[0] as *const u8, de.as_mut_ptr()) };
+        let ret = unsafe { deserialize_pubkey(&Buffer::from(message), de.as_mut_ptr()) };
         assert!(ret);
         let de = unsafe { de.assume_init() };
 
@@ -1140,7 +1163,7 @@ mod tests {
         assert_eq!(identity.len(), PUBKEY_LEN);
 
         let mut pubkey = MaybeUninit::<*mut PublicKey>::uninit();
-        let ret = unsafe { deserialize_pubkey(&identity[0] as *const u8, pubkey.as_mut_ptr()) };
+        let ret = unsafe { deserialize_pubkey(&Buffer::from(&identity[..]), pubkey.as_mut_ptr()) };
         assert!(ret, "the identity encoding is well-formed");
         let pubkey = unsafe { pubkey.assume_init() };
 
@@ -1192,9 +1215,70 @@ mod tests {
         unsafe {
             assert!(!serialize_pubkey(pubkey, std::ptr::null_mut()));
             assert!(!deserialize_pubkey(
-                marshalled.as_ptr(),
+                &Buffer::from(&marshalled[..]),
                 std::ptr::null_mut()
             ));
+        }
+    }
+
+    // The three fixed-size deserializes read a constant number of bytes. While
+    // they took a bare pointer, a caller holding fewer than that had no way to
+    // say so and the read ran off the end of their allocation.
+    #[test]
+    fn deserialization_rejects_a_wrong_length_buffer() {
+        use threshold_bls::group::Element;
+
+        let seed = b"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+        let mut keypair = MaybeUninit::<*mut Keypair>::uninit();
+        assert!(unsafe { keygen(&Buffer::from(&seed[..]), keypair.as_mut_ptr()) });
+        let keypair = unsafe { &*keypair.assume_init() };
+
+        let pubkey = bincode::serialize(unsafe { &*public_key_ptr(keypair) }).unwrap();
+        let privkey = bincode::serialize(unsafe { &*private_key_ptr(keypair) }).unwrap();
+        let sig = bincode::serialize(&Signature::new()).unwrap();
+        let encodings = [
+            (pubkey, PUBKEY_LEN),
+            (privkey, PRIVKEY_LEN),
+            (sig, SIGNATURE_LEN),
+        ];
+
+        let mut pubkey_out = MaybeUninit::<*mut PublicKey>::uninit();
+        let mut privkey_out = MaybeUninit::<*mut PrivateKey>::uninit();
+        let mut sig_out = MaybeUninit::<*mut Signature>::uninit();
+
+        // Each encoding is exactly the length the header states, and is
+        // accepted at that length — so the rejections below are the length and
+        // nothing else.
+        for (encoding, len) in &encodings {
+            assert_eq!(encoding.len(), *len);
+        }
+        unsafe {
+            assert!(deserialize_pubkey(
+                &Buffer::from(&encodings[0].0[..]),
+                pubkey_out.as_mut_ptr()
+            ));
+            assert!(deserialize_privkey(
+                &Buffer::from(&encodings[1].0[..]),
+                privkey_out.as_mut_ptr()
+            ));
+            assert!(deserialize_sig(
+                &Buffer::from(&encodings[2].0[..]),
+                sig_out.as_mut_ptr()
+            ));
+        }
+
+        for (encoding, len) in &encodings {
+            let mut too_long = encoding.clone();
+            too_long.push(0);
+
+            for wrong in [&encoding[..0], &encoding[..len - 1], &too_long[..]] {
+                let buffer = Buffer::from(wrong);
+                unsafe {
+                    assert!(!deserialize_pubkey(&buffer, pubkey_out.as_mut_ptr()));
+                    assert!(!deserialize_privkey(&buffer, privkey_out.as_mut_ptr()));
+                    assert!(!deserialize_sig(&buffer, sig_out.as_mut_ptr()));
+                }
+            }
         }
     }
 

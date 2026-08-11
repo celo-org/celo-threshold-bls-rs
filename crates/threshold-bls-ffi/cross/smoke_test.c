@@ -181,13 +181,15 @@ static void serialization(void) {
 
     uint8_t *pub_bytes = NULL;
     CHECK(serialize_pubkey(public_key_ptr(keypair), &pub_bytes));
+    Buffer pub_buf = buf(pub_bytes, PUBKEY_LEN);
     PublicKey *pub = NULL;
-    CHECK(deserialize_pubkey(pub_bytes, &pub));
+    CHECK(deserialize_pubkey(&pub_buf, &pub));
 
     uint8_t *priv_bytes = NULL;
     CHECK(serialize_privkey(private_key_ptr(keypair), &priv_bytes));
+    Buffer priv_buf = buf(priv_bytes, PRIVKEY_LEN);
     PrivateKey *priv = NULL;
-    CHECK(deserialize_privkey(priv_bytes, &priv));
+    CHECK(deserialize_privkey(&priv_buf, &priv));
 
     /* Round-tripped keys must still work together. */
     Buffer message = buf(MESSAGE, sizeof MESSAGE);
@@ -197,7 +199,7 @@ static void serialization(void) {
 
     uint8_t *sig_bytes = NULL;
     Signature *sig = NULL;
-    CHECK(deserialize_sig(signature.ptr, &sig));
+    CHECK(deserialize_sig(&signature, &sig));
     CHECK(serialize_sig(sig, &sig_bytes));
     CHECK(memcmp(sig_bytes, signature.ptr, SIGNATURE_LEN) == 0);
 
@@ -239,8 +241,9 @@ static void threshold_signing(void) {
     Buffer threshold_sig;
     CHECK(combine(THRESHOLD, &flattened, &threshold_sig));
 
+    Buffer threshold_pubkey = buf(THRESHOLD_PUBKEY, sizeof THRESHOLD_PUBKEY);
     PublicKey *pub = NULL;
-    CHECK(deserialize_pubkey(THRESHOLD_PUBKEY, &pub));
+    CHECK(deserialize_pubkey(&threshold_pubkey, &pub));
     CHECK(verify(pub, &message, &threshold_sig));
 
     /* A partial from one signer is not a signature under the threshold key. */
@@ -283,8 +286,9 @@ static void blind_threshold_signing(void) {
     Buffer signature;
     CHECK(unblind(&blinded_sig, blinding_factor, &signature));
 
+    Buffer threshold_pubkey = buf(THRESHOLD_PUBKEY, sizeof THRESHOLD_PUBKEY);
     PublicKey *pub = NULL;
-    CHECK(deserialize_pubkey(THRESHOLD_PUBKEY, &pub));
+    CHECK(deserialize_pubkey(&threshold_pubkey, &pub));
     CHECK(verify(pub, &message, &signature));
 
     free_vector(signature.ptr, signature.len);
@@ -398,6 +402,82 @@ static void buffers_with_no_memory_are_rejected(void) {
 }
 
 /*
+ * The three fixed-size deserializes read PUBKEY_LEN, PRIVKEY_LEN and
+ * SIGNATURE_LEN bytes. They used to take a bare pointer, so a caller holding
+ * fewer bytes than that could not say so and the read ran past the end of their
+ * allocation. Each is called with the right length first, so `false` means the
+ * length was caught rather than the bytes being wrong anyway.
+ */
+static void wrong_length_buffers_are_rejected(void) {
+    Buffer seed = buf(SEED, sizeof SEED);
+    struct Keypair *keypair = NULL;
+    CHECK(keygen(&seed, &keypair));
+
+    uint8_t *pub_bytes = NULL;
+    uint8_t *priv_bytes = NULL;
+    CHECK(serialize_pubkey(public_key_ptr(keypair), &pub_bytes));
+    CHECK(serialize_privkey(private_key_ptr(keypair), &priv_bytes));
+
+    Buffer message = buf(MESSAGE, sizeof MESSAGE);
+    Buffer signature;
+    CHECK(sign(private_key_ptr(keypair), &message, &signature));
+
+    PublicKey *pub = NULL;
+    PrivateKey *priv = NULL;
+    Signature *sig = NULL;
+
+    Buffer pub_buf = buf(pub_bytes, PUBKEY_LEN);
+    Buffer priv_buf = buf(priv_bytes, PRIVKEY_LEN);
+    CHECK(deserialize_pubkey(&pub_buf, &pub));
+    CHECK(deserialize_privkey(&priv_buf, &priv));
+    CHECK(deserialize_sig(&signature, &sig));
+
+    /* One byte short, and empty. */
+    Buffer pub_short = buf(pub_bytes, PUBKEY_LEN - 1);
+    Buffer priv_short = buf(priv_bytes, PRIVKEY_LEN - 1);
+    Buffer sig_short = buf(signature.ptr, SIGNATURE_LEN - 1);
+    Buffer empty = buf(pub_bytes, 0);
+
+    CHECK(!deserialize_pubkey(&pub_short, &pub));
+    CHECK(!deserialize_privkey(&priv_short, &priv));
+    CHECK(!deserialize_sig(&sig_short, &sig));
+    CHECK(!deserialize_pubkey(&empty, &pub));
+    CHECK(!deserialize_privkey(&empty, &priv));
+    CHECK(!deserialize_sig(&empty, &sig));
+
+    /*
+     * And too long: a valid encoding with one byte appended. This is the case
+     * that needs the length check rather than the parser — bincode reads the
+     * leading bytes it needs and ignores the rest, so without it a trailing
+     * byte would be accepted and the caller told nothing.
+     */
+    uint8_t pub_long[PUBKEY_LEN + 1];
+    uint8_t priv_long[PRIVKEY_LEN + 1];
+    uint8_t sig_long[SIGNATURE_LEN + 1];
+    memcpy(pub_long, pub_bytes, PUBKEY_LEN);
+    memcpy(priv_long, priv_bytes, PRIVKEY_LEN);
+    memcpy(sig_long, signature.ptr, SIGNATURE_LEN);
+    pub_long[PUBKEY_LEN] = 0;
+    priv_long[PRIVKEY_LEN] = 0;
+    sig_long[SIGNATURE_LEN] = 0;
+
+    Buffer pub_over = buf(pub_long, sizeof pub_long);
+    Buffer priv_over = buf(priv_long, sizeof priv_long);
+    Buffer sig_over = buf(sig_long, sizeof sig_long);
+    CHECK(!deserialize_pubkey(&pub_over, &pub));
+    CHECK(!deserialize_privkey(&priv_over, &priv));
+    CHECK(!deserialize_sig(&sig_over, &sig));
+
+    free_vector(signature.ptr, signature.len);
+    free_vector(priv_bytes, PRIVKEY_LEN);
+    free_vector(pub_bytes, PUBKEY_LEN);
+    destroy_sig(sig);
+    destroy_privkey(priv);
+    destroy_pubkey(pub);
+    destroy_keypair(keypair);
+}
+
+/*
  * The header asks for a seed of SEED_LEN bytes, and the library now holds
  * callers to it. A shorter one used to be sliced to length, which panicked, and
  * a panic crossing `extern "C"` aborts the process that made the call. Each
@@ -467,6 +547,7 @@ int main(void) {
     threshold_operations_reject_null();
     null_arguments_are_rejected();
     buffers_with_no_memory_are_rejected();
+    wrong_length_buffers_are_rejected();
     short_seeds_are_rejected();
     empty_polynomials_are_rejected();
     destructors_accept_null();
