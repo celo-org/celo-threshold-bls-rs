@@ -18,6 +18,10 @@ jobs:
       - uses: taiki-e/install-action@nextest
       - name: cargo test
         run: cargo nextest run --workspace --all-features
+      # nextest does not run doctests, and they are the crate's primary usage
+      # documentation, so they need their own invocation.
+      - name: cargo test --doc
+        run: cargo test --locked --workspace --all-features --doc
 
   cargo-lint:
     runs-on: ubuntu-latest

@@ -19,8 +19,10 @@ cargo test -p threshold-bls poly::      # single test / module filter
 ```
 
 - CI (`.github/workflows/rust_ci.yml`) runs `cargo nextest run --workspace
-  --all-features`. nextest does not run doctests — the doctests in
-  `threshold-bls/src/lib.rs` only execute under plain `cargo test`.
+  --all-features`, then `cargo test --doc` as a second step. nextest does not
+  run doctests, so anything that only executes under plain `cargo test` — the
+  doctests in `threshold-bls/src/lib.rs` and `sig/sig.rs` — needs that step to
+  be covered.
 - `just test` (and `just test-cached`, which adds cargo/target cache volumes)
   runs `cargo test --features wasm` inside the linux/amd64 Docker build image —
   the same environment the released libraries are built in. Requires Docker.
