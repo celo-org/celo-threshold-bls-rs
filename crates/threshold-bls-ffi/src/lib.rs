@@ -1,6 +1,16 @@
 // add this so that we can be more explicit about unsafe calls inside unsafe functions
 #![allow(unused_unsafe)]
 
+// This crate is nothing but its binding surfaces. With none of them enabled it
+// still builds, and produces a library exporting no symbols — which is what
+// shipped as an empty Android `.so` until 0025630 gave the cross builds a
+// default feature. Refuse to compile instead of handing anyone that artifact.
+#[cfg(not(any(feature = "ffi", feature = "wasm", feature = "jvm")))]
+compile_error!(
+    "threshold-bls-ffi builds a binding surface and has none enabled; pass --features with one of \
+     ffi (the C ABI), wasm or jvm"
+);
+
 // The three binding surfaces are independent: enabling several features
 // compiles all of them, so `--all-features` builds, tests and lints the lot.
 #[cfg(feature = "wasm")]

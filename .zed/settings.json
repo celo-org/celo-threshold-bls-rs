@@ -1,0 +1,14 @@
+{
+  // threshold-bls-ffi refuses to compile without a binding surface feature, so
+  // an editor analysing the workspace with default features reports only that
+  // error. Analyse with every feature, as CI builds, tests and lints do.
+  "lsp": {
+    "rust-analyzer": {
+      "initialization_options": {
+        "cargo": {
+          "features": "all"
+        }
+      }
+    }
+  }
+}

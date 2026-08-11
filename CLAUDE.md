@@ -107,6 +107,14 @@ Each surface hangs off its own `#[cfg(feature = "...")]`, so the three are
 independent: `--all-features` compiles wasm, jvm and ffi together, and builds,
 tests and lints all of them in one run.
 
+Enabling none of them is a `compile_error!`. The crate is nothing but its
+binding surfaces, and a featureless build used to succeed and produce a library
+exporting no symbols — the empty Android `.so`. So `cargo build` with no
+features fails, in this crate and therefore at the workspace root; use
+`--all-features`, or `-p threshold-bls` for the cryptography crate alone. The
+checked-in `.zed/settings.json` and `.vscode/settings.json` tell rust-analyzer
+to analyse with all features, so editors do not report the guard as an error.
+
 This replaced a `core::cfg_select!` whose first matching arm won, in the order
 wasm, jvm, ffi. Since every CI job passes `--all-features`, only `wasm.rs` was
 ever compiled: the `ffi.rs` tests were skipped, clippy never saw `ffi.rs` or
