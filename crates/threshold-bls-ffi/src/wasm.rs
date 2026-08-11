@@ -262,12 +262,29 @@ pub fn partial_verify_blind_signature(
 ///
 /// # Throws
 ///
+/// - If the flattened vector is not a whole number of partial signatures
 /// - If the aggregation fails
 ///
 /// # Safety
 ///
 /// - This function does not check if the signatures are valid!
 pub fn combine(threshold: usize, signatures: Vec<u8>) -> Result<Vec<u8>> {
+    try_combine(threshold, signatures).map_err(|err| JsValue::from_str(&err))
+}
+
+fn try_combine(threshold: usize, signatures: Vec<u8>) -> TryResult<Vec<u8>> {
+    // The caller flattens the partial signatures, so the boundaries between
+    // them are implied by the length alone. A remainder means the flattening
+    // was wrong, and every chunk after the first mistake is cut from the middle
+    // of two partials.
+    if !signatures.len().is_multiple_of(PARTIAL_SIG_LENGTH) {
+        return Err(format!(
+            "expected a multiple of {} bytes, one per partial signature, got {}",
+            PARTIAL_SIG_LENGTH,
+            signatures.len()
+        ));
+    }
+
     // break the flattened vector to a Vec<Vec<u8>> where each element is a serialized signature
     let sigs = signatures
         .chunks(PARTIAL_SIG_LENGTH)
@@ -275,7 +292,7 @@ pub fn combine(threshold: usize, signatures: Vec<u8>) -> Result<Vec<u8>> {
         .collect::<Vec<Vec<u8>>>();
 
     SigScheme::aggregate(threshold, &sigs)
-        .map_err(|err| JsValue::from_str(&format!("could not aggregate sigs: {}", err,)))
+        .map_err(|err| format!("could not aggregate sigs: {}", err))
 }
 
 ///////////////////////////////////////////////////////////////////////////
@@ -545,6 +562,44 @@ mod tests {
         assert!(try_threshold_keygen(MAX_SHARES + 1, 1, &seed).is_err());
         assert!(try_threshold_keygen(usize::MAX, 1, &seed).is_err());
         assert!(try_threshold_keygen(0, 1, &seed).is_err());
+    }
+
+    // The caller flattens the partials, so a mistake there is invisible to
+    // `combine` except in the length. Chunking a remainder cuts the tail out of
+    // the middle of two partials, and the count handed to `aggregate` is one
+    // too high.
+    #[test]
+    fn a_flattened_vector_that_is_not_whole_partials_is_rejected() {
+        let keys = try_threshold_keygen(5, 3, &[7u8; SEED_LEN]).unwrap();
+        let msg = vec![1, 9, 6, 9];
+
+        let mut flattened = Vec::new();
+        for index in 0..3 {
+            flattened.extend(partial_sign(&keys.get_share(index).unwrap(), &msg).unwrap());
+        }
+        assert_eq!(flattened.len(), 3 * PARTIAL_SIG_LENGTH);
+        assert!(try_combine(3, flattened.clone()).is_ok());
+
+        // One byte over, one byte short, and a whole partial's worth of
+        // padding that leaves the boundaries misaligned.
+        let mut one_over = flattened.clone();
+        one_over.push(0);
+        let one_short = flattened[..flattened.len() - 1].to_vec();
+        let mut half_a_partial = flattened.clone();
+        half_a_partial.extend(vec![0u8; PARTIAL_SIG_LENGTH / 2]);
+
+        // The error names the length, rather than the deserialization failure
+        // the misaligned tail would otherwise produce. That failure is what
+        // rejects these inputs today, so asserting on the message is what
+        // distinguishes this check from the parser catching it by accident.
+        for wrong in [one_over, one_short, half_a_partial] {
+            let len = wrong.len();
+            let err = try_combine(3, wrong).expect_err(&format!("combine accepted {len} bytes"));
+            assert!(
+                err.contains("expected a multiple of"),
+                "rejected {len} bytes, but as {err}"
+            );
+        }
     }
 
     // `numShares` is the caller's only guard, and it was advisory.
