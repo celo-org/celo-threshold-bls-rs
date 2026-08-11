@@ -250,38 +250,50 @@ bool combine(size_t threshold, const struct Buffer *signatures, struct Buffer *a
 /**
  * Deserializes a public key from the provided buffer
  *
+ * * pubkey_buf: A buffer of exactly `PUBKEY_LEN` bytes
+ * * pubkey: Pointer to the memory where the public key handle will be written to
+ *
  * # Safety
  * - **This function will dereference the provided pointers. If any invalid pointers are passed
  *   then the software will crash**.
  * - If NULL pointers are passed, the function will return false
+ * - If the buffer does not hold exactly `PUBKEY_LEN` bytes, the function will return false
  *
  * Returns true if successful, otherwise false.
  */
-bool deserialize_pubkey(const uint8_t *pubkey_buf, PublicKey **pubkey);
+bool deserialize_pubkey(const struct Buffer *pubkey_buf, PublicKey **pubkey);
 
 /**
  * Deserializes a private key from the provided buffer
  *
+ * * privkey_buf: A buffer of exactly `PRIVKEY_LEN` bytes
+ * * privkey: Pointer to the memory where the private key handle will be written to
+ *
  * # Safety
  * - **This function will dereference the provided pointers. If any invalid pointers are passed
  *   then the software will crash**.
  * - If NULL pointers are passed, the function will return false
+ * - If the buffer does not hold exactly `PRIVKEY_LEN` bytes, the function will return false
  *
  * Returns true if successful, otherwise false.
  */
-bool deserialize_privkey(const uint8_t *privkey_buf, PrivateKey **privkey);
+bool deserialize_privkey(const struct Buffer *privkey_buf, PrivateKey **privkey);
 
 /**
  * Deserializes a signature from the provided buffer
  *
+ * * sig_buf: A buffer of exactly `SIGNATURE_LEN` bytes
+ * * sig: Pointer to the memory where the signature handle will be written to
+ *
  * # Safety
  * - **This function will dereference the provided pointers. If any invalid pointers are passed
  *   then the software will crash**.
  * - If NULL pointers are passed, the function will return false
+ * - If the buffer does not hold exactly `SIGNATURE_LEN` bytes, the function will return false
  *
  * Returns true if successful, otherwise false.
  */
-bool deserialize_sig(const uint8_t *sig_buf, Signature **sig);
+bool deserialize_sig(const struct Buffer *sig_buf, Signature **sig);
 
 /**
  * Serializes a public key to the provided buffer
