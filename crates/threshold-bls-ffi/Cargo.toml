@@ -21,7 +21,7 @@ threshold-bls = { path = "../threshold-bls", default-features = false }
 rand_core = { version = "0.6.4", default-features = false }
 rand_chacha = { version = "0.3.1", default-features = false }
 
-bincode = { version = "1.2.1", default-features = false }
+bincode = { version = "3.0.0", default-features = false }
 serde = { version = "1", default-features = false, optional = true }
 
 # No code here calls getrandom; `rand` pulls it in. It is listed so the wasm
