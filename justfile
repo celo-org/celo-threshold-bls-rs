@@ -4,6 +4,11 @@
 # environment variable (`FEATURES=ffi just android`) or as a command line
 # assignment (`just RUST_VERSION=1.97.1 all`). Lower case variables are derived
 # and not meant to be set.
+#
+# Every cargo invocation passes `--locked`: the mobile libraries ship
+# unversioned, so a build must resolve the committed Cargo.lock and nothing
+# else. A dependency update is then a commit rather than whatever the registry
+# happened to serve. `cargo fmt` is the exception — it takes no such flag.
 
 RUST_VERSION := env("RUST_VERSION", "1.97.1")
 
@@ -61,12 +66,29 @@ wasm: build-docker-image
     set -euo pipefail
     mkdir -p {{ output_dir }}/wasm
     cid=$(docker create --platform=linux/amd64 \
-        -w /app/crates/threshold-bls-ffi \
+        -w /app \
         {{ image_name }} \
-        wasm-pack build --target nodejs -- --features=wasm)
+        just wasm-pkg)
     trap 'docker rm -f "$cid" >/dev/null' EXIT
     docker start -a "$cid"
     docker cp "$cid":/app/crates/threshold-bls-ffi/pkg/. {{ output_dir }}/wasm/
+
+# Used by the `wasm` recipe inside the build container and by CI on the host,
+# so both build the package the same way.
+#
+# The `cargo metadata` call is what enforces the lockfile here: wasm-pack
+# resolves the dependency graph itself before it hands anything to cargo, and
+# that resolution rewrites Cargo.lock, so `--locked` in the passthrough alone
+# arrives after the damage. Verified by requiring a version the lockfile does
+# not hold: metadata fails, the passthrough alone does not.
+
+# Build the npm package into crates/threshold-bls-ffi/pkg
+wasm-pkg:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    cargo metadata --locked --format-version 1 > /dev/null
+    cd {{ justfile_directory() }}/crates/threshold-bls-ffi
+    wasm-pack build --target nodejs -- --locked --features=wasm
 
 # Build the JNI shared library into output/jvm
 jvm: build-docker-image
@@ -76,7 +98,7 @@ jvm: build-docker-image
     cid=$(docker create --platform=linux/amd64 \
         -w /app/crates/threshold-bls-ffi \
         {{ image_name }} \
-        cargo build --release --features=jvm)
+        cargo build --locked --release --features=jvm)
     trap 'docker rm -f "$cid" >/dev/null' EXIT
     docker start -a "$cid"
     docker cp "$cid":/app/target/release/{{ lib_name }}.so {{ output_dir }}/jvm/
@@ -104,7 +126,7 @@ ios: ios-setup
     archives=()
     for target in {{ ios_targets }}; do
         IPHONEOS_DEPLOYMENT_TARGET={{ ios_deployment_target }} \
-            cargo build --package threshold-bls-ffi --no-default-features {{ cargo_features }} \
+            cargo build --locked --package threshold-bls-ffi --no-default-features {{ cargo_features }} \
                 --target "$target" --release --lib
         archives+=("{{ target_dir }}/$target/release/{{ lib_name }}.a")
     done
@@ -155,7 +177,7 @@ build-android-target target clang_prefix:
         AR=llvm-ar \
         CARGO_BUILD_RUSTFLAGS="{{ android_rustflags }}" \
         "$linker_var=$clang" \
-        cargo build --package threshold-bls-ffi --no-default-features {{ cargo_features }} \
+        cargo build --locked --package threshold-bls-ffi --no-default-features {{ cargo_features }} \
             --target {{ target }} --release --lib
 
 # The tests also run natively; this recipe exists to run them against the same
@@ -163,7 +185,7 @@ build-android-target target clang_prefix:
 
 # Run the tests in Docker
 test: build-docker-image
-    docker run --platform=linux/amd64 --rm -w /app {{ image_name }} cargo test --features wasm -- --nocapture
+    docker run --platform=linux/amd64 --rm -w /app {{ image_name }} cargo test --locked --features wasm -- --nocapture
 
 # Run the tests in Docker, caching Cargo and target directories in volumes
 test-cached: create-cache-volumes build-docker-image
@@ -171,14 +193,14 @@ test-cached: create-cache-volumes build-docker-image
         -v {{ cargo_cache_volume }}:/root/.cargo \
         -v {{ target_cache_volume }}:/app/target \
         -v {{ justfile_directory() }}:/app \
-        -w /app {{ image_name }} cargo test --features wasm -- --nocapture
+        -w /app {{ image_name }} cargo test --locked --features wasm -- --nocapture
 
 create-cache-volumes:
     docker volume create {{ cargo_cache_volume }}
     docker volume create {{ target_cache_volume }}
 
 lint:
-    cargo clippy --all-targets --all-features -- -D warnings
+    cargo clippy --locked --all-targets --all-features -- -D warnings
 
 fmt:
     cargo fmt --all -- --check
@@ -247,7 +269,7 @@ check-abi:
     #!/usr/bin/env bash
     set -euo pipefail
     cross={{ justfile_directory() }}/crates/threshold-bls-ffi/cross
-    cargo build --package threshold-bls-ffi --no-default-features --features ffi --release
+    cargo build --locked --package threshold-bls-ffi --no-default-features --features ffi --release
 
     tmp=$(mktemp -d)
     trap 'rm -rf "$tmp"' EXIT

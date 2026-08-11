@@ -28,6 +28,7 @@ Releases are git tags on this repository; the crates are not published to crates
 - all: Both crates moved to edition 2024. The code needs Rust 1.88 or newer; the declared MSRV stays at the pinned toolchain, 1.97. No API, behaviour or wire format changed, and the C ABI's exported symbols and generated header are byte-identical ([#222](https://github.com/celo-org/celo-threshold-bls-rs/pull/222)).
 - build: Tightened the release profile (incremental off, `codegen-units = 1`) for smaller shipped binaries across all release artifacts ([4385993](https://github.com/celo-org/celo-threshold-bls-rs/commit/4385993)).
 - build: Release artifacts are built with a single justfile (`just wasm|jvm|android|ios`), replacing the previous Makefiles; all recipes except `ios` build in Docker ([#191](https://github.com/celo-org/celo-threshold-bls-rs/pull/191)).
+- build: Every cargo invocation in the justfile and in CI passes `--locked`, so a build resolves the committed `Cargo.lock` and fails rather than silently picking up a newer patch release. A dependency change is now a commit, `cargo audit` scans the graph that was built, and two builds of the same commit see the same sources. The wasm package is built through the new `just wasm-pkg` recipe, which gates on `cargo metadata --locked` because wasm-pack resolves dependencies itself before cargo sees the flag. The build image verifies the Android NDK and wasm-pack downloads against pinned SHA-256 checksums, and CI installs the same wasm-pack version the release image uses instead of the newest release.
 
 ### Removed
 
