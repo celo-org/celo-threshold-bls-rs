@@ -169,7 +169,7 @@ mod tests {
             + ThresholdScheme,
     {
         let (_, public) = shares::<B>(5, 4);
-        let identity = bincode::serialize(&B::Signature::new()).unwrap();
+        let identity = bincode::serialize(&B::Signature::zero()).unwrap();
         let partial = bincode::serialize(&Eval {
             index: 1,
             value: identity.clone(),

@@ -1198,7 +1198,7 @@ mod tests {
     fn identity_public_key_verifies_nothing() {
         use threshold_bls::group::Element;
 
-        let identity = bincode::serialize(&PublicKey::new()).unwrap();
+        let identity = bincode::serialize(&PublicKey::zero()).unwrap();
         assert_eq!(identity.len(), PUBKEY_LEN);
 
         let mut pubkey = MaybeUninit::<*mut PublicKey>::uninit();
@@ -1206,7 +1206,7 @@ mod tests {
         assert!(ret, "the identity encoding is well-formed");
         let pubkey = unsafe { pubkey.assume_init() };
 
-        let identity_sig = bincode::serialize(&Signature::new()).unwrap();
+        let identity_sig = bincode::serialize(&Signature::zero()).unwrap();
         for msg in [&b"attack at dawn"[..], b"totally different", b""] {
             let ret =
                 unsafe { verify(pubkey, &Buffer::from(msg), &Buffer::from(&identity_sig[..])) };
@@ -1274,7 +1274,7 @@ mod tests {
 
         let pubkey = bincode::serialize(unsafe { &*public_key_ptr(keypair) }).unwrap();
         let privkey = bincode::serialize(unsafe { &*private_key_ptr(keypair) }).unwrap();
-        let sig = bincode::serialize(&Signature::new()).unwrap();
+        let sig = bincode::serialize(&Signature::zero()).unwrap();
         let encodings = [
             (pubkey, PUBKEY_LEN),
             (privkey, PRIVKEY_LEN),

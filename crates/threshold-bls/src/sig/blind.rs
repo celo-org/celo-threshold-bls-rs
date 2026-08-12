@@ -41,7 +41,7 @@ impl<S: Scalar> Default for Token<S> {
 impl<S: Scalar> Token<S> {
     /// Instantiates a token with the `Zero` element of the underlying scalar
     pub fn new() -> Self {
-        Self(S::new())
+        Self(S::zero())
     }
 }
 
@@ -60,7 +60,7 @@ where
     ) -> Result<(Self::Token, Vec<u8>), Self::Error> {
         let r = I::Private::rand(rng);
 
-        let mut h = I::Signature::new();
+        let mut h = I::Signature::zero();
 
         // r * H(m)
         h.map(msg).map_err(|_| BLSError::HashingError)?;
@@ -156,7 +156,7 @@ mod tests {
         B: BlindScheme<Error = BlindError>,
     {
         let (_, public) = B::keypair(&mut thread_rng());
-        let identity = bincode::serialize(&B::Signature::new()).unwrap();
+        let identity = bincode::serialize(&B::Signature::zero()).unwrap();
         let (_, blinded_msg) = B::blind_msg(&[1, 9, 6, 9], &mut thread_rng()).unwrap();
 
         assert!(
@@ -168,7 +168,7 @@ mod tests {
         );
 
         assert!(matches!(
-            B::blind_verify(&B::Public::new(), &blinded_msg, &identity),
+            B::blind_verify(&B::Public::zero(), &blinded_msg, &identity),
             Err(BlindError::SignatureError(BLSError::InvalidPublicKey))
         ));
     }

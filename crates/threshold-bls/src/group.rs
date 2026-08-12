@@ -16,11 +16,11 @@ pub trait Element:
     type RHS;
 
     /// Returns the zero element of the group
-    fn new() -> Self;
+    fn zero() -> Self;
 
     /// Returns the group's generator: `1` for a scalar, which generates the
     /// field's additive group, and the fixed generator point for `G1` and `G2`.
-    /// Unlike [`Element::new`] this is not an identity; [`Curve::point`] returns
+    /// Unlike [`Element::zero`] this is not an identity; [`Curve::point`] returns
     /// it under the other name.
     fn one() -> Self;
 
@@ -32,11 +32,6 @@ pub trait Element:
 
     /// Samples a random element using the provided RNG
     fn rand<R: RngCore>(rng: &mut R) -> Self;
-
-    /// Returns the zero element of the group. An alias for [`Element::new`]
-    fn zero() -> Self {
-        Self::new()
-    }
 }
 
 /// Scalar can be multiplied by only a Scalar, no other elements.
@@ -69,7 +64,7 @@ pub trait Curve: Clone + Debug + Send + Sync {
 
     /// scalar returns the field's additive identity, zero.
     fn scalar() -> Self::Scalar {
-        Self::Scalar::new()
+        Self::Scalar::zero()
     }
 
     /// point returns the default additive generator of the group.

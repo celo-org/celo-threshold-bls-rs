@@ -138,7 +138,7 @@ pub struct GT(
 impl Element for Scalar {
     type RHS = Scalar;
 
-    fn new() -> Self {
+    fn zero() -> Self {
         Self(Zero::zero())
     }
 
@@ -196,7 +196,7 @@ impl fmt::Display for Scalar {
 impl Element for G1 {
     type RHS = Scalar;
 
-    fn new() -> Self {
+    fn zero() -> Self {
         Self(Zero::zero())
     }
 
@@ -311,7 +311,7 @@ impl fmt::Display for G1 {
 impl Element for G2 {
     type RHS = Scalar;
 
-    fn new() -> Self {
+    fn zero() -> Self {
         Self(Zero::zero())
     }
 
@@ -598,7 +598,7 @@ mod tests {
         ];
 
         for (msg, expected_hex) in cases {
-            let mut point = G1::new();
+            let mut point = G1::zero();
             point.map(msg).expect("hash to curve failed");
             let serialized = bincode::serialize(&point).unwrap();
             assert_eq!(hex::encode(&serialized), *expected_hex);
@@ -628,7 +628,7 @@ mod tests {
         ];
 
         for (msg, expected_hex) in cases {
-            let mut point = G2::new();
+            let mut point = G2::zero();
             point.map(msg).expect("hash to curve failed");
             let serialized = bincode::serialize(&point).unwrap();
             assert_eq!(hex::encode(&serialized), *expected_hex);
