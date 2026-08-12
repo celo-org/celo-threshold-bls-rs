@@ -78,13 +78,15 @@ fn try_blind(message: Vec<u8>, seed: &[u8]) -> TryResult<BlindedMessage> {
 ///
 /// - If unblinding fails.
 pub fn unblind(blinded_signature: &[u8], blinding_factor_buf: &[u8]) -> Result<Vec<u8>> {
+    try_unblind(blinded_signature, blinding_factor_buf).map_err(|err| JsValue::from_str(&err))
+}
+
+fn try_unblind(blinded_signature: &[u8], blinding_factor_buf: &[u8]) -> TryResult<Vec<u8>> {
     let blinding_factor: Token<PrivateKey> = serialization::deserialize(blinding_factor_buf)
-        .map_err(|err| {
-            JsValue::from_str(&format!("could not deserialize blinding factor {}", err))
-        })?;
+        .map_err(|err| format!("could not deserialize blinding factor {}", err))?;
 
     SigScheme::unblind_sig(&blinding_factor, blinded_signature)
-        .map_err(|err| JsValue::from_str(&format!("could not unblind signature {}", err)))
+        .map_err(|err| format!("could not unblind signature {}", err))
 }
 
 #[wasm_bindgen]
@@ -99,12 +101,15 @@ pub fn unblind(blinded_signature: &[u8], blinding_factor_buf: &[u8]) -> Result<V
 ///
 /// - If verification fails
 pub fn verify(public_key_buf: &[u8], message: &[u8], signature: &[u8]) -> Result<()> {
-    let public_key: PublicKey = serialization::deserialize(public_key_buf)
-        .map_err(|err| JsValue::from_str(&format!("could not deserialize public key {}", err)))?;
+    try_verify(public_key_buf, message, signature).map_err(|err| JsValue::from_str(&err))
+}
+
+fn try_verify(public_key_buf: &[u8], message: &[u8], signature: &[u8]) -> TryResult<()> {
+    let public_key = public_key(public_key_buf)?;
 
     // checks the signature on the message hash
     SigScheme::verify(&public_key, message, signature)
-        .map_err(|err| JsValue::from_str(&format!("signature verification failed: {}", err)))
+        .map_err(|err| format!("signature verification failed: {}", err))
 }
 
 #[wasm_bindgen(js_name = verifyBlindSignature)]
@@ -127,12 +132,20 @@ pub fn verify_blind_signature(
     message: &[u8],
     signature: &[u8],
 ) -> Result<()> {
-    let public_key: PublicKey = serialization::deserialize(public_key_buf)
-        .map_err(|err| JsValue::from_str(&format!("could not deserialize public key {}", err)))?;
+    try_verify_blind_signature(public_key_buf, message, signature)
+        .map_err(|err| JsValue::from_str(&err))
+}
+
+fn try_verify_blind_signature(
+    public_key_buf: &[u8],
+    message: &[u8],
+    signature: &[u8],
+) -> TryResult<()> {
+    let public_key = public_key(public_key_buf)?;
 
     // checks the pairing against the message point directly, without hashing
     SigScheme::blind_verify(&public_key, message, signature)
-        .map_err(|err| JsValue::from_str(&format!("signature verification failed: {}", err)))
+        .map_err(|err| format!("signature verification failed: {}", err))
 }
 
 ///////////////////////////////////////////////////////////////////////////
@@ -146,11 +159,13 @@ pub fn verify_blind_signature(
 ///
 /// - If signing fails
 pub fn sign(private_key_buf: &[u8], message: &[u8]) -> Result<Vec<u8>> {
-    let private_key: PrivateKey = serialization::deserialize(private_key_buf)
-        .map_err(|err| JsValue::from_str(&format!("could not deserialize private key {}", err)))?;
+    try_sign(private_key_buf, message).map_err(|err| JsValue::from_str(&err))
+}
 
-    SigScheme::sign(&private_key, message)
-        .map_err(|err| JsValue::from_str(&format!("could not sign message: {}", err)))
+fn try_sign(private_key_buf: &[u8], message: &[u8]) -> TryResult<Vec<u8>> {
+    let private_key = private_key(private_key_buf)?;
+
+    SigScheme::sign(&private_key, message).map_err(|err| format!("could not sign message: {}", err))
 }
 
 #[wasm_bindgen(js_name = signBlindedMessage)]
@@ -160,11 +175,14 @@ pub fn sign(private_key_buf: &[u8], message: &[u8]) -> Result<Vec<u8>> {
 ///
 /// - If signing fails
 pub fn sign_blinded_message(private_key_buf: &[u8], message: &[u8]) -> Result<Vec<u8>> {
-    let private_key: PrivateKey = serialization::deserialize(private_key_buf)
-        .map_err(|err| JsValue::from_str(&format!("could not deserialize private key {}", err)))?;
+    try_sign_blinded_message(private_key_buf, message).map_err(|err| JsValue::from_str(&err))
+}
+
+fn try_sign_blinded_message(private_key_buf: &[u8], message: &[u8]) -> TryResult<Vec<u8>> {
+    let private_key = private_key(private_key_buf)?;
 
     SigScheme::blind_sign(&private_key, message)
-        .map_err(|err| JsValue::from_str(&format!("could not sign message: {}", err)))
+        .map_err(|err| format!("could not sign message: {}", err))
 }
 
 #[wasm_bindgen(js_name = partialSign)]
@@ -178,12 +196,14 @@ pub fn sign_blinded_message(private_key_buf: &[u8], message: &[u8]) -> Result<Ve
 /// NOTE: This method must NOT be called with a PrivateKey which is not generated via a
 /// secret sharing scheme.
 pub fn partial_sign(share_buf: &[u8], message: &[u8]) -> Result<Vec<u8>> {
-    let share: Share<PrivateKey> = serialization::deserialize(share_buf).map_err(|err| {
-        JsValue::from_str(&format!("could not deserialize private key share {}", err))
-    })?;
+    try_partial_sign(share_buf, message).map_err(|err| JsValue::from_str(&err))
+}
+
+fn try_partial_sign(share_buf: &[u8], message: &[u8]) -> TryResult<Vec<u8>> {
+    let share = share(share_buf)?;
 
     SigScheme::partial_sign(&share, message)
-        .map_err(|err| JsValue::from_str(&format!("could not partially sign message: {}", err)))
+        .map_err(|err| format!("could not partially sign message: {}", err))
 }
 
 #[wasm_bindgen(js_name = partialSignBlindedMessage)]
@@ -197,12 +217,14 @@ pub fn partial_sign(share_buf: &[u8], message: &[u8]) -> Result<Vec<u8>> {
 /// NOTE: This method must NOT be called with a PrivateKey which is not generated via a
 /// secret sharing scheme.
 pub fn partial_sign_blinded_message(share_buf: &[u8], message: &[u8]) -> Result<Vec<u8>> {
-    let share: Share<PrivateKey> = serialization::deserialize(share_buf).map_err(|err| {
-        JsValue::from_str(&format!("could not deserialize private key share {}", err))
-    })?;
+    try_partial_sign_blinded_message(share_buf, message).map_err(|err| JsValue::from_str(&err))
+}
+
+fn try_partial_sign_blinded_message(share_buf: &[u8], message: &[u8]) -> TryResult<Vec<u8>> {
+    let share = share(share_buf)?;
 
     SigScheme::sign_blind_partial(&share, message)
-        .map_err(|err| JsValue::from_str(&format!("could not partially sign message: {}", err)))
+        .map_err(|err| format!("could not partially sign message: {}", err))
 }
 
 ///////////////////////////////////////////////////////////////////////////
@@ -217,11 +239,14 @@ pub fn partial_sign_blinded_message(share_buf: &[u8], message: &[u8]) -> Result<
 ///
 /// - If verification fails
 pub fn partial_verify(polynomial_buf: &[u8], blinded_message: &[u8], sig: &[u8]) -> Result<()> {
-    let polynomial: Poly<PublicKey> = serialization::deserialize(polynomial_buf)
-        .map_err(|err| JsValue::from_str(&format!("could not deserialize polynomial {}", err)))?;
+    try_partial_verify(polynomial_buf, blinded_message, sig).map_err(|err| JsValue::from_str(&err))
+}
+
+fn try_partial_verify(polynomial_buf: &[u8], blinded_message: &[u8], sig: &[u8]) -> TryResult<()> {
+    let polynomial = polynomial(polynomial_buf)?;
 
     SigScheme::partial_verify(&polynomial, blinded_message, sig)
-        .map_err(|err| JsValue::from_str(&format!("could not partially verify message: {}", err)))
+        .map_err(|err| format!("could not partially verify message: {}", err))
 }
 
 #[wasm_bindgen(js_name = partialVerifyBlindSignature)]
@@ -236,11 +261,19 @@ pub fn partial_verify_blind_signature(
     blinded_message: &[u8],
     sig: &[u8],
 ) -> Result<()> {
-    let polynomial: Poly<PublicKey> = serialization::deserialize(polynomial_buf)
-        .map_err(|err| JsValue::from_str(&format!("could not deserialize polynomial {}", err)))?;
+    try_partial_verify_blind_signature(polynomial_buf, blinded_message, sig)
+        .map_err(|err| JsValue::from_str(&err))
+}
+
+fn try_partial_verify_blind_signature(
+    polynomial_buf: &[u8],
+    blinded_message: &[u8],
+    sig: &[u8],
+) -> TryResult<()> {
+    let polynomial = polynomial(polynomial_buf)?;
 
     SigScheme::verify_blind_partial(&polynomial, blinded_message, sig)
-        .map_err(|err| JsValue::from_str(&format!("could not partially verify message: {}", err)))
+        .map_err(|err| format!("could not partially verify message: {}", err))
 }
 
 #[wasm_bindgen]
@@ -298,6 +331,29 @@ fn try_combine(threshold: usize, signatures: Vec<u8>) -> TryResult<Vec<u8>> {
 ///////////////////////////////////////////////////////////////////////////
 // Helpers
 ///////////////////////////////////////////////////////////////////////////
+
+// The four values callers hand over as bytes. Each message is written once here
+// rather than at every entry point that takes that type.
+
+fn public_key(buf: &[u8]) -> TryResult<PublicKey> {
+    serialization::deserialize(buf)
+        .map_err(|err| format!("could not deserialize public key {}", err))
+}
+
+fn private_key(buf: &[u8]) -> TryResult<PrivateKey> {
+    serialization::deserialize(buf)
+        .map_err(|err| format!("could not deserialize private key {}", err))
+}
+
+fn share(buf: &[u8]) -> TryResult<Share<PrivateKey>> {
+    serialization::deserialize(buf)
+        .map_err(|err| format!("could not deserialize private key share {}", err))
+}
+
+fn polynomial(buf: &[u8]) -> TryResult<Poly<PublicKey>> {
+    serialization::deserialize(buf)
+        .map_err(|err| format!("could not deserialize polynomial {}", err))
+}
 
 #[wasm_bindgen(js_name = thresholdKeygen)]
 /// Generates a t-of-n polynomial and private key shares
@@ -590,6 +646,117 @@ mod tests {
                 "rejected {len} bytes, but as {err}"
             );
         }
+    }
+
+    // Bytes that are not the type the entry point expects are reported as that
+    // type, so a caller can tell which argument they got wrong. One message per
+    // type, asserted where each type enters.
+    #[test]
+    fn malformed_bytes_are_reported_as_the_type_they_were_meant_to_be() {
+        let garbage = [7u8; 3];
+
+        let cases: Vec<(String, &str)> = vec![
+            (
+                try_verify(&garbage, b"msg", &garbage).unwrap_err(),
+                "could not deserialize public key",
+            ),
+            (
+                try_verify_blind_signature(&garbage, b"msg", &garbage).unwrap_err(),
+                "could not deserialize public key",
+            ),
+            (
+                try_sign(&garbage, b"msg").unwrap_err(),
+                "could not deserialize private key",
+            ),
+            (
+                try_sign_blinded_message(&garbage, b"msg").unwrap_err(),
+                "could not deserialize private key",
+            ),
+            (
+                try_partial_sign(&garbage, b"msg").unwrap_err(),
+                "could not deserialize private key share",
+            ),
+            (
+                try_partial_sign_blinded_message(&garbage, b"msg").unwrap_err(),
+                "could not deserialize private key share",
+            ),
+            (
+                try_partial_verify(&garbage, b"msg", &garbage).unwrap_err(),
+                "could not deserialize polynomial",
+            ),
+            (
+                try_partial_verify_blind_signature(&garbage, b"msg", &garbage).unwrap_err(),
+                "could not deserialize polynomial",
+            ),
+            (
+                try_unblind(&garbage, &garbage).unwrap_err(),
+                "could not deserialize blinding factor",
+            ),
+        ];
+
+        for (err, expected) in cases {
+            assert!(
+                err.starts_with(expected),
+                "{err} does not start with {expected}"
+            );
+        }
+    }
+
+    // The other half: well-formed arguments that do not go together. These are
+    // the paths a caller hits in production, and until the conversion moved to
+    // the boundary none of them could be asserted here.
+    #[test]
+    fn well_formed_arguments_that_do_not_match_are_rejected() {
+        let keypair = try_keygen([7u8; SEED_LEN].to_vec()).unwrap();
+        let other = try_keygen([9u8; SEED_LEN].to_vec()).unwrap();
+        let msg = b"attack at dawn";
+        let signature = try_sign(&keypair.private_key(), msg).unwrap();
+
+        assert!(try_verify(&keypair.public_key(), msg, &signature).is_ok());
+        assert!(
+            try_verify(&other.public_key(), msg, &signature)
+                .unwrap_err()
+                .starts_with("signature verification failed")
+        );
+        assert!(
+            try_verify(&keypair.public_key(), b"other message", &signature)
+                .unwrap_err()
+                .starts_with("signature verification failed")
+        );
+
+        // A signature is not a blinded message point, so blind verification of
+        // one fails rather than passing on a technicality.
+        assert!(
+            try_verify_blind_signature(&keypair.public_key(), &signature, &signature)
+                .unwrap_err()
+                .starts_with("signature verification failed")
+        );
+
+        // Unblinding does not validate: any token inverts against any signature
+        // point, so the wrong one yields a result that fails verification rather
+        // than an error. Only bytes that are not a signature are refused.
+        let blinded = try_blind(msg.to_vec(), &[3u8; SEED_LEN]).unwrap();
+        let mismatched = try_unblind(&signature, &blinded.blinding_factor()).unwrap();
+        assert!(try_verify(&keypair.public_key(), msg, &mismatched).is_err());
+        assert!(
+            try_unblind(&[1, 2, 3], &blinded.blinding_factor())
+                .unwrap_err()
+                .starts_with("could not unblind signature")
+        );
+
+        let keys = try_threshold_keygen(5, 3, &[7u8; SEED_LEN]).unwrap();
+        let partial = try_partial_sign(&keys.try_get_share(0).unwrap(), msg).unwrap();
+        assert!(try_partial_verify(&keys.polynomial(), msg, &partial).is_ok());
+        assert!(
+            try_partial_verify(&keys.polynomial(), b"other message", &partial)
+                .unwrap_err()
+                .starts_with("could not partially verify message")
+        );
+        assert!(
+            try_partial_verify_blind_signature(&keys.polynomial(), msg, &partial)
+                .unwrap_err()
+                .starts_with("could not partially verify message")
+        );
     }
 
     // `numShares` is the caller's only guard, and it was advisory.
