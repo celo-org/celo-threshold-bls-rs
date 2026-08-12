@@ -36,11 +36,6 @@ pub enum ThresholdError<I: SignatureScheme> {
     /// were fewer than the threshold
     #[error("not enough partial signatures: {0}/{1}")]
     NotEnoughPartialSignatures(usize, usize),
-
-    /// ZeroThreshold is raised if aggregation is attempted with a threshold of
-    /// zero, which would produce a signature from no partials at all
-    #[error("threshold must be at least one")]
-    ZeroThreshold,
 }
 
 impl<I: SignatureScheme> ThresholdScheme for I {
@@ -72,12 +67,12 @@ impl<I: SignatureScheme> ThresholdScheme for I {
     }
 
     fn aggregate(
-        threshold: usize,
+        public: &Poly<Self::Public>,
         partials: &[Partial],
     ) -> Result<Vec<u8>, <Self as ThresholdScheme>::Error> {
-        if threshold == 0 {
-            return Err(ThresholdError::ZeroThreshold);
-        }
+        // The polynomial always has at least one coefficient, so this is at
+        // least 1 and the zero-threshold case cannot arise from here.
+        let threshold = public.degree() + 1;
 
         if threshold > partials.len() {
             return Err(ThresholdError::NotEnoughPartialSignatures(
@@ -149,7 +144,7 @@ mod tests {
                 .iter()
                 .any(|p| T::partial_verify(&public, &msg, p).is_err())
         );
-        let final_sig = T::aggregate(threshold, &partials).unwrap();
+        let final_sig = T::aggregate(&public, &partials).unwrap();
 
         T::verify(public.public_key(), &msg, &final_sig).unwrap();
     }
@@ -190,8 +185,8 @@ mod tests {
             .map(|s| T::partial_sign(s, &msg).unwrap())
             .collect();
 
-        let from_low_indices = T::aggregate(threshold, &partials[0..3]).unwrap();
-        let from_high_indices = T::aggregate(threshold, &partials[2..5]).unwrap();
+        let from_low_indices = T::aggregate(&public, &partials[0..3]).unwrap();
+        let from_high_indices = T::aggregate(&public, &partials[2..5]).unwrap();
 
         assert_eq!(
             from_low_indices, from_high_indices,
@@ -201,25 +196,42 @@ mod tests {
     }
 
     #[test]
-    fn aggregate_rejects_a_zero_threshold_g1() {
-        aggregate_rejects_a_zero_threshold::<G1Scheme<PCurve>>();
+    fn aggregate_rejects_too_few_partials_g1() {
+        aggregate_rejects_too_few_partials::<G1Scheme<PCurve>>();
     }
 
     #[test]
-    fn aggregate_rejects_a_zero_threshold_g2() {
-        aggregate_rejects_a_zero_threshold::<G2Scheme<PCurve>>();
+    fn aggregate_rejects_too_few_partials_g2() {
+        aggregate_rejects_too_few_partials::<G2Scheme<PCurve>>();
     }
 
-    /// Aggregating over zero partials folds to the identity signature — a
-    /// valid-looking signature from no inputs at all — so a threshold of
-    /// zero is rejected outright.
-    fn aggregate_rejects_a_zero_threshold<T>()
+    /// Fewer partials than the polynomial's degree + 1 interpolate to a
+    /// different polynomial, whose constant term is a valid-looking signature
+    /// nobody produced. Nothing about the partials reveals that, so the count is
+    /// checked against the polynomial the caller supplies — while the threshold
+    /// was the caller's to state, too small a value returned that wrong
+    /// signature with no error at all.
+    fn aggregate_rejects_too_few_partials<T>()
     where
         T: ThresholdScheme<Error = ThresholdError<T>> + SignatureScheme,
     {
+        let threshold = 4;
+        let (shares, public) = shares::<T>(5, threshold);
+        let msg = vec![1, 9, 6, 9];
+
+        let partials: Vec<_> = shares
+            .iter()
+            .map(|s| T::partial_sign(s, &msg).unwrap())
+            .collect();
+
+        assert!(T::aggregate(&public, &partials[..threshold]).is_ok());
         assert!(matches!(
-            T::aggregate(0, &[]),
-            Err(ThresholdError::ZeroThreshold)
+            T::aggregate(&public, &partials[..threshold - 1]),
+            Err(ThresholdError::NotEnoughPartialSignatures(3, 4))
+        ));
+        assert!(matches!(
+            T::aggregate(&public, &[]),
+            Err(ThresholdError::NotEnoughPartialSignatures(0, 4))
         ));
     }
 
@@ -248,7 +260,7 @@ mod tests {
         partials.insert(0, partials[0].clone());
         partials.truncate(5);
 
-        let final_sig = T::aggregate(threshold, &partials).unwrap();
+        let final_sig = T::aggregate(&public, &partials).unwrap();
         T::verify(public.public_key(), &msg, &final_sig).unwrap();
     }
 
@@ -270,7 +282,7 @@ mod tests {
         T: ThresholdScheme<Error = ThresholdError<T>> + SignatureScheme,
     {
         let threshold = 4;
-        let (shares, _) = shares::<T>(5, threshold);
+        let (shares, public) = shares::<T>(5, threshold);
         let msg = vec![1, 9, 6, 9];
 
         let mut partials: Vec<_> = shares[..threshold - 1]
@@ -280,7 +292,7 @@ mod tests {
         partials.insert(0, partials[0].clone());
 
         assert!(matches!(
-            T::aggregate(threshold, &partials),
+            T::aggregate(&public, &partials),
             Err(ThresholdError::PolyError(PolyError::InvalidRecovery(3, 4)))
         ));
     }

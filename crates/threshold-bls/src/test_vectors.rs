@@ -258,7 +258,8 @@ mod tests {
                 }
 
                 // Aggregate signatures
-                let aggregated = G2Scheme::aggregate(n, &partials).expect("Failed to aggregate");
+                let aggregated =
+                    G2Scheme::aggregate(&public_poly, &partials).expect("Failed to aggregate");
                 let agg_hex = hex::encode(bincode::serialize(&aggregated).unwrap());
                 assert_eq!(
                     agg_hex, EXPECTED_AGGREGATED_SIGNATURES[msg_idx],

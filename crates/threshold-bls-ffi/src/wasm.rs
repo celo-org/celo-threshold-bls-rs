@@ -293,19 +293,24 @@ fn try_partial_verify_blind_signature(
 /// }
 /// ```
 ///
+/// The threshold comes from the public polynomial rather than from the caller:
+/// it is the polynomial's degree plus one, and a smaller number would combine a
+/// subset of the partials into a different signature without failing.
+///
 /// # Throws
 ///
+/// - If the polynomial cannot be deserialized
 /// - If the flattened vector is not a whole number of partial signatures
 /// - If the aggregation fails
 ///
 /// # Safety
 ///
 /// - This function does not check if the signatures are valid!
-pub fn combine(threshold: usize, signatures: Vec<u8>) -> Result<Vec<u8>> {
-    try_combine(threshold, signatures).map_err(|err| JsValue::from_str(&err))
+pub fn combine(polynomial_buf: &[u8], signatures: Vec<u8>) -> Result<Vec<u8>> {
+    try_combine(polynomial_buf, signatures).map_err(|err| JsValue::from_str(&err))
 }
 
-fn try_combine(threshold: usize, signatures: Vec<u8>) -> TryResult<Vec<u8>> {
+fn try_combine(polynomial_buf: &[u8], signatures: Vec<u8>) -> TryResult<Vec<u8>> {
     // The caller flattens the partial signatures, so the boundaries between
     // them are implied by the length alone. A remainder means the flattening
     // was wrong, and every chunk after the first mistake is cut from the middle
@@ -324,7 +329,9 @@ fn try_combine(threshold: usize, signatures: Vec<u8>) -> TryResult<Vec<u8>> {
         .map(|chunk| chunk.to_vec())
         .collect::<Vec<Vec<u8>>>();
 
-    SigScheme::aggregate(threshold, &sigs)
+    let polynomial = polynomial(polynomial_buf)?;
+
+    SigScheme::aggregate(&polynomial, &sigs)
         .map_err(|err| format!("could not aggregate sigs: {}", err))
 }
 
@@ -624,7 +631,7 @@ mod tests {
             flattened.extend(partial_sign(&keys.get_share(index).unwrap(), &msg).unwrap());
         }
         assert_eq!(flattened.len(), 3 * PARTIAL_SIG_LENGTH);
-        assert!(try_combine(3, flattened.clone()).is_ok());
+        assert!(try_combine(&keys.polynomial(), flattened.clone()).is_ok());
 
         // One byte over, one byte short, and a whole partial's worth of
         // padding that leaves the boundaries misaligned.
@@ -640,7 +647,8 @@ mod tests {
         // distinguishes this check from the parser catching it by accident.
         for wrong in [one_over, one_short, half_a_partial] {
             let len = wrong.len();
-            let err = try_combine(3, wrong).expect_err(&format!("combine accepted {len} bytes"));
+            let err = try_combine(&keys.polynomial(), wrong)
+                .expect_err(&format!("combine accepted {len} bytes"));
             assert!(
                 err.contains("expected a multiple of"),
                 "rejected {len} bytes, but as {err}"
@@ -836,7 +844,7 @@ mod tests {
             .for_each(|sig| verify_fn(&keys.polynomial(), &message, sig).unwrap());
 
         let concatenated = sigs.concat();
-        let asig = combine(3, concatenated).unwrap();
+        let asig = combine(&keys.polynomial(), concatenated).unwrap();
 
         if should_blind {
             verify_blind_signature(&keys.threshold_public_key(), &message, &asig).unwrap();

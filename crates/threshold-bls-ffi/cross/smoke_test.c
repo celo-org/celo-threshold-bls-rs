@@ -239,7 +239,7 @@ static void threshold_signing(void) {
 
     Buffer flattened = buf(concatenated, sizeof concatenated);
     Buffer threshold_sig;
-    CHECK(combine(THRESHOLD, &flattened, &threshold_sig));
+    CHECK(combine(&polynomial, &flattened, &threshold_sig));
 
     Buffer threshold_pubkey = buf(THRESHOLD_PUBKEY, sizeof THRESHOLD_PUBKEY);
     PublicKey *pub = NULL;
@@ -281,7 +281,7 @@ static void blind_threshold_signing(void) {
 
     Buffer flattened = buf(concatenated, sizeof concatenated);
     Buffer blinded_sig;
-    CHECK(combine(THRESHOLD, &flattened, &blinded_sig));
+    CHECK(combine(&polynomial, &flattened, &blinded_sig));
 
     Buffer signature;
     CHECK(unblind(&blinded_sig, blinding_factor, &signature));
@@ -304,13 +304,15 @@ static void blind_threshold_signing(void) {
 /* The threshold operations reject a NULL share or polynomial. */
 static void threshold_operations_reject_null(void) {
     Buffer message = buf(MESSAGE, sizeof MESSAGE);
+    Buffer polynomial = buf(PUBLIC_POLY, sizeof PUBLIC_POLY);
     Buffer signature;
 
     CHECK(!partial_sign(NULL, &message, &signature));
     CHECK(!partial_sign_blinded_message(NULL, &message, &signature));
     CHECK(!partial_verify(NULL, &message, &message));
     CHECK(!partial_verify_blind_signature(NULL, &message, &message));
-    CHECK(!combine(3, NULL, &signature));
+    CHECK(!combine(NULL, NULL, &signature));
+    CHECK(!combine(&polynomial, NULL, &signature));
 
     /* Bytes that are not a share or a polynomial are rejected, not trusted. */
     Buffer garbage = buf(MESSAGE, sizeof MESSAGE);
@@ -392,7 +394,8 @@ static void buffers_with_no_memory_are_rejected(void) {
     CHECK(!partial_verify(&polynomial, &no_memory, &partial));
     CHECK(!partial_verify(&polynomial, &message, &no_memory));
 
-    CHECK(!combine(THRESHOLD, &no_memory, &signature));
+    CHECK(!combine(&polynomial, &no_memory, &signature));
+    CHECK(!combine(&no_memory, &partial, &signature));
 
     free_vector(partial.ptr, partial.len);
     free_vector(blinded.ptr, blinded.len);
@@ -419,14 +422,15 @@ static void misaligned_partials_are_rejected(void) {
     }
     concatenated[THRESHOLD * PARTIAL_SIG_LENGTH] = 0;
 
+    Buffer polynomial = buf(PUBLIC_POLY, sizeof PUBLIC_POLY);
     Buffer whole = buf(concatenated, THRESHOLD * PARTIAL_SIG_LENGTH);
     Buffer one_over = buf(concatenated, sizeof concatenated);
     Buffer one_short = buf(concatenated, THRESHOLD * PARTIAL_SIG_LENGTH - 1);
 
     Buffer threshold_sig;
-    CHECK(combine(THRESHOLD, &whole, &threshold_sig));
-    CHECK(!combine(THRESHOLD, &one_over, &threshold_sig));
-    CHECK(!combine(THRESHOLD, &one_short, &threshold_sig));
+    CHECK(combine(&polynomial, &whole, &threshold_sig));
+    CHECK(!combine(&polynomial, &one_over, &threshold_sig));
+    CHECK(!combine(&polynomial, &one_short, &threshold_sig));
 
     free_vector(threshold_sig.ptr, threshold_sig.len);
     for (size_t i = 0; i < THRESHOLD; i++) {
