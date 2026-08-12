@@ -1,3 +1,15 @@
+//! Known-answer vectors for the byte formats the bindings exchange.
+//!
+//! This is the compatibility gate for `docs/wire-format.md`: a fixed seed, and
+//! the resulting keys, signatures, shares, partial signatures and public
+//! polynomial pinned as hex. Nothing else in the repository fails when an
+//! encoding changes — the header pins lengths, not contents.
+//!
+//! **A failure here is a breaking change for every consumer, not a stale
+//! vector.** Regenerating these constants to make the suite pass is how such a
+//! change ships unnoticed; the values move only alongside a changelog entry
+//! telling consumers what to migrate.
+
 #[cfg(test)]
 mod tests {
     #[cfg(test)]
@@ -33,28 +45,28 @@ mod tests {
         const EXPECTED_SIGNATURES: [[&str; 3]; 3] = [
             // First private key with each message
             [
-                "3000000000000000e2dac33c610f0a247a82c98324188070164206c0151be6a98d8666e63a36c3804bfcb682f6764ad2307406292f2d2281",
-                "3000000000000000f07921d52176cc4f6528005c19eab9d230900b531780e9ddfd1d13f020cf4b559a96a6909c33bfb16bd0e3ca0cdf5d01",
-                "30000000000000007711c1febaa06af30f0c9bb19e942b642d21354c25ad392b1c4c3cf4eb0375809afa05bf7defaa17684202e036cfd480",
+                "e2dac33c610f0a247a82c98324188070164206c0151be6a98d8666e63a36c3804bfcb682f6764ad2307406292f2d2281",
+                "f07921d52176cc4f6528005c19eab9d230900b531780e9ddfd1d13f020cf4b559a96a6909c33bfb16bd0e3ca0cdf5d01",
+                "7711c1febaa06af30f0c9bb19e942b642d21354c25ad392b1c4c3cf4eb0375809afa05bf7defaa17684202e036cfd480",
             ],
             // Second private key with each message
             [
-                "30000000000000001b4827907e476d060382874380fbd600605662c7eb80de9d0fc55cfc26a3efea6f596f18bc13e91353b87f4ec4c2b980",
-                "30000000000000007cfb12face29af9d65638bd4430f5d95f10796eaaba9c91d594685780dda98f3870ed1d01a13356a308cdc24312f5a01",
-                "30000000000000006dd334350a2e502b2b2880c9d58c1c3281dc4343b36d57de0541f29c2f77d29c39c4475a2368a6a4dff9702e5ba29d81",
+                "1b4827907e476d060382874380fbd600605662c7eb80de9d0fc55cfc26a3efea6f596f18bc13e91353b87f4ec4c2b980",
+                "7cfb12face29af9d65638bd4430f5d95f10796eaaba9c91d594685780dda98f3870ed1d01a13356a308cdc24312f5a01",
+                "6dd334350a2e502b2b2880c9d58c1c3281dc4343b36d57de0541f29c2f77d29c39c4475a2368a6a4dff9702e5ba29d81",
             ],
             // Third private key with each message
             [
-                "30000000000000005eb1a349270e162e0e7c2fc027759d751e91765d27693591273a25737616516d431fddad37e94fe45714e5caca370b01",
-                "3000000000000000d4829581cdd53438721641e1a6893ef92e62dbbd3bca21cb5dd74b6c685c9aaf905b81c544fb3b07031a917602647101",
-                "3000000000000000bfff68378c234eeb81604dfe320c09cdacb0c7521cb0563d79789a1ba217397998be539204f4d6b0077511f0c14a0600",
+                "5eb1a349270e162e0e7c2fc027759d751e91765d27693591273a25737616516d431fddad37e94fe45714e5caca370b01",
+                "d4829581cdd53438721641e1a6893ef92e62dbbd3bca21cb5dd74b6c685c9aaf905b81c544fb3b07031a917602647101",
+                "bfff68378c234eeb81604dfe320c09cdacb0c7521cb0563d79789a1ba217397998be539204f4d6b0077511f0c14a0600",
             ],
         ];
 
         const EXPECTED_AGGREGATED_SIGNATURES: [&str; 3] = [
-            "3000000000000000e2dac33c610f0a247a82c98324188070164206c0151be6a98d8666e63a36c3804bfcb682f6764ad2307406292f2d2281",
-            "3000000000000000f07921d52176cc4f6528005c19eab9d230900b531780e9ddfd1d13f020cf4b559a96a6909c33bfb16bd0e3ca0cdf5d01",
-            "30000000000000007711c1febaa06af30f0c9bb19e942b642d21354c25ad392b1c4c3cf4eb0375809afa05bf7defaa17684202e036cfd480",
+            "e2dac33c610f0a247a82c98324188070164206c0151be6a98d8666e63a36c3804bfcb682f6764ad2307406292f2d2281",
+            "f07921d52176cc4f6528005c19eab9d230900b531780e9ddfd1d13f020cf4b559a96a6909c33bfb16bd0e3ca0cdf5d01",
+            "7711c1febaa06af30f0c9bb19e942b642d21354c25ad392b1c4c3cf4eb0375809afa05bf7defaa17684202e036cfd480",
         ];
 
         // Expected bincode encoding of `Poly<PublicKey>` committed from the
@@ -119,7 +131,7 @@ mod tests {
                 for (j, &msg) in MESSAGES.iter().enumerate() {
                     // Sign the message
                     let sig = G2Scheme::sign(&privkey, msg).expect("Error signing");
-                    let sig_hex = hex::encode(bincode::serialize(&sig).unwrap());
+                    let sig_hex = hex::encode(&sig);
                     assert_eq!(
                         sig_hex, EXPECTED_SIGNATURES[i][j],
                         "Signature for key[{}] and message[{}] mismatch",
@@ -173,6 +185,40 @@ mod tests {
             let decoded: Poly<PublicKey> = serialization::deserialize(&bytes)
                 .expect("bounded deserialize must accept pinned wire data");
             assert_eq!(decoded, public_poly);
+        }
+
+        /// The layouts `docs/wire-format.md` states, asserted rather than
+        /// described. The pinned hex above would catch a change to any of these
+        /// too, but only as a wall of bytes: this says which part moved.
+        #[test]
+        fn test_wire_format_layout() {
+            let (shares, public_poly) = fixed_threshold_setup();
+            let share = &shares[1];
+            let encoded = bincode::serialize(share).unwrap();
+
+            // A share leads with its index.
+            assert_eq!(encoded.len(), 36);
+            assert_eq!(&encoded[..4], &share.index.to_le_bytes());
+
+            // A partial signature trails with it, behind the length of the
+            // signature it carries.
+            let partial = G2Scheme::partial_sign(share, MESSAGES[0]).unwrap();
+            assert_eq!(partial.len(), 60);
+            assert_eq!(&partial[..8], &48u64.to_le_bytes());
+            assert_eq!(&partial[partial.len() - 4..], &share.index.to_le_bytes());
+
+            // A signature carries no length of its own.
+            let (privkey, pubkey) = get_keypair(0);
+            let sig = G2Scheme::sign(&privkey, MESSAGES[0]).unwrap();
+            assert_eq!(sig.len(), 48);
+            assert_eq!(bincode::serialize(&pubkey).unwrap().len(), 96);
+            assert_eq!(bincode::serialize(&privkey).unwrap().len(), 32);
+
+            // A polynomial leads with its coefficient count.
+            let encoded = bincode::serialize(&public_poly).unwrap();
+            let coefficients = (public_poly.degree() + 1) as u64;
+            assert_eq!(&encoded[..8], &coefficients.to_le_bytes());
+            assert_eq!(encoded.len(), 8 + 96 * coefficients as usize);
         }
 
         #[test]
@@ -260,7 +306,7 @@ mod tests {
                 // Aggregate signatures
                 let aggregated =
                     G2Scheme::aggregate(&public_poly, &partials).expect("Failed to aggregate");
-                let agg_hex = hex::encode(bincode::serialize(&aggregated).unwrap());
+                let agg_hex = hex::encode(&aggregated);
                 assert_eq!(
                     agg_hex, EXPECTED_AGGREGATED_SIGNATURES[msg_idx],
                     "Aggregated signature for message {} mismatch",

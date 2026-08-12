@@ -8,6 +8,11 @@ the underlying [Rust library](https://github.com/celo-org/celo-threshold-bls-rs)
 You can find details on the functionalities provided per function by inspecting
 the [Typescript types file](./src/blind_threshold_bls.d.ts)
 
+Every argument and return value is a `Uint8Array`. What is inside them — the
+byte layout of a key, a share, a partial signature and the public polynomial —
+is documented in
+[`docs/wire-format.md`](https://github.com/celo-org/celo-threshold-bls-rs/blob/main/docs/wire-format.md).
+
 Install by running: `npm install @celo/blind-threshold-bls`
 
 ## Building from source

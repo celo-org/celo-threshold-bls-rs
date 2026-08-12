@@ -115,6 +115,12 @@ This repository contains Rust crates that implement threshold BLS signatures. Th
   [README](crates/threshold-bls-ffi/README.md) covers building and consuming each
   binding surface.
 
+## Wire format
+
+Every value the bindings exchange crosses as bytes, and those layouts are public
+API: [`docs/wire-format.md`](docs/wire-format.md) documents each one, what pins
+it, and what changes it.
+
 ## Disclaimers
 
 **This software has not been audited. Use at your own risk.**
