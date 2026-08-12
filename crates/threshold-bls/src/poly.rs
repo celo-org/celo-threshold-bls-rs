@@ -26,6 +26,11 @@ impl<A: fmt::Display> fmt::Display for Eval<A> {
 /// the type of the variable, which is always a scalar.
 ///
 /// Always has at least one coefficient, on the wire as well as in memory.
+///
+/// Deserializing one goes through [`serialization::deserialize`](crate::serialization::deserialize),
+/// so a polynomial larger than [`MAX_DESERIALIZE_BYTES`](crate::serialization::MAX_DESERIALIZE_BYTES)
+/// is refused rather than allocated. At 1 MiB that is a ceiling on the number of
+/// participants, in the order of ten thousand.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(try_from = "Vec<C>")]
 pub struct Poly<C>(Vec<C>);

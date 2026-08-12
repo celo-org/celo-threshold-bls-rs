@@ -23,7 +23,7 @@
 //! Blind signatures are supported via an implementation based on this
 //! [paper](https://eprint.iacr.org/2018/733.pdf).
 //!
-//! The procedure is the same, but we import the [`SignatureSchemeExt`] because it requires
+//! The procedure is the same, but we import the [`BlindScheme`](sig::BlindScheme) because it requires
 //! signing the blinded message without hashing it. Note that verification is done in the same
 //! way as before on the unblinded signature and message.
 //!
@@ -117,11 +117,11 @@
 //! ### Supporting a new curve
 //!
 //! Curves are implemented in the [`curve`] module. In order to support a new curve,
-//! the trait [`PairingCurve`] must be implemented for it. This in turn requires that
+//! the trait [`PairingCurve`](group::PairingCurve) must be implemented for it. This in turn requires that
 //! you define the pairing-friendly curve's `Scalar` and `G_T` fields, its
 //! G1 and G2 groups and implement the `Scalar`, `Element` and `Point` traits for them.
-//! For reference, use the [existing implementation of BLS12-377](bls12_377) which wraps the implementation
-//! from [Zexe](https://github.com/arkworks-rs/snark/).
+//! For reference, use the [existing implementation of BLS12-377](curve::bls12377), which wraps
+//! [arkworks](https://github.com/arkworks-rs/algebra).
 //!
 //! ### Switching Groups
 //!
@@ -131,28 +131,26 @@
 //! Before:
 //!
 //! ```rust
-//! use threshold_bls::sig::G1Scheme as SigScheme;
+//! use threshold_bls::schemes::bls12_377::G1Scheme as SigScheme;
 //! ```
 //!
 //! After:
 //!
 //! ```rust
-//! use threshold_bls::sig::G2Scheme as SigScheme;
+//! use threshold_bls::schemes::bls12_377::G2Scheme as SigScheme;
 //! ```
 //!
-//! ## Features
+//! The name says which group holds the public keys; signatures live in the other
+//! one. [`sig::G1Scheme`] and [`sig::G2Scheme`] are the same schemes still generic
+//! over the pairing curve, so they take a curve parameter and do not substitute
+//! into the examples above.
 //!
-//! Curently there is `BLS12-377` available.
+//! ## Curves
 //!
-//! ```toml
-//! threshold-bls = { version = "0.1" }
-//! ```
-//!
-//! [poly]: ./poly/index.html
-//! [bls12_377]: ./curve/zexe/index.html
-//!
-//! [`curve`]: ./curve/index.html
-//! [`SignatureSchemeExt`]: ./sig/trait.SignatureSchemeExt.html
+//! `BLS12-377` is the only curve implemented, in [`curve::bls12377`]; the schemes
+//! instantiated over it are in [`schemes::bls12_377`]. The crate has no Cargo
+//! features and is not published to crates.io, so consumers depend on it by git
+//! revision.
 
 /// Curve implementations for the traits defined in the [`group`](group/index.html) module.
 pub mod curve;
@@ -160,9 +158,9 @@ pub mod curve;
 /// Definitions of generic traits with scalars of prime fields and points on elliptic curves.
 pub mod group;
 
-/// Implementation of a polynomial suitable to be used for secret sharing schemes and DKG
-/// protocols. It can evaluate and interpolate private and public shares to their corresponding
-/// polynomial.
+/// Implementation of a polynomial suitable to be used for secret sharing schemes.
+/// It can evaluate and interpolate private and public shares to their
+/// corresponding polynomial.
 pub mod poly;
 
 /// Bounded bincode (de)serialization helpers that cap input size to prevent

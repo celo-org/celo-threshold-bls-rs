@@ -9,7 +9,9 @@ use thiserror::Error;
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 /// A private share which is part of the threshold signing key
 pub struct Share<S> {
-    /// The share's index in the polynomial
+    /// Identifies the share's holder. It is not the x-coordinate the polynomial
+    /// is evaluated at: that is `index + 1`, since evaluating at zero would hand
+    /// out the secret itself.
     pub index: Idx,
     /// The scalar corresponding to the share's secret
     pub private: S,

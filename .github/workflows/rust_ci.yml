@@ -22,6 +22,12 @@ jobs:
       # documentation, so they need their own invocation.
       - name: cargo test --doc
         run: cargo test --locked --workspace --all-features --doc
+      # The rustdoc is the API documentation consumers read. Nothing checked it,
+      # which is how links to a trait renamed years ago survived.
+      - name: cargo doc
+        run: cargo doc --locked --no-deps --all-features
+        env:
+          RUSTDOCFLAGS: -D warnings
 
   cargo-lint:
     runs-on: ubuntu-latest

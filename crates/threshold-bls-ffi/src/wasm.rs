@@ -246,7 +246,7 @@ pub fn partial_verify_blind_signature(
 #[wasm_bindgen]
 /// Combines a flattened vector of partial signatures to a single threshold signature
 ///
-/// NOTE: Wasm-bindgen does not support Vec<Vec<u8>>, so this function accepts a flattened
+/// NOTE: Wasm-bindgen does not support `Vec<Vec<u8>>`, so this function accepts a flattened
 /// byte vector which it will parse in chunks for each signature.
 ///
 /// NOTE: If you are working with an array of Uint8Arrays In Javascript, the simplest
