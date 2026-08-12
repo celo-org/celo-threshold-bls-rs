@@ -29,10 +29,11 @@ pub enum BLSError {
     DeserializationError(#[from] bincode::Error),
 }
 
-// private module workaround to avoid leaking a private
-// trait into a public trait
-// see https://github.com/rust-lang/rust/issues/34537
-// XXX another way to pull it off without this hack?
+// A public trait cannot name a private one in its bounds (rust-lang/rust#34537),
+// so the sealed trait lives in a public module inside a module that `sig`
+// re-exports as `#[doc(hidden)]`. That is the sealing idiom, not a workaround
+// awaiting a better one: the trait stays unimplementable from outside while the
+// bound rustc names in a diagnostic remains a path the reader can import.
 pub mod common {
     use super::*;
 
@@ -46,7 +47,7 @@ pub mod common {
             should_hash: bool,
         ) -> Result<Vec<u8>, BLSError> {
             let mut h = if should_hash {
-                let mut h = Self::Signature::new();
+                let mut h = Self::Signature::zero();
                 h.map(msg).map_err(|_| BLSError::HashingError)?;
                 h
             } else {
@@ -68,7 +69,7 @@ pub mod common {
             let sig: Self::Signature = serialization::deserialize_from(sig_bytes)?;
 
             let h = if should_hash {
-                let mut h = Self::Signature::new();
+                let mut h = Self::Signature::zero();
                 h.map(msg).map_err(|_| BLSError::HashingError)?;
                 h
             } else {
@@ -95,11 +96,11 @@ pub mod common {
             sig: &Self::Signature,
             hm: &Self::Signature,
         ) -> Result<(), BLSError> {
-            if public == &Self::Public::new() {
+            if public == &Self::Public::zero() {
                 return Err(BLSError::InvalidPublicKey);
             }
 
-            if hm == &Self::Signature::new() {
+            if hm == &Self::Signature::zero() {
                 return Err(BLSError::InvalidMessagePoint);
             }
 
@@ -230,9 +231,9 @@ mod tests {
     where
         S: SignatureScheme<Error = BLSError>,
     {
-        let identity_sig = bincode::serialize(&S::Signature::new()).unwrap();
+        let identity_sig = bincode::serialize(&S::Signature::zero()).unwrap();
 
-        let encoded = bincode::serialize(&S::Public::new()).unwrap();
+        let encoded = bincode::serialize(&S::Public::zero()).unwrap();
         assert_eq!(encoded.len(), pubkey_len);
         assert_eq!(
             encoded.last(),
@@ -243,7 +244,7 @@ mod tests {
         let identity: S::Public = serialization::deserialize(&encoded).unwrap();
         assert_eq!(
             identity,
-            S::Public::new(),
+            S::Public::zero(),
             "the identity must stay deserializable"
         );
 
@@ -268,7 +269,7 @@ mod tests {
         let (private, public) = S::keypair(&mut thread_rng());
         let msg = b"attack at dawn";
 
-        let identity_sig = bincode::serialize(&S::Signature::new()).unwrap();
+        let identity_sig = bincode::serialize(&S::Signature::zero()).unwrap();
         assert!(matches!(
             S::verify(&public, msg, &identity_sig),
             Err(BLSError::InvalidSig)
@@ -276,7 +277,7 @@ mod tests {
 
         let sig = S::sign(&private, msg).unwrap();
         assert!(matches!(
-            S::verify(&S::Public::new(), msg, &sig),
+            S::verify(&S::Public::zero(), msg, &sig),
             Err(BLSError::InvalidPublicKey)
         ));
     }
@@ -289,17 +290,17 @@ mod tests {
     where
         S: common::BLSScheme,
     {
-        let mut hm = S::Signature::new();
+        let mut hm = S::Signature::zero();
         hm.map(b"attack at dawn").expect("could not hash to curve");
 
         assert!(
-            S::final_exp(&S::Public::new(), &S::Signature::new(), &hm),
+            S::final_exp(&S::Public::zero(), &S::Signature::zero(), &hm),
             "identity public key should satisfy the raw pairing equation"
         );
 
         let (_, public) = S::keypair(&mut thread_rng());
         assert!(
-            S::final_exp(&public, &S::Signature::new(), &S::Signature::new()),
+            S::final_exp(&public, &S::Signature::zero(), &S::Signature::zero()),
             "identity message point should satisfy the raw pairing equation"
         );
     }

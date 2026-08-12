@@ -6,7 +6,7 @@ use ark_ec::{
     pairing::Pairing,
     short_weierstrass::{Affine, Projective, SWCurveConfig},
 };
-use ark_ff::{Field, One, PrimeField, UniformRand, Zero};
+use ark_ff::{Field, One, UniformRand, Zero};
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize, Compress};
 use rand_core::RngCore;
 use serde::{
@@ -138,7 +138,7 @@ pub struct GT(
 impl Element for Scalar {
     type RHS = Scalar;
 
-    fn new() -> Self {
+    fn zero() -> Self {
         Self(Zero::zero())
     }
 
@@ -196,7 +196,7 @@ impl fmt::Display for Scalar {
 impl Element for G1 {
     type RHS = Scalar;
 
-    fn new() -> Self {
+    fn zero() -> Self {
         Self(Zero::zero())
     }
 
@@ -311,7 +311,7 @@ impl fmt::Display for G1 {
 impl Element for G2 {
     type RHS = Scalar;
 
-    fn new() -> Self {
+    fn zero() -> Self {
         Self(Zero::zero())
     }
 
@@ -348,45 +348,6 @@ impl Point for G2 {
 impl fmt::Display for G2 {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{{{:?}}}", self.0)
-    }
-}
-
-//TODO (michael) : This interface should be refactored, GT is multiplicative subgroup of extension field
-// so using elliptic curve additive notation for it doesn't make sense
-impl Element for GT {
-    type RHS = Scalar;
-
-    fn new() -> Self {
-        // TODO(pl)
-        // Self(Zero::zero())
-        Self(One::one())
-    }
-    fn one() -> Self {
-        Self(One::one())
-    }
-    // fn add(&mut self, s2: &Self) {
-    //     self.0.add_assign(s2.0);
-    // }
-    // fn mul(&mut self, mul: &Scalar) {
-    //     self.0.mul_assign(mul.0)
-    // }
-    fn add(&mut self, s2: &Self) {
-        self.0.mul_assign(s2.0);
-    }
-    fn mul(&mut self, mul: &Scalar) {
-        let scalar = mul.0.into_bigint();
-        let mut res = Self::one();
-        let mut temp = self.clone();
-        for b in ark_ff::BitIteratorLE::without_trailing_zeros(scalar) {
-            if b {
-                res.0.mul_assign(temp.0);
-            }
-            temp.0.square_in_place();
-        }
-        *self = res.clone();
-    }
-    fn rand<R: RngCore>(rng: &mut R) -> Self {
-        Self(bls377::Fq12::rand(rng))
     }
 }
 
@@ -561,37 +522,21 @@ mod tests {
 
     #[test]
     fn serialize_field() {
-        serialize_field_test::<GT>(576);
-        serialize_field_test::<Scalar>(32);
+        // A pairing output is the only way a GT value is produced, now that the
+        // type carries no arithmetic of its own.
+        serialize_field_test(PairingCurve::pair(&G1::one(), &G2::one()), 576);
+        serialize_field_test(Scalar::rand(&mut rand::thread_rng()), 32);
     }
 
-    fn serialize_field_test<E: Element>(size: usize) {
-        let rng = &mut rand::thread_rng();
-        let sig = E::rand(rng);
-        let ser = bincode::serialize(&sig).unwrap();
+    fn serialize_field_test<E>(value: E, size: usize)
+    where
+        E: Serialize + serde::de::DeserializeOwned + PartialEq + std::fmt::Debug,
+    {
+        let ser = bincode::serialize(&value).unwrap();
         assert_eq!(ser.len(), size);
 
         let de: E = serialization::deserialize(&ser).unwrap();
-        assert_eq!(de, sig);
-    }
-
-    #[test]
-    fn gt_exp() {
-        let rng = &mut rand::thread_rng();
-        let base = GT::rand(rng);
-
-        let mut sc = Scalar::one();
-        sc.add(&Scalar::one());
-        sc.add(&Scalar::one());
-
-        let mut exp = base.clone();
-        exp.mul(&sc);
-
-        let mut res = base.clone();
-        res.add(&base);
-        res.add(&base);
-
-        assert_eq!(exp, res);
+        assert_eq!(de, value);
     }
 
     #[test]
@@ -653,7 +598,7 @@ mod tests {
         ];
 
         for (msg, expected_hex) in cases {
-            let mut point = G1::new();
+            let mut point = G1::zero();
             point.map(msg).expect("hash to curve failed");
             let serialized = bincode::serialize(&point).unwrap();
             assert_eq!(hex::encode(&serialized), *expected_hex);
@@ -683,7 +628,7 @@ mod tests {
         ];
 
         for (msg, expected_hex) in cases {
-            let mut point = G2::new();
+            let mut point = G2::zero();
             point.map(msg).expect("hash to curve failed");
             let serialized = bincode::serialize(&point).unwrap();
             assert_eq!(hex::encode(&serialized), *expected_hex);

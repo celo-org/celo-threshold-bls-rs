@@ -22,7 +22,7 @@ pub struct Share<S> {
 pub enum ThresholdError<I: SignatureScheme> {
     /// PolyError is raised when the public key could not be recovered
     #[error("could not recover public key: {0}")]
-    PolyError(PolyError),
+    PolyError(#[from] PolyError),
 
     /// BincodeError is raised when there is an error in (de)serialization
     #[error(transparent)]
@@ -98,8 +98,7 @@ impl<I: SignatureScheme> ThresholdScheme for I {
             })
             .collect::<Result<_, <Self as ThresholdScheme>::Error>>()?;
 
-        let recovered_sig = Poly::<Self::Signature>::recover(threshold, valid_partials)
-            .map_err(ThresholdError::PolyError)?;
+        let recovered_sig = Poly::<Self::Signature>::recover(threshold, valid_partials)?;
         Ok(bincode::serialize(&recovered_sig).expect("could not serialize"))
     }
 }

@@ -904,21 +904,10 @@ pub struct Keypair {
     public: PublicKey,
 }
 
+/// Seeds the RNG, reporting a seed shorter than `SEED_LEN` as `None`, which the
+/// exports turn into `false`. See [`crate::seed_from_slice`].
 fn get_rng(digest: &[u8]) -> Option<impl RngCore> {
-    Some(ChaChaRng::from_seed(from_slice(digest)?))
-}
-
-/// Takes the RNG's whole seed from the caller's bytes.
-///
-/// Returns `None` for fewer than `SEED_LEN` of them, which the exports report
-/// as `false`. A short seed used to be sliced to length, which panicked — and a
-/// panic crossing `extern "C"` aborts the process it was called from. Padding
-/// it instead is not an option: the padding is not secret, so the key material
-/// would be drawn from less randomness than the caller supplied bytes for.
-fn from_slice(bytes: &[u8]) -> Option<[u8; SEED_LEN]> {
-    let mut array = [0; SEED_LEN];
-    array.copy_from_slice(bytes.get(..SEED_LEN)?);
-    Some(array)
+    Some(ChaChaRng::from_seed(seed_from_slice(digest)?))
 }
 
 // The general pattern in these FFI tests is:
@@ -1209,7 +1198,7 @@ mod tests {
     fn identity_public_key_verifies_nothing() {
         use threshold_bls::group::Element;
 
-        let identity = bincode::serialize(&PublicKey::new()).unwrap();
+        let identity = bincode::serialize(&PublicKey::zero()).unwrap();
         assert_eq!(identity.len(), PUBKEY_LEN);
 
         let mut pubkey = MaybeUninit::<*mut PublicKey>::uninit();
@@ -1217,7 +1206,7 @@ mod tests {
         assert!(ret, "the identity encoding is well-formed");
         let pubkey = unsafe { pubkey.assume_init() };
 
-        let identity_sig = bincode::serialize(&Signature::new()).unwrap();
+        let identity_sig = bincode::serialize(&Signature::zero()).unwrap();
         for msg in [&b"attack at dawn"[..], b"totally different", b""] {
             let ret =
                 unsafe { verify(pubkey, &Buffer::from(msg), &Buffer::from(&identity_sig[..])) };
@@ -1285,7 +1274,7 @@ mod tests {
 
         let pubkey = bincode::serialize(unsafe { &*public_key_ptr(keypair) }).unwrap();
         let privkey = bincode::serialize(unsafe { &*private_key_ptr(keypair) }).unwrap();
-        let sig = bincode::serialize(&Signature::new()).unwrap();
+        let sig = bincode::serialize(&Signature::zero()).unwrap();
         let encodings = [
             (pubkey, PUBKEY_LEN),
             (privkey, PRIVKEY_LEN),

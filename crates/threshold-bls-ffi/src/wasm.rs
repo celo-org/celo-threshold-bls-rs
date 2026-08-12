@@ -474,27 +474,17 @@ impl Keys {
     }
 }
 
+/// Seeds the RNG, turning a seed shorter than `SEED_LEN` into the message JS
+/// sees thrown. See [`crate::seed_from_slice`].
 fn get_rng(digest: &[u8]) -> TryResult<impl RngCore> {
-    let seed = from_slice(digest)?;
-    Ok(ChaChaRng::from_seed(seed))
-}
-
-/// Takes the RNG's whole seed from the caller's bytes.
-///
-/// A shorter seed is refused rather than padded: the padding is not secret, so
-/// the key material would be drawn from less randomness than the caller
-/// supplied bytes for.
-fn from_slice(bytes: &[u8]) -> TryResult<[u8; SEED_LEN]> {
-    let mut array = [0; SEED_LEN];
-    let seed = bytes.get(..SEED_LEN).ok_or_else(|| {
+    let seed = seed_from_slice(digest).ok_or_else(|| {
         format!(
             "seed must be at least {} bytes (got {})",
             SEED_LEN,
-            bytes.len()
+            digest.len()
         )
     })?;
-    array.copy_from_slice(seed);
-    Ok(array)
+    Ok(ChaChaRng::from_seed(seed))
 }
 
 #[cfg(test)]

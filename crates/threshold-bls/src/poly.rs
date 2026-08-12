@@ -61,8 +61,8 @@ impl<C: Element> Poly<C> {
 
     /// set the given element at the specified index. The index 0 is the free
     /// coefficient of the polynomial. It panics if the index is out of range.
-    pub fn set(&mut self, index: usize, value: C) {
-        self.0[index] = value;
+    pub fn set(&mut self, index: Idx, value: C) {
+        self.0[index as usize] = value;
     }
 
     /// Returns a new polynomial of the given degree where each coefficients is
@@ -74,10 +74,9 @@ impl<C: Element> Poly<C> {
         Self::new_from(degree, &mut thread_rng())
     }
 
-    /// Returns a polynomial from the given list of coefficients
-    // TODO: implement the From<> trait
-    // TODO fix semantics of zero:
-    // it should be G1::zero() as only element
+    /// Returns the zero polynomial: one coefficient, holding the group's zero
+    /// element. A polynomial always has at least one coefficient, so this is the
+    /// smallest one there is.
     pub fn zero() -> Self {
         Self(vec![C::zero()])
     }
@@ -116,7 +115,7 @@ where
 {
     /// Evaluates the polynomial at the specified value.
     pub fn eval(&self, i: Idx) -> Eval<C> {
-        let mut xi = C::RHS::new();
+        let mut xi = C::RHS::zero();
         // +1 because we must never evaluate the polynomial at its first point
         // otherwise it reveals the "secret" value !
         // TODO: maybe move that a layer above, to not mix ss scheme with poly.
@@ -233,7 +232,7 @@ where
             .into_iter()
             .take(t)
             .fold(BTreeMap::new(), |mut m, sh| {
-                let mut xi = C::RHS::new();
+                let mut xi = C::RHS::zero();
                 // Widened to u64 so the largest index cannot wrap back onto
                 // x = 0, where it would annihilate every other Lagrange term.
                 xi.set_int(u64::from(sh.index) + 1);
@@ -599,7 +598,7 @@ pub mod tests {
 
     #[test]
     fn eval(d in 0..100usize, idx in 0..(100 as Idx)) {
-        let mut x = Sc::new();
+        let mut x = Sc::zero();
         x.set_int(idx as u64 + 1);
 
         let p1 = Poly::<Sc>::new(d);
@@ -695,13 +694,13 @@ pub mod tests {
         // d0 * c1
         let mut l22 = p1.0[1];
         l22.mul(&p2.0[0]);
-        let mut l2 = Sc::new();
+        let mut l2 = Sc::zero();
         l2.add(&l21);
         l2.add(&l22);
         let mut l3 = p1.0[1];
         l3.mul(&p2.0[1]);
 
-        let mut total = Sc::new();
+        let mut total = Sc::zero();
         total.add(&l1);
         total.add(&l2);
         total.add(&l3);
