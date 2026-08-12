@@ -949,14 +949,14 @@ mod tests {
         let (message_to_sign, blinding_factor) = if should_blind {
             let mut blinded_message = MaybeUninit::<Buffer>::uninit();
             let mut blinding_factor = MaybeUninit::<*mut BlindingFactor>::uninit();
-            unsafe {
+            assert!(unsafe {
                 blind(
                     &Buffer::from(msg.as_ref()),
                     &Buffer::from(user_seed),
                     blinded_message.as_mut_ptr(),
                     blinding_factor.as_mut_ptr(),
                 )
-            };
+            });
             let blinded_message = unsafe { blinded_message.assume_init() };
             let blinding_factor = unsafe { &*blinding_factor.assume_init() };
 
@@ -1051,14 +1051,14 @@ mod tests {
         let (message_to_sign, blinding_factor) = if should_blind {
             let mut blinded_message = MaybeUninit::<Buffer>::uninit();
             let mut blinding_factor = MaybeUninit::<*mut BlindingFactor>::uninit();
-            unsafe {
+            assert!(unsafe {
                 blind(
                     &Buffer::from(msg.as_ref()),
                     &Buffer::from(user_seed),
                     blinded_message.as_mut_ptr(),
                     blinding_factor.as_mut_ptr(),
                 )
-            };
+            });
             let blinded_message = unsafe { blinded_message.assume_init() };
             let blinding_factor = unsafe { &*blinding_factor.assume_init() };
 
