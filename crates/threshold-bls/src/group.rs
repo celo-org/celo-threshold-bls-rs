@@ -5,26 +5,23 @@ use serde::{Deserialize, Serialize};
 use std::fmt::{Debug, Display};
 use std::marker::PhantomData;
 
-/// Element represents an element of a group which is also equipped with a
-/// multiplication transformation.
+/// Element represents an element of a group with the additive notation
+/// which is also equipped with a multiplication transformation.
 /// Two implementations are for Scalar which forms a ring so RHS is the same
 /// and Point which can be multiplied by a scalar of its prime field.
-///
-/// The method names are additive — `add`, `zero` — because the groups this was
-/// written for are written that way. `GT` is not: its `add` multiplies and its
-/// `new`/`zero` is the multiplicative identity, so read every name below as the
-/// group operation rather than as arithmetic.
 pub trait Element:
     Clone + Display + Debug + Eq + Serialize + for<'a> Deserialize<'a> + PartialEq + Send + Sync
 {
     /// The right-hand-side argument for multiplication
     type RHS;
 
-    /// Returns the identity element of the group operation: zero where the group
-    /// is written additively, one for `GT`
+    /// Returns the zero element of the group
     fn new() -> Self;
 
-    /// Returns the one element of the group
+    /// Returns the group's generator: `1` for a scalar, which generates the
+    /// field's additive group, and the fixed generator point for `G1` and `G2`.
+    /// Unlike [`Element::new`] this is not an identity; [`Curve::point`] returns
+    /// it under the other name.
     fn one() -> Self;
 
     /// Adds the RHS  element to the LHS element in place
@@ -36,8 +33,7 @@ pub trait Element:
     /// Samples a random element using the provided RNG
     fn rand<R: RngCore>(rng: &mut R) -> Self;
 
-    /// Alias for [`Element::new`], and identical to it — including for `GT`,
-    /// where it returns the multiplicative identity rather than a zero
+    /// Returns the zero element of the group. An alias for [`Element::new`]
     fn zero() -> Self {
         Self::new()
     }
@@ -91,9 +87,16 @@ pub trait PairingCurve: Debug {
 
     type G2: Point<RHS = Self::Scalar>;
 
-    type GT: Element;
+    /// The pairing's target group.
+    ///
+    /// Bounded by equality alone because that is all a pairing check needs, and
+    /// all this crate ever does with one. It deliberately does not implement
+    /// [`Element`]: the target group is written multiplicatively, so an additive
+    /// `zero` there would be the multiplicative identity — a trap for anyone
+    /// writing generic code over `Element`.
+    type GT: Eq + Debug;
 
-    /// Perfors a pairing operation between the 2 group elements
+    /// Performs a pairing operation between the 2 group elements
     fn pair(a: &Self::G1, b: &Self::G2) -> Self::GT;
 }
 

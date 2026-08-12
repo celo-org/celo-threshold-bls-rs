@@ -904,21 +904,10 @@ pub struct Keypair {
     public: PublicKey,
 }
 
+/// Seeds the RNG, reporting a seed shorter than `SEED_LEN` as `None`, which the
+/// exports turn into `false`. See [`crate::seed_from_slice`].
 fn get_rng(digest: &[u8]) -> Option<impl RngCore> {
-    Some(ChaChaRng::from_seed(from_slice(digest)?))
-}
-
-/// Takes the RNG's whole seed from the caller's bytes.
-///
-/// Returns `None` for fewer than `SEED_LEN` of them, which the exports report
-/// as `false`. A short seed used to be sliced to length, which panicked — and a
-/// panic crossing `extern "C"` aborts the process it was called from. Padding
-/// it instead is not an option: the padding is not secret, so the key material
-/// would be drawn from less randomness than the caller supplied bytes for.
-fn from_slice(bytes: &[u8]) -> Option<[u8; SEED_LEN]> {
-    let mut array = [0; SEED_LEN];
-    array.copy_from_slice(bytes.get(..SEED_LEN)?);
-    Some(array)
+    Some(ChaChaRng::from_seed(seed_from_slice(digest)?))
 }
 
 // The general pattern in these FFI tests is:

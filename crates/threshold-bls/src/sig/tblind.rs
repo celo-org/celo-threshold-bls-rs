@@ -5,9 +5,8 @@ use crate::sig::{BlindScheme, BlindThresholdScheme, Partial, ThresholdScheme};
 use thiserror::Error;
 
 #[derive(Debug, Error)]
-// TODO: Can we get rid of this static lifetime bound?
 /// Errors associated with partially unblinding a signature
-pub enum BlindThresholdError<E: 'static + std::error::Error> {
+pub enum BlindThresholdError<E: std::error::Error> {
     /// Raised when unblinding fails
     #[error(transparent)]
     BlindError(E),

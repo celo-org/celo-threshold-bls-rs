@@ -31,6 +31,24 @@ pub(crate) type PrivateKey = <SigScheme as Scheme>::Private;
 #[allow(dead_code)]
 pub const SEED_LEN: usize = 32;
 
+/// Takes the RNG's whole seed from the caller's bytes.
+///
+/// Shared by the surfaces rather than written per surface: it is the one place
+/// that decides what happens to a short seed, and the answer has to be the same
+/// everywhere. It is refused rather than padded — the padding is not secret, so
+/// the key material would be drawn from less randomness than the caller supplied
+/// bytes for — and rather than sliced to length, which panicked, and a panic
+/// crossing `extern "C"` aborts the process it was called from.
+///
+/// The surfaces differ only in how they report the refusal: `ffi` as `false`,
+/// `wasm` as a thrown message.
+#[allow(dead_code)]
+pub(crate) fn seed_from_slice(bytes: &[u8]) -> Option<[u8; SEED_LEN]> {
+    let mut seed = [0; SEED_LEN];
+    seed.copy_from_slice(bytes.get(..SEED_LEN)?);
+    Some(seed)
+}
+
 /// Bytes bincode prepends to a serialized sequence as its length prefix.
 #[allow(dead_code)]
 pub const VEC_LENGTH: usize = 8;
