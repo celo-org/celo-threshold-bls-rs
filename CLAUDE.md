@@ -123,11 +123,14 @@ result; `just install-cbindgen` provides the pinned version it insists on.
 
 CI enforces this twice over. `just check-header` regenerates, compiles the
 header as C11, C99, C++, Objective-C and Objective-C++, and fails on drift.
-`just check-abi` compiles `cross/smoke_test.c` against it, links the cdylib and
-runs it, then diffs the exported symbols against
-`cross/exported-symbols.txt`. The second is what catches a header that
+`just check-abi` compiles `cross/smoke_test.c` against it under
+AddressSanitizer, links the cdylib and runs it, then diffs the exported symbols
+against `cross/exported-symbols.txt`. The second is what catches a header that
 disagrees with the library; Rust tests call Rust functions with Rust types and
-structurally cannot.
+structurally cannot. Only the C side is instrumented, but the allocator is
+shared, so a buffer the library hands out is tracked: reading past its end, or
+freeing it twice, fails the run. Leak checking is pinned off — the
+uninstrumented Rust side's one-time allocations would swamp it.
 
 Three things constrain how the header can be generated, all of them learned the
 hard way:

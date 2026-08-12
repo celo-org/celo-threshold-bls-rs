@@ -276,11 +276,24 @@ check-abi:
 
     # The cdylib rather than the staticlib: linking a Rust staticlib from C
     # means supplying Rust's native system libraries by hand.
+    #
+    # AddressSanitizer is what makes the run worth more than the compile. The
+    # library hands C raw pointers and lengths, and reading one byte past a
+    # buffer it returned passes silently otherwise — verified by doing exactly
+    # that. Only the C side is instrumented, but the allocator is shared, so
+    # every buffer the library hands over is tracked.
     clang -std=c11 -Wall -Wextra -Werror \
+        -fsanitize=address -fno-omit-frame-pointer -g \
         -I "$cross" "$cross/smoke_test.c" \
         -L {{ target_dir }}/release -lblind_threshold_bls \
         -o "$tmp/smoke_test"
-    LD_LIBRARY_PATH={{ target_dir }}/release \
+    # Leak checking is off deliberately, and pinned rather than left to the
+    # platform: it defaults on under Linux and is unsupported on arm64 macOS, and
+    # the uninstrumented Rust side's one-time allocations would be reported as
+    # leaks no C caller can free. What is left is the ownership class this test
+    # exists for — overflow, use after free, double and invalid free.
+    ASAN_OPTIONS=detect_leaks=0 \
+        LD_LIBRARY_PATH={{ target_dir }}/release \
         DYLD_LIBRARY_PATH={{ target_dir }}/release \
         "$tmp/smoke_test"
 
