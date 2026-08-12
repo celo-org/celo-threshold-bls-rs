@@ -241,6 +241,8 @@ bool partial_verify_blind_signature(const struct Buffer *polynomial,
  * - **This function will dereference the provided pointers. If any invalid pointers are passed
  *   then the software will crash**.
  * - If NULL pointers are passed, the function will return false
+ * - If the flattened buffer is not a whole number of `PARTIAL_SIG_LENGTH` chunks, the function
+ *   will return false
  * - This function does not check if the signatures are valid!
  *
  * Returns true if successful, otherwise false.

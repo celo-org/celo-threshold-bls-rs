@@ -470,6 +470,8 @@ pub unsafe extern "C" fn partial_verify_blind_signature(
 /// - **This function will dereference the provided pointers. If any invalid pointers are passed
 ///   then the software will crash**.
 /// - If NULL pointers are passed, the function will return false
+/// - If the flattened buffer is not a whole number of `PARTIAL_SIG_LENGTH` chunks, the function
+///   will return false
 /// - This function does not check if the signatures are valid!
 ///
 /// Returns true if successful, otherwise false.
@@ -485,6 +487,14 @@ pub unsafe extern "C" fn combine(
     let Some(signatures) = (unsafe { buffer_slice(signatures) }) else {
         return false;
     };
+
+    // The caller flattens the partial signatures, so the boundaries between
+    // them are implied by the length alone. A remainder means the flattening
+    // was wrong, and every chunk after the first mistake is cut from the middle
+    // of two partials.
+    if !signatures.len().is_multiple_of(PARTIAL_SIG_LENGTH) {
+        return false;
+    }
 
     // split the flattened vector to a Vec<Vec<u8>> where each element is a serialized signature
     let sigs = signatures
@@ -1024,6 +1034,46 @@ mod tests {
             )
         };
         assert!(ret);
+    }
+
+    // `combine` splits its input into PARTIAL_SIG_LENGTH chunks, so the
+    // boundaries between partials are implied by the length alone. A remainder
+    // means the caller flattened them wrongly, and chunking it anyway cuts the
+    // tail from the middle of two partials.
+    //
+    // This pins the contract rather than guarding the check: the misaligned
+    // tail fails to deserialize as well, and `bool` carries no message to tell
+    // the two apart. The wasm test asserts on the error text, which does.
+    #[test]
+    fn combine_rejects_a_partial_chunk() {
+        let seed = b"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+        let msg = Buffer::from(&[1u8, 9, 6, 9][..]);
+        let (n, t) = (5, 3);
+        let keys = threshold_keygen(n, t, &seed[..]);
+
+        let mut concatenated = Vec::new();
+        for share in keys.shares.iter().take(t) {
+            let share = bincode::serialize(share).unwrap();
+            let mut partial = MaybeUninit::<Buffer>::uninit();
+            assert!(unsafe { partial_sign(&Buffer::from(&share[..]), &msg, partial.as_mut_ptr()) });
+            let partial = unsafe { partial.assume_init() };
+            concatenated.extend_from_slice(unsafe { buffer_slice(&partial) }.unwrap());
+        }
+        assert_eq!(concatenated.len(), t * PARTIAL_SIG_LENGTH);
+
+        let mut asig = MaybeUninit::<Buffer>::uninit();
+        assert!(unsafe { combine(t, &Buffer::from(&concatenated[..]), asig.as_mut_ptr()) });
+
+        let mut one_over = concatenated.clone();
+        one_over.push(0);
+        let one_short = &concatenated[..concatenated.len() - 1];
+        let mut half_a_partial = concatenated.clone();
+        half_a_partial.extend(vec![0u8; PARTIAL_SIG_LENGTH / 2]);
+
+        for wrong in [&one_over[..], one_short, &half_a_partial[..]] {
+            let ret = unsafe { combine(t, &Buffer::from(wrong), asig.as_mut_ptr()) };
+            assert!(!ret, "combine accepted {} bytes", wrong.len());
+        }
     }
 
     #[test]

@@ -86,6 +86,22 @@ describe('Invalid inputs', () => {
       const flattened = Uint8Array.from([...partialSigs[0], ...partialSigs[1]]);
       expect(() => threshold.combine(t, flattened)).toThrow('could not aggregate sigs');
     });
+
+    // combine infers the boundaries between partials from the length, so a
+    // caller whose flattening is off by a byte is only visible here.
+    it('combine throws when the flattened input is not whole partial signatures', () => {
+      const flattened = Uint8Array.from(
+        partialSigs.slice(0, t).reduce((all, sig) => [...all, ...sig], [])
+      );
+      expect(() => threshold.combine(t, flattened)).not.toThrow();
+
+      expect(() =>
+        threshold.combine(t, Uint8Array.from([...flattened, 0]))
+      ).toThrow('expected a multiple of');
+      expect(() =>
+        threshold.combine(t, flattened.slice(0, -1))
+      ).toThrow('expected a multiple of');
+    });
   });
 
   // These arguments used to panic, which in wasm traps and leaves the instance

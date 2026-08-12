@@ -402,6 +402,39 @@ static void buffers_with_no_memory_are_rejected(void) {
 }
 
 /*
+ * combine splits its input into PARTIAL_SIG_LENGTH chunks, so a caller that
+ * flattens the partials wrongly is only visible in the length. The full input
+ * is combined first, so `false` means the added byte was caught.
+ */
+static void misaligned_partials_are_rejected(void) {
+    Buffer message = buf(MESSAGE, sizeof MESSAGE);
+    uint8_t concatenated[THRESHOLD * PARTIAL_SIG_LENGTH + 1];
+    Buffer partials[THRESHOLD];
+
+    for (size_t i = 0; i < THRESHOLD; i++) {
+        Buffer share = buf(SHARES[i], 36);
+        CHECK(partial_sign(&share, &message, &partials[i]));
+        memcpy(concatenated + i * PARTIAL_SIG_LENGTH, partials[i].ptr,
+               PARTIAL_SIG_LENGTH);
+    }
+    concatenated[THRESHOLD * PARTIAL_SIG_LENGTH] = 0;
+
+    Buffer whole = buf(concatenated, THRESHOLD * PARTIAL_SIG_LENGTH);
+    Buffer one_over = buf(concatenated, sizeof concatenated);
+    Buffer one_short = buf(concatenated, THRESHOLD * PARTIAL_SIG_LENGTH - 1);
+
+    Buffer threshold_sig;
+    CHECK(combine(THRESHOLD, &whole, &threshold_sig));
+    CHECK(!combine(THRESHOLD, &one_over, &threshold_sig));
+    CHECK(!combine(THRESHOLD, &one_short, &threshold_sig));
+
+    free_vector(threshold_sig.ptr, threshold_sig.len);
+    for (size_t i = 0; i < THRESHOLD; i++) {
+        free_vector(partials[i].ptr, partials[i].len);
+    }
+}
+
+/*
  * The three fixed-size deserializes read PUBKEY_LEN, PRIVKEY_LEN and
  * SIGNATURE_LEN bytes. They used to take a bare pointer, so a caller holding
  * fewer bytes than that could not say so and the read ran past the end of their
@@ -548,6 +581,7 @@ int main(void) {
     null_arguments_are_rejected();
     buffers_with_no_memory_are_rejected();
     wrong_length_buffers_are_rejected();
+    misaligned_partials_are_rejected();
     short_seeds_are_rejected();
     empty_polynomials_are_rejected();
     destructors_accept_null();
