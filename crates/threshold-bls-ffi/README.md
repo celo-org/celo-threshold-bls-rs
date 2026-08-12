@@ -41,7 +41,9 @@ no place in production — so a signer receives its share out of band, from a DK
 and hands the bytes straight to `partial_sign`.
 
 `combine` splits its flattened input into `PARTIAL_SIG_LENGTH` chunks, so build
-that buffer by concatenating whole partials.
+that buffer by concatenating whole partials. What is inside each of these
+buffers — every length and layout the C API works in — is in
+[`docs/wire-format.md`](../../docs/wire-format.md).
 
 Two rough edges are deferred to a planned redesign of this surface:
 `serialize_pubkey`, `serialize_privkey` and `serialize_sig` return a pointer

@@ -53,7 +53,10 @@ cargo test -p threshold-bls poly::      # single test / module filter
   `BlindThresholdScheme` (`tblind.rs`). `sig/sig.rs` holds the trait
   definitions; the other files implement them.
 - `serialization.rs` — bounded bincode helpers that cap input size so
-  attacker-crafted length prefixes can't OOM. Use these, not raw bincode.
+  attacker-crafted length prefixes can't OOM. Use these, not raw bincode. The
+  byte layouts these produce are public API and are documented in
+  `docs/wire-format.md`; `test_vectors.rs` is the gate that fails when one
+  changes.
 - `schemes::bls12_377::{G1Scheme, G2Scheme}` in `lib.rs` are the
   pre-instantiated entry points; the names say which group holds public keys
   (signatures live in the other group).
