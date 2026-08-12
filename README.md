@@ -106,8 +106,14 @@ just RUST_VERSION=1.97.1 all
 
 This repository contains Rust crates that implement threshold BLS signatures. The high-level structure of the repository is as follows:
 
-- [`threshold-bls`](crates/threshold-bls): (blind) threshold BLS signatures for BLS12-377
-- [`threshold-bls-ffi`](crates/threshold-bls-ffi): FFI and WASM bindings to `threshold-bls` for cross platform interoperability
+- [`threshold-bls`](crates/threshold-bls): (blind) threshold BLS signatures for
+  BLS12-377. The API documentation, with worked examples for plain, blind and
+  threshold signing, is the crate-level rustdoc in
+  [`src/lib.rs`](crates/threshold-bls/src/lib.rs); `cargo doc --open` renders it.
+- [`threshold-bls-ffi`](crates/threshold-bls-ffi): FFI and WASM bindings to
+  `threshold-bls` for cross platform interoperability. Its
+  [README](crates/threshold-bls-ffi/README.md) covers building and consuming each
+  binding surface.
 
 ## Disclaimers
 
