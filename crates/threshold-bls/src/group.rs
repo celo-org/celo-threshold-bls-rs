@@ -5,17 +5,23 @@ use serde::{Deserialize, Serialize};
 use std::fmt::{Debug, Display};
 use std::marker::PhantomData;
 
-/// Element represents an element of a group with the additive notation
-/// which is also equipped with a multiplication transformation.
+/// Element represents an element of a group which is also equipped with a
+/// multiplication transformation.
 /// Two implementations are for Scalar which forms a ring so RHS is the same
 /// and Point which can be multiplied by a scalar of its prime field.
+///
+/// The method names are additive — `add`, `zero` — because the groups this was
+/// written for are written that way. `GT` is not: its `add` multiplies and its
+/// `new`/`zero` is the multiplicative identity, so read every name below as the
+/// group operation rather than as arithmetic.
 pub trait Element:
     Clone + Display + Debug + Eq + Serialize + for<'a> Deserialize<'a> + PartialEq + Send + Sync
 {
     /// The right-hand-side argument for multiplication
     type RHS;
 
-    /// Returns the zero element of the group
+    /// Returns the identity element of the group operation: zero where the group
+    /// is written additively, one for `GT`
     fn new() -> Self;
 
     /// Returns the one element of the group
@@ -30,7 +36,8 @@ pub trait Element:
     /// Samples a random element using the provided RNG
     fn rand<R: RngCore>(rng: &mut R) -> Self;
 
-    /// Returns the zero element of the group
+    /// Alias for [`Element::new`], and identical to it — including for `GT`,
+    /// where it returns the multiplicative identity rather than a zero
     fn zero() -> Self {
         Self::new()
     }
@@ -65,7 +72,7 @@ pub trait Curve: Clone + Debug + Send + Sync {
     /// The curve's point
     type Point: Point<RHS = Self::Scalar>;
 
-    /// scalar returns the identity element of the field.
+    /// scalar returns the field's additive identity, zero.
     fn scalar() -> Self::Scalar {
         Self::Scalar::new()
     }

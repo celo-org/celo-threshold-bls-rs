@@ -10,8 +10,9 @@ use thiserror::Error;
 #[derive(Debug, Error)]
 pub enum BlindError {
     /// InvalidToken is thrown out when the token used to unblind can not be
-    /// inversed. This error should not happen if you use the Token that was
-    /// returned by the blind operation.
+    /// inversed. A token returned by the blind operation always can be; a
+    /// default-constructed one never can, since [`Token::new`] holds the zero
+    /// scalar.
     #[error("invalid token")]
     InvalidToken,
 

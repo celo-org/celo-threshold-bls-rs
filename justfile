@@ -209,8 +209,10 @@ fmt:
 install-cbindgen:
     cargo install cbindgen --version {{ cbindgen_version }} --locked
 
-# Regenerate cross/threshold.h from ffi.rs. Run after any change to the C ABI
-# and commit the result; `check-header` fails if it is stale.
+# Run after any change to the C ABI and commit the result; `check-header` fails
+# if the committed copy is stale.
+
+# Regenerate cross/threshold.h from ffi.rs
 generate-header:
     #!/usr/bin/env bash
     set -euo pipefail
@@ -228,10 +230,10 @@ generate-header:
     cd {{ justfile_directory() }}/crates/threshold-bls-ffi
     cbindgen --output cross/threshold.h
 
-# Regenerate the header, compile it in every dialect a consumer might use, and
-# fail if the committed copy is stale. Compiling matters as much as the diff: a
-# malformed header committed alongside the source that produced it would pass a
-# diff-only check.
+# Compiling matters as much as the diff: a malformed header committed alongside
+# the source that produced it would pass a diff-only check.
+
+# Regenerate threshold.h, compile it in every dialect a consumer might use, and fail if it is stale
 check-header: generate-header
     #!/usr/bin/env bash
     set -euo pipefail
@@ -259,12 +261,11 @@ check-header: generate-header
     git ls-files --error-unmatch -- "$inc/threshold.h" > /dev/null
     git diff --exit-code -- "$inc/threshold.h"
 
-# Compile the C smoke test against the generated header, link it to the real
-# library, run it, and check the exported symbols against the manifest.
-#
 # Rust tests call Rust functions with Rust types, so they cannot catch a
-# header/library mismatch — which is how the keygen declaration stayed wrong
-# for five years. This can.
+# header/library mismatch — which is how the keygen declaration stayed wrong for
+# five years. This can.
+
+# Compile the C smoke test against the header, run it under ASan, and check the exported symbols
 check-abi:
     #!/usr/bin/env bash
     set -euo pipefail

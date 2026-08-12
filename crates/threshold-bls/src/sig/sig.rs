@@ -115,9 +115,10 @@ pub trait BlindScheme: Scheme {
         rng: &mut R,
     ) -> Result<(Self::Token, Vec<u8>), Self::Error>;
 
-    /// Given the blinding factor that was used to blind the provided message, it will
-    /// unblind it and return the cleartext message
-    fn unblind_sig(t: &Self::Token, blinded_message: &[u8]) -> Result<Vec<u8>, Self::Error>;
+    /// Given the blinding factor that was used to blind the message, removes it from
+    /// a signature over that blinded message, returning the signature over the
+    /// cleartext. It takes and returns a signature, never the message.
+    fn unblind_sig(t: &Self::Token, blinded_signature: &[u8]) -> Result<Vec<u8>, Self::Error>;
 
     /// blind_sign is the method that signs the given blinded message and
     /// returns a blinded signature.
