@@ -45,7 +45,6 @@ pub trait Scalar: Element {
     fn inverse(&self) -> Option<Self>;
     fn negate(&mut self);
     fn sub(&mut self, other: &Self);
-    // TODO
     fn from_random_bytes(bytes: &[u8]) -> Option<Self>;
     fn serialized_size(&self) -> usize;
 }

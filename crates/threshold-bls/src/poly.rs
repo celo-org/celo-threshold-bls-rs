@@ -74,10 +74,9 @@ impl<C: Element> Poly<C> {
         Self::new_from(degree, &mut thread_rng())
     }
 
-    /// Returns a polynomial from the given list of coefficients
-    // TODO: implement the From<> trait
-    // TODO fix semantics of zero:
-    // it should be G1::zero() as only element
+    /// Returns the zero polynomial: one coefficient, holding the group's zero
+    /// element. A polynomial always has at least one coefficient, so this is the
+    /// smallest one there is.
     pub fn zero() -> Self {
         Self(vec![C::zero()])
     }

@@ -29,10 +29,11 @@ pub enum BLSError {
     DeserializationError(#[from] bincode::Error),
 }
 
-// private module workaround to avoid leaking a private
-// trait into a public trait
-// see https://github.com/rust-lang/rust/issues/34537
-// XXX another way to pull it off without this hack?
+// A public trait cannot name a private one in its bounds (rust-lang/rust#34537),
+// so the sealed trait lives in a public module inside a module that `sig`
+// re-exports as `#[doc(hidden)]`. That is the sealing idiom, not a workaround
+// awaiting a better one: the trait stays unimplementable from outside while the
+// bound rustc names in a diagnostic remains a path the reader can import.
 pub mod common {
     use super::*;
 
