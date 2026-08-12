@@ -466,10 +466,17 @@ pub unsafe extern "C" fn partial_verify_blind_signature(
 
 /// Combines a flattened vector of partial signatures to a single threshold signature
 ///
+/// * polynomial: The public polynomial the shares were dealt from, serialized. The threshold is
+///   its degree plus one, taken from here rather than from the caller: a smaller number would
+///   combine a subset of the partials into a different signature without failing.
+/// * signatures: The partial signatures, concatenated, each `PARTIAL_SIG_LENGTH` bytes
+/// * asig: Pointer to the memory where the combined signature will be written to
+///
 /// # Safety
 /// - **This function will dereference the provided pointers. If any invalid pointers are passed
 ///   then the software will crash**.
 /// - If NULL pointers are passed, the function will return false
+/// - If the polynomial cannot be deserialized, the function will return false
 /// - If the flattened buffer is not a whole number of `PARTIAL_SIG_LENGTH` chunks, the function
 ///   will return false
 /// - This function does not check if the signatures are valid!
@@ -477,15 +484,23 @@ pub unsafe extern "C" fn partial_verify_blind_signature(
 /// Returns true if successful, otherwise false.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn combine(
-    threshold: usize,
+    polynomial: *const Buffer,
     signatures: *const Buffer,
     asig: *mut Buffer,
 ) -> bool {
     if asig.is_null() {
         return false;
     }
+    let Some(polynomial) = (unsafe { buffer_slice(polynomial) }) else {
+        return false;
+    };
     let Some(signatures) = (unsafe { buffer_slice(signatures) }) else {
         return false;
+    };
+
+    let polynomial: Poly<PublicKey> = match serialization::deserialize(polynomial) {
+        Ok(p) => p,
+        Err(_) => return false,
     };
 
     // The caller flattens the partial signatures, so the boundaries between
@@ -502,7 +517,7 @@ pub unsafe extern "C" fn combine(
         .map(|chunk| chunk.to_vec())
         .collect::<Vec<Vec<u8>>>();
 
-    let signature = match SigScheme::aggregate(threshold, &sigs) {
+    let signature = match SigScheme::aggregate(&polynomial, &sigs) {
         Ok(s) => s,
         Err(_) => return false,
     };
@@ -1000,7 +1015,7 @@ mod tests {
 
         // 4. generate the threshold signature
         let mut asig = MaybeUninit::<Buffer>::uninit();
-        let ret = unsafe { combine(t, &concatenated, asig.as_mut_ptr()) };
+        let ret = unsafe { combine(&public_poly, &concatenated, asig.as_mut_ptr()) };
         assert!(ret);
         let asig = unsafe { asig.assume_init() };
 
@@ -1050,8 +1065,17 @@ mod tests {
         }
         assert_eq!(concatenated.len(), t * PARTIAL_SIG_LENGTH);
 
+        let polynomial = bincode::serialize(&keys.polynomial).unwrap();
+        let polynomial = Buffer::from(&polynomial[..]);
+
         let mut asig = MaybeUninit::<Buffer>::uninit();
-        assert!(unsafe { combine(t, &Buffer::from(&concatenated[..]), asig.as_mut_ptr()) });
+        assert!(unsafe {
+            combine(
+                &polynomial,
+                &Buffer::from(&concatenated[..]),
+                asig.as_mut_ptr(),
+            )
+        });
 
         let mut one_over = concatenated.clone();
         one_over.push(0);
@@ -1060,7 +1084,7 @@ mod tests {
         half_a_partial.extend(vec![0u8; PARTIAL_SIG_LENGTH / 2]);
 
         for wrong in [&one_over[..], one_short, &half_a_partial[..]] {
-            let ret = unsafe { combine(t, &Buffer::from(wrong), asig.as_mut_ptr()) };
+            let ret = unsafe { combine(&polynomial, &Buffer::from(wrong), asig.as_mut_ptr()) };
             assert!(!ret, "combine accepted {} bytes", wrong.len());
         }
     }
@@ -1489,8 +1513,11 @@ mod tests {
                 free_vector(partial.ptr, partial.len);
             }
             let partials = Buffer::from(&concatenated[..]);
-            assert!(combine(t, &partials, out.as_mut_ptr()));
-            assert!(!combine(t, &no_memory, out.as_mut_ptr()));
+            let polynomial_bytes = bincode::serialize(&keys.polynomial).unwrap();
+            let polynomial = Buffer::from(&polynomial_bytes[..]);
+            assert!(combine(&polynomial, &partials, out.as_mut_ptr()));
+            assert!(!combine(&polynomial, &no_memory, out.as_mut_ptr()));
+            assert!(!combine(&no_memory, &partials, out.as_mut_ptr()));
             let combined = out.assume_init_read();
 
             for buffer in [

@@ -100,8 +100,9 @@
 //!     SigScheme::partial_verify(&public_poly, &msg[..], &partial).unwrap();
 //! });
 //!
-//! // generate the threshold sig
-//! let threshold_sig = SigScheme::aggregate(t, &partials).unwrap();
+//! // generate the threshold sig. The threshold is the public polynomial's
+//! // degree plus one, so aggregation takes the polynomial rather than a number
+//! let threshold_sig = SigScheme::aggregate(&public_poly, &partials).unwrap();
 //!
 //! SigScheme::verify(
 //!     &threshold_public_key,

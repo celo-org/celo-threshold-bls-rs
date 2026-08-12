@@ -115,7 +115,7 @@ describe('Blind Threshold BLS Static Tests', () => {
       }
       
       // Combine the signatures
-      const combinedSig = threshold.combine(t, flattenSigsArray(partialSigs));
+      const combinedSig = threshold.combine(keys.polynomial, flattenSigsArray(partialSigs));
       
       // Unblind the signature
       const unblindedSig = threshold.unblind(combinedSig, blinded.blindingFactor);
@@ -152,7 +152,7 @@ describe('Blind Threshold BLS Static Tests', () => {
       }
       
       // Combine the signatures
-      const combinedSig = threshold.combine(t, flattenSigsArray(partialSigs));
+      const combinedSig = threshold.combine(keys.polynomial, flattenSigsArray(partialSigs));
       
       // Verify the combined signature
       threshold.verify(keys.thresholdPublicKey, STATIC_MESSAGE, combinedSig);

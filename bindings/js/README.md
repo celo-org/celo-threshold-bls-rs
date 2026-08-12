@@ -115,7 +115,7 @@ for (const sig of sigs) {
     threshold.partialVerifyBlindSignature(polynomial, blindedMessage, sig)
 }
 
-const blindSig = threshold.combine(t, flattenSigsArray(sigs))
+const blindSig = threshold.combine(polynomial, flattenSigsArray(sigs))
 
 // User unblinds the combined threshold signature with his scalar
 const sig = threshold.unblind(blindSig, blinded.blindingFactor)

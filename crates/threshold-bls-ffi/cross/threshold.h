@@ -237,17 +237,24 @@ bool partial_verify_blind_signature(const struct Buffer *polynomial,
 /**
  * Combines a flattened vector of partial signatures to a single threshold signature
  *
+ * * polynomial: The public polynomial the shares were dealt from, serialized. The threshold is
+ *   its degree plus one, taken from here rather than from the caller: a smaller number would
+ *   combine a subset of the partials into a different signature without failing.
+ * * signatures: The partial signatures, concatenated, each `PARTIAL_SIG_LENGTH` bytes
+ * * asig: Pointer to the memory where the combined signature will be written to
+ *
  * # Safety
  * - **This function will dereference the provided pointers. If any invalid pointers are passed
  *   then the software will crash**.
  * - If NULL pointers are passed, the function will return false
+ * - If the polynomial cannot be deserialized, the function will return false
  * - If the flattened buffer is not a whole number of `PARTIAL_SIG_LENGTH` chunks, the function
  *   will return false
  * - This function does not check if the signatures are valid!
  *
  * Returns true if successful, otherwise false.
  */
-bool combine(size_t threshold, const struct Buffer *signatures, struct Buffer *asig);
+bool combine(const struct Buffer *polynomial, const struct Buffer *signatures, struct Buffer *asig);
 
 /**
  * Deserializes a public key from the provided buffer

@@ -134,12 +134,12 @@ mod tests {
             .collect();
 
         // aggregate & verify the unblinded partials
-        let final_sig1 = B::aggregate(thr, &unblindeds_partials).unwrap();
+        let final_sig1 = B::aggregate(&public, &unblindeds_partials).unwrap();
         B::verify(public.public_key(), &msg, &final_sig1).unwrap();
 
         // Another method is to aggregate the blinded partials directly. This
         // can be done by a third party
-        let blinded_final = B::aggregate(thr, &partials).unwrap();
+        let blinded_final = B::aggregate(&public, &partials).unwrap();
 
         // unblind the aggregated signature
         let final_sig2 = B::unblind_sig(&token, &blinded_final).unwrap();

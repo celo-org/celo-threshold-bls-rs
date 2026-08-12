@@ -159,7 +159,14 @@ pub trait ThresholdScheme: Scheme {
     /// Aggregates all partials signature together. Note that this method does
     /// not verify if the partial signatures are correct or not; it only
     /// aggregates them.
-    fn aggregate(threshold: usize, partials: &[Partial]) -> Result<Vec<u8>, Self::Error>;
+    ///
+    /// The threshold is the public polynomial's degree plus one, so it is taken
+    /// from the polynomial rather than from the caller: too small a threshold
+    /// interpolates a subset of the partials into a different, valid-looking
+    /// signature, and nothing about the partials themselves reveals that. Any
+    /// `t` distinct points define a unique degree `t - 1` polynomial.
+    fn aggregate(public: &Poly<Self::Public>, partials: &[Partial])
+    -> Result<Vec<u8>, Self::Error>;
 }
 
 /// BlindThreshold is ThresholdScheme that allows to verify a partially blinded

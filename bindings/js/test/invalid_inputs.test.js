@@ -84,7 +84,14 @@ describe('Invalid inputs', () => {
 
     it('combine throws when given fewer partial signatures than the threshold', () => {
       const flattened = Uint8Array.from([...partialSigs[0], ...partialSigs[1]]);
-      expect(() => threshold.combine(t, flattened)).toThrow('could not aggregate sigs');
+      expect(() => threshold.combine(keys.polynomial, flattened)).toThrow('could not aggregate sigs');
+    });
+
+    it('combine throws on a polynomial it cannot deserialize', () => {
+      const flattened = Uint8Array.from([...partialSigs[0], ...partialSigs[1], ...partialSigs[2]]);
+      expect(() =>
+        threshold.combine(keys.polynomial.slice(0, -1), flattened)
+      ).toThrow('could not deserialize polynomial');
     });
 
     // combine infers the boundaries between partials from the length, so a
@@ -93,13 +100,13 @@ describe('Invalid inputs', () => {
       const flattened = Uint8Array.from(
         partialSigs.slice(0, t).reduce((all, sig) => [...all, ...sig], [])
       );
-      expect(() => threshold.combine(t, flattened)).not.toThrow();
+      expect(() => threshold.combine(keys.polynomial, flattened)).not.toThrow();
 
       expect(() =>
-        threshold.combine(t, Uint8Array.from([...flattened, 0]))
+        threshold.combine(keys.polynomial, Uint8Array.from([...flattened, 0]))
       ).toThrow('expected a multiple of');
       expect(() =>
-        threshold.combine(t, flattened.slice(0, -1))
+        threshold.combine(keys.polynomial, flattened.slice(0, -1))
       ).toThrow('expected a multiple of');
     });
   });
