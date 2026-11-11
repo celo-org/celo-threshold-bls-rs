@@ -2,7 +2,7 @@
 #
 # Variables in upper case are the knobs meant to be overridden, either as an
 # environment variable (`FEATURES=ffi just android`) or as a command line
-# assignment (`just RUST_VERSION=1.97.1 all`). Lower case variables are derived
+# assignment (`just RUST_VERSION=1.99.1 all`). Lower case variables are derived
 # and not meant to be set.
 #
 # Every cargo invocation passes `--locked`: the mobile libraries ship
@@ -10,7 +10,7 @@
 # else. A dependency update is then a commit rather than whatever the registry
 # happened to serve. `cargo fmt` is the exception — it takes no such flag.
 
-RUST_VERSION := env("RUST_VERSION", "1.97.1")
+RUST_VERSION := env("RUST_VERSION", "1.99.1")
 
 # Cargo features for the Android/iOS cross builds. The mobile consumers link
 # against the C ABI (threshold.h), which requires "ffi"; without it the
