@@ -68,8 +68,11 @@ jobs:
       - run:
           name: Build iOS
           command: just ios
+      - run:
+          name: Link a Swift caller against every slice
+          command: just check-ios-xcframework
       - store_artifacts:
-          path: output/ios
+          path: output/ios/BlindThresholdBls.xcframework.zip
 
 workflows:
   version: 2

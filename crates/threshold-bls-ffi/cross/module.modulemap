@@ -1,0 +1,7 @@
+// Lets Swift and Objective-C `import BlindThresholdBls` instead of reaching
+// threshold.h through a bridging header. `just ios` copies this file and the
+// header into the xcframework.
+module BlindThresholdBls {
+    header "threshold.h"
+    export *
+}

@@ -39,8 +39,13 @@ android_rustflags := "-C link-args=-Wl,-z,max-page-size=16384"
 # The host reads them back from here with `docker cp`.
 container_android_dir := "/output/android"
 
-ios_targets := "aarch64-apple-ios x86_64-apple-ios"
+ios_device_target := "aarch64-apple-ios"
+ios_simulator_targets := "aarch64-apple-ios-sim x86_64-apple-ios"
 ios_deployment_target := "15.2"
+# Also the name Swift and Objective-C import, so it has to match the module
+# declared in cross/module.modulemap.
+ios_framework_name := "BlindThresholdBls"
+ios_xcframework := output_dir / "ios" / ios_framework_name + ".xcframework"
 
 # List the available recipes
 default:
@@ -119,22 +124,71 @@ android: build-docker-image
 
 # iOS builds cannot run in Docker, so they run on the macOS host.
 
-# Build the universal iOS static library into output/ios
+#
+# The result is an xcframework rather than one fat library: the device and the
+# Apple Silicon simulator are both arm64, and a fat Mach-O file cannot hold two
+# slices of one architecture. An xcframework keeps a library per platform, so
+# the two simulator architectures are merged with lipo and the device library
+# stands alone.
+#
+# The header and module map go into a directory named after the module, not
+# into the root of Headers. Xcode copies every static xcframework's Headers
+# into one shared include directory, where a second library's root-level
+# module.modulemap would collide with this one.
+
+# Build the iOS xcframework, and a zip of it, into output/ios
 ios: ios-setup
     #!/usr/bin/env bash
     set -euo pipefail
-    archives=()
-    for target in {{ ios_targets }}; do
+    cross={{ justfile_directory() }}/crates/threshold-bls-ffi/cross
+    simulator_archives=()
+    for target in {{ ios_device_target }} {{ ios_simulator_targets }}; do
         IPHONEOS_DEPLOYMENT_TARGET={{ ios_deployment_target }} \
             cargo build --locked --package threshold-bls-ffi --no-default-features {{ cargo_features }} \
                 --target "$target" --release --lib
-        archives+=("{{ target_dir }}/$target/release/{{ lib_name }}.a")
+        if [ "$target" != "{{ ios_device_target }}" ]; then
+            simulator_archives+=("{{ target_dir }}/$target/release/{{ lib_name }}.a")
+        fi
     done
+
+    staging=$(mktemp -d)
+    trap 'rm -rf "$staging"' EXIT
+    mkdir -p "$staging/simulator" "$staging/Headers/{{ ios_framework_name }}"
+    lipo -create -output "$staging/simulator/{{ lib_name }}.a" "${simulator_archives[@]}"
+    cp "$cross/threshold.h" "$cross/module.modulemap" "$staging/Headers/{{ ios_framework_name }}/"
+
+    # xcodebuild refuses to write over an existing xcframework.
+    rm -rf {{ output_dir }}/ios
     mkdir -p {{ output_dir }}/ios
-    lipo -create -output {{ output_dir }}/ios/{{ lib_name }}.a "${archives[@]}"
+    xcodebuild -create-xcframework \
+        -library {{ target_dir }}/{{ ios_device_target }}/release/{{ lib_name }}.a -headers "$staging/Headers" \
+        -library "$staging/simulator/{{ lib_name }}.a" -headers "$staging/Headers" \
+        -output {{ ios_xcframework }}
+    # An xcframework is a directory; the zip is the one file to hand around.
+    ditto -c -k --sequesterRsrc --keepParent {{ ios_xcframework }} {{ ios_xcframework }}.zip
+
+# Link only: running the result would need a device or a booted simulator.
+
+# Compile and link cross/smoke_test.swift against every slice of the xcframework
+check-ios-xcframework:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    tmp=$(mktemp -d)
+    trap 'rm -rf "$tmp"' EXIT
+    link_smoke_test() {
+        local sdk=$1 triple=$2 slice={{ ios_xcframework }}/$3
+        echo "linking for $triple against $3"
+        xcrun --sdk "$sdk" swiftc -target "$triple" \
+            -I "$slice/Headers" -L "$slice" -lblind_threshold_bls \
+            {{ justfile_directory() }}/crates/threshold-bls-ffi/cross/smoke_test.swift \
+            -o "$tmp/smoke_test-$triple"
+    }
+    link_smoke_test iphoneos arm64-apple-ios{{ ios_deployment_target }} ios-arm64
+    link_smoke_test iphonesimulator arm64-apple-ios{{ ios_deployment_target }}-simulator ios-arm64_x86_64-simulator
+    link_smoke_test iphonesimulator x86_64-apple-ios{{ ios_deployment_target }}-simulator ios-arm64_x86_64-simulator
 
 ios-setup:
-    rustup target add {{ ios_targets }}
+    rustup target add {{ ios_device_target }} {{ ios_simulator_targets }}
 
 android-setup:
     rustup target add {{ android_targets }}
