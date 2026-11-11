@@ -17,6 +17,7 @@ Releases are git tags on this repository; the crates are not published to crates
 
 ### Changed
 
+- ffi: `just ios` builds `output/ios/BlindThresholdBls.xcframework` (and a zip of it) in place of the fat `output/ios/libblind_threshold_bls.a`. The fat library had no arm64 simulator slice, so it could not be linked into a simulator build on an Apple Silicon Mac; the xcframework holds an arm64 device library and an arm64 + x86_64 simulator library. It also embeds `threshold.h` and a module map, so Swift can `import BlindThresholdBls` without a bridging header. Breaking for anyone linking the old `.a`: link the xcframework instead ([#249](https://github.com/celo-org/celo-threshold-bls-rs/pull/249)).
 - docs: The byte layouts the bindings exchange are documented in `docs/wire-format.md` — every length, the bincode configuration behind them, the places a caller gets them wrong, and which check pins what. The C and JS READMEs point at it, and `test_vectors.rs` now states that it is the compatibility gate: a failure there is a breaking change for consumers, not a stale vector.
 - core: The signature test vectors pin the 48 bytes a caller receives rather than 56. `sign` returns the serialized signature, and the vectors ran it through bincode a second time, prepending an 8-byte length no consumer ever sees. The signature bytes themselves are unchanged.
 

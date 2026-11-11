@@ -76,7 +76,9 @@ The mobile builds target:
 just ios
 ```
 
-This builds a universal static library for iOS (combining aarch64 and x86_64 architectures) and places it in `output/ios`. Note that iOS builds must be run on a macOS host as they cannot be built in Docker.
+This builds `output/ios/BlindThresholdBls.xcframework` and a zip of it. The xcframework holds a static library for arm64 devices and one for the simulator (arm64 and x86_64), each with `threshold.h` and a module map, so Swift and Objective-C code can `import BlindThresholdBls` without a bridging header. iOS builds need a macOS host with Xcode; they cannot run in Docker.
+
+`just check-ios-xcframework` then compiles a small Swift caller and links it against every slice.
 
 ### Android Build
 

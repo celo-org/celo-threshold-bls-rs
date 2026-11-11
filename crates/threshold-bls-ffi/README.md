@@ -16,6 +16,11 @@ cargo build --package threshold-bls-ffi --no-default-features --features ffi \
 `just android` and `just ios` do this for every mobile architecture and stage
 the results under `output/`.
 
+On iOS the result is `output/ios/BlindThresholdBls.xcframework`, which carries
+the header and a module map next to the device and simulator libraries. Add it
+to an Xcode target and `import BlindThresholdBls`; no bridging header is
+needed.
+
 **`cross/threshold.h` is generated. Do not edit it.** After any change to the C
 surface in `src/ffi.rs`:
 
