@@ -483,6 +483,8 @@ pub fn keygen(seed: Vec<u8>) -> Result<WasmKeypair> {
 }
 
 fn try_keygen(seed: Vec<u8>) -> TryResult<WasmKeypair> {
+    // The key is a function of the seed alone, so the seed is wiped with it.
+    let seed = zeroize::Zeroizing::new(seed);
     let mut rng = get_rng(&seed)?;
     let (private, public) = SigScheme::keypair(&mut rng);
     Ok(WasmKeypair { private, public })
