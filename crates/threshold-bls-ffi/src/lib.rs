@@ -42,9 +42,11 @@ pub const SEED_LEN: usize = 32;
 ///
 /// The surfaces differ only in how they report the refusal: `ffi` as `false`,
 /// `wasm` as a thrown message.
+///
+/// The copy is wiped when dropped: a key is a function of its seed alone.
 #[allow(dead_code)]
-pub(crate) fn seed_from_slice(bytes: &[u8]) -> Option<[u8; SEED_LEN]> {
-    let mut seed = [0; SEED_LEN];
+pub(crate) fn seed_from_slice(bytes: &[u8]) -> Option<zeroize::Zeroizing<[u8; SEED_LEN]>> {
+    let mut seed = zeroize::Zeroizing::new([0; SEED_LEN]);
     seed.copy_from_slice(bytes.get(..SEED_LEN)?);
     Some(seed)
 }

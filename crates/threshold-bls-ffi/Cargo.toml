@@ -23,6 +23,7 @@ rand_chacha = { version = "0.3.1", default-features = false }
 
 bincode = { version = "1.2.1", default-features = false }
 serde = { version = "1", default-features = false, optional = true }
+zeroize = "1.9"
 
 # No code here calls getrandom; `rand` pulls it in. It is listed so the wasm
 # build can enable the "js" feature, without which getrandom refuses to

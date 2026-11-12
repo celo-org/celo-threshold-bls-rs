@@ -547,7 +547,7 @@ fn get_rng(digest: &[u8]) -> TryResult<impl RngCore> {
             digest.len()
         )
     })?;
-    Ok(ChaChaRng::from_seed(seed))
+    Ok(ChaChaRng::from_seed(*seed))
 }
 
 #[cfg(test)]

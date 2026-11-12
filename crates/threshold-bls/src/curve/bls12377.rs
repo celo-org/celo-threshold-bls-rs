@@ -21,6 +21,7 @@ use std::{
 };
 
 use thiserror::Error;
+use zeroize::{Zeroize, Zeroizing};
 
 /// Domain separator for signing messages
 const SIG_DOMAIN: &[u8] = b"ULforxof";
@@ -103,7 +104,18 @@ fn blake2_hash(
 
 // TODO(gakonst): Make this work with any Pairing.
 
-#[derive(Debug, Clone, Copy, Eq, PartialEq, Deserialize, Serialize)]
+/// An element of the curve's scalar field.
+///
+/// Private keys, shares, blinding factors and the coefficients of a secret
+/// polynomial are all values of this type, so it treats every value as secret:
+/// it is wiped from memory when dropped, and `Debug` and `Display` print a
+/// placeholder instead of the value. That is also why it is not `Copy` — a
+/// copy would be a second value nothing wipes.
+///
+/// The wipe is best effort. It clears the value where it finally rests, not the
+/// copies a move leaves behind on the stack, nor the temporaries the field
+/// arithmetic makes.
+#[derive(Clone, Eq, PartialEq, Deserialize, Serialize)]
 pub struct Scalar(
     #[serde(deserialize_with = "deserialize_field")]
     #[serde(serialize_with = "serialize_field")]
@@ -186,9 +198,21 @@ impl Sc for Scalar {
     }
 }
 
+impl Drop for Scalar {
+    fn drop(&mut self) {
+        self.0.zeroize();
+    }
+}
+
+impl fmt::Debug for Scalar {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        f.write_str("Scalar(<redacted>)")
+    }
+}
+
 impl fmt::Display for Scalar {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{{{:?}}}", self.0)
+        fmt::Debug::fmt(self, f)
     }
 }
 
@@ -398,12 +422,16 @@ where
             S: SeqAccess<'de>,
         {
             let len = C::zero().serialized_size(Compress::Yes);
-            let bytes: Vec<u8> = (0..len)
-                .map(|_| {
-                    seq.next_element()?
-                        .ok_or_else(|| DeserializeError::custom("could not read bytes"))
-                })
-                .collect::<Result<Vec<_>, _>>()?;
+            // The bytes may be a private key, so they are wiped once parsed.
+            // Allocated at full size up front: growing the vector would leave
+            // the outgrown allocations behind, unwiped.
+            let mut bytes = Zeroizing::new(Vec::with_capacity(len));
+            for _ in 0..len {
+                let byte: u8 = seq
+                    .next_element()?
+                    .ok_or_else(|| DeserializeError::custom("could not read bytes"))?;
+                bytes.push(byte);
+            }
 
             let res =
                 C::deserialize_compressed(&mut &bytes[..]).map_err(DeserializeError::custom)?;
@@ -421,12 +449,13 @@ where
     C: Field,
 {
     let len = c.serialized_size(Compress::Yes);
-    let mut bytes = Vec::with_capacity(len);
-    c.serialize_compressed(&mut bytes)
+    // The bytes may be a private key, so they are wiped once written out.
+    let mut bytes = Zeroizing::new(Vec::with_capacity(len));
+    c.serialize_compressed(&mut *bytes)
         .map_err(SerializationError::custom)?;
 
     let mut tup = s.serialize_tuple(len)?;
-    for byte in &bytes {
+    for byte in bytes.iter() {
         tup.serialize_element(byte)?;
     }
     tup.end()
@@ -537,6 +566,66 @@ mod tests {
 
         let de: E = serialization::deserialize(&ser).unwrap();
         assert_eq!(de, value);
+    }
+
+    #[test]
+    fn scalar_is_wiped_on_drop() {
+        let mut slot = std::mem::MaybeUninit::new(Scalar::one());
+        // The slot outlives the value dropped inside it, so its bytes stay
+        // readable afterwards.
+        let bytes = |slot: &std::mem::MaybeUninit<Scalar>| unsafe {
+            std::slice::from_raw_parts(slot.as_ptr().cast::<u8>(), size_of::<Scalar>()).to_vec()
+        };
+        assert_ne!(bytes(&slot), [0; size_of::<Scalar>()]);
+
+        unsafe { slot.assume_init_drop() };
+
+        assert_eq!(bytes(&slot), [0; size_of::<Scalar>()]);
+    }
+
+    #[test]
+    fn secrets_do_not_print() {
+        use crate::poly::{Eval, Poly};
+        use crate::sig::{Share, Token};
+
+        let scalar = Scalar::one();
+        assert_eq!(format!("{scalar:?}"), "Scalar(<redacted>)");
+        assert_eq!(format!("{scalar}"), "Scalar(<redacted>)");
+
+        // Everything that holds a scalar prints it through the scalar's own
+        // impls, so it is redacted there too.
+        let share = Share {
+            index: 7,
+            private: Scalar::one(),
+        };
+        assert_eq!(
+            format!("{share:?}"),
+            "Share { index: 7, private: Scalar(<redacted>) }"
+        );
+        assert_eq!(
+            format!("{:?}", Token::<Scalar>::new()),
+            "Token(Scalar(<redacted>))"
+        );
+
+        let poly = Poly::try_from(vec![Scalar::one(), Scalar::one()]).unwrap();
+        assert_eq!(
+            format!("{poly:?}"),
+            "Poly([Scalar(<redacted>), Scalar(<redacted>)])"
+        );
+        assert_eq!(
+            format!("{poly}"),
+            "[deg: 1, coeffs: [0: Scalar(<redacted>), 1: Scalar(<redacted>)]]"
+        );
+
+        let eval = Eval {
+            value: Scalar::one(),
+            index: 7,
+        };
+        assert_eq!(
+            format!("{eval:?}"),
+            "Eval { value: Scalar(<redacted>), index: 7 }"
+        );
+        assert_eq!(format!("{eval}"), "{ idx: 7, value: Scalar(<redacted>) }");
     }
 
     #[test]

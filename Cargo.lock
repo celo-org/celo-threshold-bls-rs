@@ -1097,6 +1097,7 @@ dependencies = [
  "serde",
  "static_assertions",
  "thiserror",
+ "zeroize",
 ]
 
 [[package]]
@@ -1112,6 +1113,7 @@ dependencies = [
  "serde",
  "threshold-bls",
  "wasm-bindgen",
+ "zeroize",
 ]
 
 [[package]]

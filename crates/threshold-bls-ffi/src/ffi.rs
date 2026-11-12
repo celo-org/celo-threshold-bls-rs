@@ -10,6 +10,7 @@ use threshold_bls::{
         BlindScheme, BlindThresholdScheme, Scheme, Share, SignatureScheme, ThresholdScheme, Token,
     },
 };
+use zeroize::Zeroize;
 
 use crate::*;
 
@@ -763,7 +764,10 @@ pub unsafe extern "C" fn free_vector(bytes: *const u8, len: usize) {
     // Reconstructed as the boxed slice `into_raw_bytes` handed out, whose
     // allocation is exactly `len` bytes.
     let bytes = std::ptr::slice_from_raw_parts_mut(bytes as *mut u8, len);
-    drop(unsafe { Box::from_raw(bytes) });
+    let mut bytes = unsafe { Box::from_raw(bytes) };
+    // Wiped before it is freed: the buffer may be a serialized private key, and
+    // nothing here says which buffers are.
+    bytes.zeroize();
 }
 
 #[unsafe(no_mangle)]
@@ -922,7 +926,7 @@ pub struct Keypair {
 /// Seeds the RNG, reporting a seed shorter than `SEED_LEN` as `None`, which the
 /// exports turn into `false`. See [`crate::seed_from_slice`].
 fn get_rng(digest: &[u8]) -> Option<impl RngCore> {
-    Some(ChaChaRng::from_seed(seed_from_slice(digest)?))
+    Some(ChaChaRng::from_seed(*seed_from_slice(digest)?))
 }
 
 // The general pattern in these FFI tests is:
