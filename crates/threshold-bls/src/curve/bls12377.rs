@@ -103,7 +103,16 @@ fn blake2_hash(
 
 // TODO(gakonst): Make this work with any Pairing.
 
-#[derive(Debug, Clone, Copy, Eq, PartialEq, Deserialize, Serialize)]
+/// An element of the curve's scalar field.
+///
+/// Private keys, shares, blinding factors and the coefficients of a secret
+/// polynomial are all values of this type, so `Debug` and `Display` print a
+/// placeholder instead of the value: a stray `{:?}` must not put a key in a log.
+///
+/// The value is not wiped from memory when dropped. Every consumer reaches this
+/// library through bindings that exchange keys as bytes, so the caller holds its
+/// own copy that a wipe here could not reach.
+#[derive(Clone, Copy, Eq, PartialEq, Deserialize, Serialize)]
 pub struct Scalar(
     #[serde(deserialize_with = "deserialize_field")]
     #[serde(serialize_with = "serialize_field")]
@@ -186,9 +195,15 @@ impl Sc for Scalar {
     }
 }
 
+impl fmt::Debug for Scalar {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        f.write_str("Scalar(<redacted>)")
+    }
+}
+
 impl fmt::Display for Scalar {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{{{:?}}}", self.0)
+        fmt::Debug::fmt(self, f)
     }
 }
 
@@ -537,6 +552,51 @@ mod tests {
 
         let de: E = serialization::deserialize(&ser).unwrap();
         assert_eq!(de, value);
+    }
+
+    #[test]
+    fn secrets_do_not_print() {
+        use crate::poly::{Eval, Poly};
+        use crate::sig::{Share, Token};
+
+        let scalar = Scalar::one();
+        assert_eq!(format!("{scalar:?}"), "Scalar(<redacted>)");
+        assert_eq!(format!("{scalar}"), "Scalar(<redacted>)");
+
+        // Everything that holds a scalar prints it through the scalar's own
+        // impls, so it is redacted there too.
+        let share = Share {
+            index: 7,
+            private: Scalar::one(),
+        };
+        assert_eq!(
+            format!("{share:?}"),
+            "Share { index: 7, private: Scalar(<redacted>) }"
+        );
+        assert_eq!(
+            format!("{:?}", Token::<Scalar>::new()),
+            "Token(Scalar(<redacted>))"
+        );
+
+        let poly = Poly::try_from(vec![Scalar::one(), Scalar::one()]).unwrap();
+        assert_eq!(
+            format!("{poly:?}"),
+            "Poly([Scalar(<redacted>), Scalar(<redacted>)])"
+        );
+        assert_eq!(
+            format!("{poly}"),
+            "[deg: 1, coeffs: [0: Scalar(<redacted>), 1: Scalar(<redacted>)]]"
+        );
+
+        let eval = Eval {
+            value: Scalar::one(),
+            index: 7,
+        };
+        assert_eq!(
+            format!("{eval:?}"),
+            "Eval { value: Scalar(<redacted>), index: 7 }"
+        );
+        assert_eq!(format!("{eval}"), "{ idx: 7, value: Scalar(<redacted>) }");
     }
 
     #[test]

@@ -418,7 +418,9 @@ fn try_threshold_keygen(n: usize, t: usize, seed: &[u8]) -> TryResult<Keys> {
     })
 }
 
-#[wasm_bindgen(inspectable)]
+// Not `inspectable`: that generates `toJSON`, `toString` and Node's inspect
+// hook from the getters, so logging the object would print the blinding factor.
+#[wasm_bindgen]
 /// A blinded message along with the blinding_factor used to produce it
 pub struct BlindedMessage {
     /// The resulting blinded message
