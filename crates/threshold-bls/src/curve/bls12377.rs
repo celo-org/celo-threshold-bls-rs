@@ -21,7 +21,6 @@ use std::{
 };
 
 use thiserror::Error;
-use zeroize::{Zeroize, Zeroizing};
 
 /// Domain separator for signing messages
 const SIG_DOMAIN: &[u8] = b"ULforxof";
@@ -107,15 +106,13 @@ fn blake2_hash(
 /// An element of the curve's scalar field.
 ///
 /// Private keys, shares, blinding factors and the coefficients of a secret
-/// polynomial are all values of this type, so it treats every value as secret:
-/// it is wiped from memory when dropped, and `Debug` and `Display` print a
-/// placeholder instead of the value. That is also why it is not `Copy` — a
-/// copy would be a second value nothing wipes.
+/// polynomial are all values of this type, so `Debug` and `Display` print a
+/// placeholder instead of the value: a stray `{:?}` must not put a key in a log.
 ///
-/// The wipe is best effort. It clears the value where it finally rests, not the
-/// copies a move leaves behind on the stack, nor the temporaries the field
-/// arithmetic makes.
-#[derive(Clone, Eq, PartialEq, Deserialize, Serialize)]
+/// The value is not wiped from memory when dropped. Every consumer reaches this
+/// library through bindings that exchange keys as bytes, so the caller holds its
+/// own copy that a wipe here could not reach.
+#[derive(Clone, Copy, Eq, PartialEq, Deserialize, Serialize)]
 pub struct Scalar(
     #[serde(deserialize_with = "deserialize_field")]
     #[serde(serialize_with = "serialize_field")]
@@ -195,12 +192,6 @@ impl Sc for Scalar {
 
     fn serialized_size(&self) -> usize {
         self.0.serialized_size(Compress::Yes)
-    }
-}
-
-impl Drop for Scalar {
-    fn drop(&mut self) {
-        self.0.zeroize();
     }
 }
 
@@ -422,16 +413,12 @@ where
             S: SeqAccess<'de>,
         {
             let len = C::zero().serialized_size(Compress::Yes);
-            // The bytes may be a private key, so they are wiped once parsed.
-            // Allocated at full size up front: growing the vector would leave
-            // the outgrown allocations behind, unwiped.
-            let mut bytes = Zeroizing::new(Vec::with_capacity(len));
-            for _ in 0..len {
-                let byte: u8 = seq
-                    .next_element()?
-                    .ok_or_else(|| DeserializeError::custom("could not read bytes"))?;
-                bytes.push(byte);
-            }
+            let bytes: Vec<u8> = (0..len)
+                .map(|_| {
+                    seq.next_element()?
+                        .ok_or_else(|| DeserializeError::custom("could not read bytes"))
+                })
+                .collect::<Result<Vec<_>, _>>()?;
 
             let res =
                 C::deserialize_compressed(&mut &bytes[..]).map_err(DeserializeError::custom)?;
@@ -449,13 +436,12 @@ where
     C: Field,
 {
     let len = c.serialized_size(Compress::Yes);
-    // The bytes may be a private key, so they are wiped once written out.
-    let mut bytes = Zeroizing::new(Vec::with_capacity(len));
-    c.serialize_compressed(&mut *bytes)
+    let mut bytes = Vec::with_capacity(len);
+    c.serialize_compressed(&mut bytes)
         .map_err(SerializationError::custom)?;
 
     let mut tup = s.serialize_tuple(len)?;
-    for byte in bytes.iter() {
+    for byte in &bytes {
         tup.serialize_element(byte)?;
     }
     tup.end()
@@ -566,21 +552,6 @@ mod tests {
 
         let de: E = serialization::deserialize(&ser).unwrap();
         assert_eq!(de, value);
-    }
-
-    #[test]
-    fn scalar_is_wiped_on_drop() {
-        let mut slot = std::mem::MaybeUninit::new(Scalar::one());
-        // The slot outlives the value dropped inside it, so its bytes stay
-        // readable afterwards.
-        let bytes = |slot: &std::mem::MaybeUninit<Scalar>| unsafe {
-            std::slice::from_raw_parts(slot.as_ptr().cast::<u8>(), size_of::<Scalar>()).to_vec()
-        };
-        assert_ne!(bytes(&slot), [0; size_of::<Scalar>()]);
-
-        unsafe { slot.assume_init_drop() };
-
-        assert_eq!(bytes(&slot), [0; size_of::<Scalar>()]);
     }
 
     #[test]

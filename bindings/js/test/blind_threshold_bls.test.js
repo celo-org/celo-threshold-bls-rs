@@ -29,6 +29,14 @@ describe('Blind Threshold BLS Static Tests', () => {
       expect(Buffer.from(signature).toString('hex')).toBe(expectedSignature);
     });
     
+    it('should not print the blinding factor when a blinded message is logged', () => {
+      const blinded = threshold.blind(STATIC_MESSAGE, STATIC_BLINDING_SEED);
+
+      expect(require('util').inspect(blinded)).not.toContain('blindingFactor');
+      expect(JSON.stringify(blinded)).not.toContain('blindingFactor');
+      expect(String(blinded)).not.toContain('blindingFactor');
+    });
+
     it('should blind, sign, unblind and verify', () => {
       // Blind the message
       const blinded = threshold.blind(STATIC_MESSAGE, STATIC_BLINDING_SEED);

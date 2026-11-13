@@ -414,7 +414,7 @@ pub mod tests {
     fn recover_is_not_hijacked_by_max_index_share() {
         let t = 3;
         let private = Poly::<Sc>::new(t - 1);
-        let secret = private.public_key().clone();
+        let secret = *private.public_key();
 
         let mut shares: Vec<Eval<Sc>> = (0..t as Idx).map(|i| private.eval(i)).collect();
 
@@ -423,7 +423,7 @@ pub mod tests {
         let attacker_value = Sc::rand(&mut thread_rng());
         shares[t - 1] = Eval {
             index: Idx::MAX,
-            value: attacker_value.clone(),
+            value: attacker_value,
         };
 
         let recovered = Poly::<Sc>::recover(t, shares).expect("recovery should not error");
@@ -554,7 +554,7 @@ pub mod tests {
 
         for i in 0..larger.0.len() {
             if i < smaller.0.len() {
-                let mut coeff_sum = p1.0[i].clone();
+                let mut coeff_sum = p1.0[i];
                 coeff_sum.add(&p2.0[i]);
                 assert_eq!(res.0[i], coeff_sum);
             } else {
@@ -573,14 +573,14 @@ pub mod tests {
     // covered by recover_rejects_a_zero_threshold.
     fn interpolation(degree in 0..100usize, num_evals in 1..100usize) {
         let poly = Poly::<Sc>::new(degree);
-        let expected = poly.0[0].clone();
+        let expected = poly.0[0];
 
         let shares = (0..num_evals)
             .map(|i| poly.eval(i as Idx))
             .collect::<Vec<_>>();
 
         let recovered_poly = Poly::<Sc>::full_recover(num_evals, shares.clone()).unwrap();
-        let computed = recovered_poly.0[0].clone();
+        let computed = recovered_poly.0[0];
 
         let recovered_constant = Poly::<Sc>::recover(num_evals, shares).unwrap();
 
@@ -606,9 +606,9 @@ pub mod tests {
 
         // Naively calculate \sum c_i * x^i
         let coeffs = p1.0;
-        let mut sum = coeffs[0].clone();
+        let mut sum = coeffs[0];
         for (i, coeff) in coeffs.into_iter().enumerate().take(d + 1).skip(1) {
-            let xi = pow(&x, i);
+            let xi = pow(x, i);
             let mut var = coeff;
             var.mul(&xi);
             sum.add(&var);
@@ -617,10 +617,10 @@ pub mod tests {
         assert_eq!(sum, evaluation);
 
         // helper to calculate the power of x
-        fn pow(base: &Sc, pow: usize) -> Sc {
+        fn pow(base: Sc, pow: usize) -> Sc {
             let mut res = Sc::one();
             for _ in 0..pow {
-                res.mul(base)
+                res.mul(&base)
             }
             res
         }
@@ -684,20 +684,20 @@ pub mod tests {
         // f3 = f1 * f2 = (c0*d0) + (c0*d1 + d0*c1) * x + (c1*d1) * x^2
 
         // f3(1) = l1 + l2 + l3
-        let mut l1 = p1.0[0].clone();
+        let mut l1 = p1.0[0];
         l1.mul(&p2.0[0]);
 
         // c0 * d1
-        let mut l21 = p1.0[0].clone();
+        let mut l21 = p1.0[0];
         l21.mul(&p2.0[1]);
 
         // d0 * c1
-        let mut l22 = p1.0[1].clone();
+        let mut l22 = p1.0[1];
         l22.mul(&p2.0[0]);
         let mut l2 = Sc::zero();
         l2.add(&l21);
         l2.add(&l22);
-        let mut l3 = p1.0[1].clone();
+        let mut l3 = p1.0[1];
         l3.mul(&p2.0[1]);
 
         let mut total = Sc::zero();
@@ -711,7 +711,7 @@ pub mod tests {
     #[test]
     fn new_neg_constant() {
         let mut constant = Sc::rand(&mut thread_rng());
-        let p = Poly::<Sc>::new_neg_constant(constant.clone());
+        let p = Poly::<Sc>::new_neg_constant(constant);
 
         constant.negate();
         let v = vec![constant, Sc::one()];

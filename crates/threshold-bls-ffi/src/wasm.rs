@@ -418,7 +418,9 @@ fn try_threshold_keygen(n: usize, t: usize, seed: &[u8]) -> TryResult<Keys> {
     })
 }
 
-#[wasm_bindgen(inspectable)]
+// Not `inspectable`: that generates `toJSON`, `toString` and Node's inspect
+// hook from the getters, so logging the object would print the blinding factor.
+#[wasm_bindgen]
 /// A blinded message along with the blinding_factor used to produce it
 pub struct BlindedMessage {
     /// The resulting blinded message
@@ -483,8 +485,6 @@ pub fn keygen(seed: Vec<u8>) -> Result<WasmKeypair> {
 }
 
 fn try_keygen(seed: Vec<u8>) -> TryResult<WasmKeypair> {
-    // The key is a function of the seed alone, so the seed is wiped with it.
-    let seed = zeroize::Zeroizing::new(seed);
     let mut rng = get_rng(&seed)?;
     let (private, public) = SigScheme::keypair(&mut rng);
     Ok(WasmKeypair { private, public })
@@ -549,7 +549,7 @@ fn get_rng(digest: &[u8]) -> TryResult<impl RngCore> {
             digest.len()
         )
     })?;
-    Ok(ChaChaRng::from_seed(*seed))
+    Ok(ChaChaRng::from_seed(seed))
 }
 
 #[cfg(test)]
