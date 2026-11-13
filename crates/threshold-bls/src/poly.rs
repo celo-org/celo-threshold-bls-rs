@@ -734,8 +734,8 @@ pub mod tests {
         assert_eq!(commitment, secret.commit::<G1>());
     }
 
-    // `degree()` used to answer `usize::MAX` in release, having computed
-    // `0 - 1`, and `public_key()` indexed an empty vector.
+    // With no coefficients `degree()` would compute `0 - 1`, which wraps to
+    // `usize::MAX` in release, and `public_key()` would index an empty vector.
     #[test]
     fn no_coefficients_is_not_a_polynomial() {
         assert!(matches!(

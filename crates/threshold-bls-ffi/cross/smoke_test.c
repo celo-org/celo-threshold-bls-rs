@@ -440,10 +440,10 @@ static void misaligned_partials_are_rejected(void) {
 
 /*
  * The three fixed-size deserializes read PUBKEY_LEN, PRIVKEY_LEN and
- * SIGNATURE_LEN bytes. They used to take a bare pointer, so a caller holding
- * fewer bytes than that could not say so and the read ran past the end of their
- * allocation. Each is called with the right length first, so `false` means the
- * length was caught rather than the bytes being wrong anyway.
+ * SIGNATURE_LEN bytes. They take the length along with the pointer, so a caller
+ * holding fewer bytes than that can say so and the read cannot run past the end
+ * of their allocation. Each is called with the right length first, so `false`
+ * means the length was caught rather than the bytes being wrong anyway.
  */
 static void wrong_length_buffers_are_rejected(void) {
     Buffer seed = buf(SEED, sizeof SEED);
@@ -515,11 +515,10 @@ static void wrong_length_buffers_are_rejected(void) {
 }
 
 /*
- * The header asks for a seed of SEED_LEN bytes, and the library now holds
- * callers to it. A shorter one used to be sliced to length, which panicked, and
- * a panic crossing `extern "C"` aborts the process that made the call. Each
- * call is made with a full seed first, so `false` means the short seed was
- * caught.
+ * The header asks for a seed of SEED_LEN bytes, and the library holds callers
+ * to it. Slicing a shorter one to length would panic, and a panic crossing
+ * `extern "C"` aborts the process that made the call. Each call is made with a
+ * full seed first, so `false` means the short seed was caught.
  */
 static void short_seeds_are_rejected(void) {
     Buffer message = buf(MESSAGE, sizeof MESSAGE);

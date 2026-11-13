@@ -1536,9 +1536,9 @@ mod tests {
         }
     }
 
-    // A seed too short to fill the RNG's state used to be sliced to length,
-    // which panicked — and a panic crossing `extern "C"` aborts the process the
-    // library was called from, which for the mobile consumer is the whole app.
+    // Slicing a seed too short to fill the RNG's state would panic, and a panic
+    // crossing `extern "C"` aborts the process the library was called from,
+    // which for the mobile consumer is the whole app.
     #[test]
     fn a_short_seed_is_rejected() {
         let short = [7u8; SEED_LEN - 1];
@@ -1573,8 +1573,8 @@ mod tests {
         }
     }
 
-    // `keygen` used to return void, so a caller had no way to learn that it had
-    // written nothing.
+    // The return value is the only way a caller learns that `keygen` wrote
+    // nothing.
     #[test]
     fn keygen_reports_failure() {
         let seed = b"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
