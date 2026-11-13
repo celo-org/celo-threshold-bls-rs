@@ -308,9 +308,9 @@ mod tests {
     }
 
     /// A polynomial with no coefficients is a bare length prefix on the wire.
-    /// It used to parse and evaluate to the identity at every index, leaving
-    /// the identity public key check to stop it. That check still exists; this
-    /// asserts the input no longer reaches it.
+    /// If it parsed, it would evaluate to the identity at every index and only
+    /// the identity public key check would stop it. This asserts the input is
+    /// rejected before it reaches that check.
     fn empty_polynomial_verifies_nothing<T>()
     where
         T: SignatureScheme<Error = BLSError> + ThresholdScheme<Error = ThresholdError<T>>,

@@ -572,8 +572,8 @@ mod tests {
     // exported bindings, because the conversion the bindings do would abort the
     // test process. See `TryResult`.
 
-    // A seed shorter than the RNG's state used to be sliced to length, which
-    // panicked, and a panic in wasm poisons the instance it happened in.
+    // Slicing a seed shorter than the RNG's state would panic, and a panic in
+    // wasm poisons the instance it happened in.
     #[test]
     fn a_short_seed_is_rejected() {
         let short = [7u8; SEED_LEN - 1];

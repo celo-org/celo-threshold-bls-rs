@@ -101,8 +101,6 @@ fn blake2_hash(
     Ok(result)
 }
 
-// TODO(gakonst): Make this work with any Pairing.
-
 /// An element of the curve's scalar field.
 ///
 /// Private keys, shares, blinding factors and the coefficients of a secret

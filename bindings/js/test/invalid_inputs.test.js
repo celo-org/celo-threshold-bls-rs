@@ -111,10 +111,10 @@ describe('Invalid inputs', () => {
     });
   });
 
-  // These arguments used to panic, which in wasm traps and leaves the instance
-  // unusable. Testing them from Rust cannot show that they now reach JS as
-  // exceptions: those tests run natively, where building a JsValue aborts the
-  // process. So the boundary itself is only covered here.
+  // A panic on these arguments would trap in wasm and leave the instance
+  // unusable, so they must reach JS as exceptions. Testing them from Rust
+  // cannot show that: those tests run natively, where building a JsValue aborts
+  // the process. So the boundary itself is only covered here.
   describe('caller arguments', () => {
     const SHORT_SEED = STATIC_SEED.slice(0, 31);
 

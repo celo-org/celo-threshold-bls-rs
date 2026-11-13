@@ -118,7 +118,6 @@ where
         let mut xi = C::RHS::zero();
         // +1 because we must never evaluate the polynomial at its first point
         // otherwise it reveals the "secret" value !
-        // TODO: maybe move that a layer above, to not mix ss scheme with poly.
         // Widened to u64 so the largest index cannot wrap back onto x = 0.
         xi.set_int(u64::from(i) + 1);
 
@@ -188,7 +187,6 @@ where
                     .into_iter()
                     .map(move |c| {
                         // y_j * L_y
-                        // TODO: Can we avoid allocating here?
                         let mut s = share.1.clone();
                         s.mul(&c);
                         s
@@ -279,7 +277,6 @@ impl<X: Scalar<RHS = X>> Poly<X> {
     /// but may be inneficient for other purposes: the degree of the returned polynomial
     /// is always the greatest possible, regardless of the actual coefficients
     /// given.
-    // TODO: Implement divide and conquer algorithm
     fn mul(&mut self, other: &Self) {
         if self.is_zero() || other.is_zero() {
             *self = Self::zero();
@@ -317,8 +314,7 @@ impl<X: Scalar<RHS = X>> Poly<X> {
         // accumulator of the denominator values
         let mut acc = X::one();
 
-        // TODO remove that cloning due to borrowing issue with the map
-        let xi = xs.get(&i).unwrap().clone().0;
+        let xi = &xs.get(&i).unwrap().0;
         for (idx, sc) in xs.iter() {
             if *idx == i {
                 continue;
@@ -330,7 +326,7 @@ impl<X: Scalar<RHS = X>> Poly<X> {
 
             // den = xi - sc
             let mut den = X::zero();
-            den.add(&xi);
+            den.add(xi);
             den.sub(&sc.0);
 
             // den = 1 / den
@@ -738,8 +734,8 @@ pub mod tests {
         assert_eq!(commitment, secret.commit::<G1>());
     }
 
-    // `degree()` used to answer `usize::MAX` in release, having computed
-    // `0 - 1`, and `public_key()` indexed an empty vector.
+    // With no coefficients `degree()` would compute `0 - 1`, which wraps to
+    // `usize::MAX` in release, and `public_key()` would index an empty vector.
     #[test]
     fn no_coefficients_is_not_a_polynomial() {
         assert!(matches!(
