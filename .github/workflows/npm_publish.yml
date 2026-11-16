@@ -1,0 +1,76 @@
+name: npm publish
+
+# Publishes @celo/blind-threshold-bls. Pushing the tag js-v<version> builds the
+# package, tests it, and, once a reviewer of the `npm` environment approves,
+# publishes the tarball that was tested. docs/npm-release.md has the steps.
+on:
+  push:
+    tags: ['js-v*']
+
+permissions:
+  contents: read
+
+jobs:
+  package:
+    runs-on: ubuntu-latest
+    name: package
+    outputs:
+      dist-tag: ${{ steps.release.outputs.dist-tag }}
+    steps:
+      - name: Checkout sources
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          # Full history, so the tagged commit can be checked against main.
+          fetch-depth: 0
+      - name: Check the tag
+        id: release
+        run: |
+          version=$(jq -r .version bindings/js/package.json)
+          if [ "$GITHUB_REF_NAME" != "js-v$version" ]; then
+            echo "::error::tag $GITHUB_REF_NAME does not match version $version in bindings/js/package.json"
+            exit 1
+          fi
+          if ! git merge-base --is-ancestor "$GITHUB_SHA" origin/main; then
+            echo "::error::$GITHUB_SHA is not on main; only reviewed commits are published"
+            exit 1
+          fi
+          # npm refuses to publish a prerelease without a dist-tag, and a
+          # prerelease must not become what a plain `npm install` resolves to.
+          case "$version" in
+            *-*) echo "dist-tag=next" >> "$GITHUB_OUTPUT" ;;
+            *) echo "dist-tag=latest" >> "$GITHUB_OUTPUT" ;;
+          esac
+      - uses: ./.github/actions/wasm-pkg
+      - name: Upload the npm tarball
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        with:
+          name: npm-tarball
+          path: bindings/js/*.tgz
+          if-no-files-found: error
+
+  # Holds the only credential in the workflow, so it runs no build tooling and
+  # installs no dependencies: it uploads the tarball the job above tested.
+  publish:
+    needs: package
+    runs-on: ubuntu-latest
+    name: publish
+    environment: npm
+    permissions:
+      # npm trusted publishing: the registry accepts this job's OIDC token in
+      # place of a stored npm token, and records provenance for the tarball.
+      id-token: write
+    steps:
+      - uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7
+        with:
+          name: npm-tarball
+          path: tarball
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
+        with:
+          node-version: 26
+          registry-url: https://registry.npmjs.org
+      - name: Publish
+        env:
+          DIST_TAG: ${{ needs.package.outputs.dist-tag }}
+        run: |
+          npm --version
+          npm publish tarball/*.tgz --access public --tag "$DIST_TAG"

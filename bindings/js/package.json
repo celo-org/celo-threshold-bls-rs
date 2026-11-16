@@ -29,7 +29,8 @@
   "main": "src/blind_threshold_bls.js",
   "types": "src/blind_threshold_bls.d.ts",
   "scripts": {
-    "test": "jest"
+    "test": "jest",
+    "prepack": "node scripts/check-build-output.js"
   },
   "devDependencies": {
     "jest": "^30.0.0"
