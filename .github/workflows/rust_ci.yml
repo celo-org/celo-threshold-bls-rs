@@ -98,48 +98,10 @@ jobs:
     steps:
       - name: Checkout sources
         uses: actions/checkout@v7
-      - uses: ./.github/actions/setup
-        with:
-          channel: stable
-      # Pinned to the version in the Dockerfile, and checksummed, so this job
-      # tests a package built by the same wasm-pack that builds the published
-      # one. The installer script takes whatever is newest instead.
-      - name: install wasm-pack
-        env:
-          WASM_PACK_VERSION: 0.14.0
-          WASM_PACK_SHA256: 278a8d668085821f4d1a637bd864f1713f872b0ae3a118c77562a308c0abfe8d
-        run: |
-          curl -fsSL -o /tmp/wasm-pack.tar.gz \
-            "https://github.com/wasm-bindgen/wasm-pack/releases/download/v${WASM_PACK_VERSION}/wasm-pack-v${WASM_PACK_VERSION}-x86_64-unknown-linux-musl.tar.gz"
-          echo "${WASM_PACK_SHA256}  /tmp/wasm-pack.tar.gz" | sha256sum -c -
-          sudo tar -xz -C /usr/local/bin --strip-components=1 \
-            -f /tmp/wasm-pack.tar.gz "wasm-pack-v${WASM_PACK_VERSION}-x86_64-unknown-linux-musl/wasm-pack"
-      - name: build
-        run: just wasm-pkg
-      # The Rust struct behind this class is named WasmKeypair, so that ffi.rs
-      # can keep its own Keypair without cbindgen emitting the typedef twice.
-      # js_name/js_class hold the exported name in place; assert that here
-      # rather than relying on the downstream suite, which tracks a moving
-      # branch and could go red or green for unrelated reasons.
-      - name: Check the exported declarations are unchanged
-        run: |
-          decls=crates/threshold-bls-ffi/pkg/blind_threshold_bls.d.ts
-          grep -q '^export class Keypair {' "$decls"
-          grep -q 'export function keygen(seed: Uint8Array): Keypair;' "$decls"
-          ! grep -q 'WasmKeypair' "$decls"
+      - uses: ./.github/actions/wasm-pkg
       - name: Upload wasm pkg artifact
+        if: always()
         uses: actions/upload-artifact@v7
         with:
           name: wasm-pkg
           path: crates/threshold-bls-ffi/pkg
-
-      - uses: actions/setup-node@v7
-        with:
-          node-version: 26
-      - name: Run wasm package tests
-        run: |
-          mkdir -p bindings/js/src
-          cp crates/threshold-bls-ffi/pkg/blind* bindings/js/src/
-          cd bindings/js
-          npm ci
-          npm test

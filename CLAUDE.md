@@ -36,6 +36,10 @@ cargo test -p threshold-bls poly::      # single test / module filter
 - CI split: GitHub Actions tests, lints, audits, and runs the npm package
   suite in `bindings/js` against a fresh wasm-pack build. CircleCI only
   builds the platform artifacts.
+- The npm package is published only by `.github/workflows/npm_publish.yml`,
+  on a `js-v<version>` tag; `docs/npm-release.md` has the steps. It shares the
+  `.github/actions/wasm-pkg` action with CI, so a change to how the package is
+  built or tested goes there.
 
 ## Architecture
 

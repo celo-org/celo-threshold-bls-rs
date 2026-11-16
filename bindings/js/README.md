@@ -28,6 +28,9 @@ cp pkg/blind* ../../bindings/js/src/
 
 Then run the test suite from this directory with `npm ci && npm test`.
 
+Releases are published from CI, not from a checkout; see
+[`docs/npm-release.md`](../../docs/npm-release.md).
+
 ## Examples
 
 Currently there are 2 examples available. You can run them and inspect the comments in the files
